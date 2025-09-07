@@ -721,6 +721,8 @@ function createTextContainer() {
     textContainer.id = 'element-textContainer';
     textContainer.dataset.elementId = 'textContainer';
     
+    console.log('Creating text container with mapped columns:', appState.mappedColumns.text);
+    
     // Set layout direction
     textContainer.classList.add(appState.labelSettings.textLayout);
     textContainer.style.gap = `${appState.labelSettings.textGap}px`;
