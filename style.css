@@ -591,6 +591,7 @@ body {
   cursor: pointer;
   font-size: var(--font-size-sm);
   transition: all 0.2s ease;
+  user-select: none;
 }
 
 .tree-item:hover {
@@ -600,6 +601,20 @@ body {
 .tree-item.selected {
   background: var(--color-primary);
   color: var(--color-white);
+}
+
+.tree-item.drag-over {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border: 2px dashed var(--color-white);
+}
+
+.tree-item[draggable="true"] {
+  cursor: move;
+}
+
+.tree-item[draggable="true"]:hover {
+  background: rgba(37, 99, 235, 0.2);
 }
 
 .tree-item.child {
