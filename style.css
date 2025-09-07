@@ -627,7 +627,7 @@ body {
 .preview-static {
   position: absolute;
   font-size: var(--font-size-xs);
-  color: var(--color-gray-500);
+  color: var(--color-gray-700);
   font-style: italic;
   border: 1px dashed var(--color-primary);
   background: rgba(37, 99, 235, 0.1);
@@ -635,6 +635,11 @@ body {
   user-select: none;
   padding: 2px;
   word-wrap: break-word;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
 }
 
 .preview-static:hover {

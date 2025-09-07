@@ -651,12 +651,13 @@ function createBarcodeElement() {
     const barcodeContainer = document.createElement('div');
     barcodeContainer.className = 'barcode-container';
     
-    // Create SVG for barcode
-    const svg = document.createElement('svg');
+    // Create SVG for barcode using proper namespace
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.id = 'design-preview-barcode';
     svg.className = 'barcode-svg';
     svg.setAttribute('width', '100%');
     svg.setAttribute('height', '100%');
+    svg.setAttribute('viewBox', '0 0 200 100');
     
     // Create barcode number display
     const barcodeNumber = document.createElement('div');
@@ -820,13 +821,20 @@ function getDefaultElementConfig(id) {
             return { x: 0.1, y: 0.6, width: labelWidth - 0.2, height: 0.3, fontSize: 10, align: 'center' };
         default:
             if (id.startsWith('static-')) {
-                return { x: 0.1, y: 0.9, width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
+                // Position static text elements in a vertical stack below other elements
+                const staticIndex = parseInt(id.split('-')[1]) || 0;
+                return { x: 0.1, y: 0.5 + (staticIndex * 0.15), width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
             }
-            return { x: 0.1, y: 0.9, width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
+            return { x: 0.1, y: 0.5, width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
     }
 }
 
 function updateElementPosition(element, config) {
+    if (!element || !config) {
+        console.error('Invalid element or config for positioning:', { element, config });
+        return;
+    }
+    
     const labelWidth = appState.labelSettings.size === 'custom' 
         ? appState.labelSettings.customWidth 
         : LABEL_SIZES[appState.labelSettings.size].width;
@@ -836,22 +844,26 @@ function updateElementPosition(element, config) {
     
     // Convert inches to pixels (assuming 100 DPI for preview)
     const dpi = 100;
-    const x = config.x * dpi;
-    const y = config.y * dpi;
-    const width = config.width * dpi;
-    const height = config.height * dpi;
+    const x = Math.max(0, Math.min(config.x * dpi, (labelWidth - config.width) * dpi));
+    const y = Math.max(0, Math.min(config.y * dpi, (labelHeight - config.height) * dpi));
+    const width = Math.max(10, Math.min(config.width * dpi, labelWidth * dpi));
+    const height = Math.max(10, Math.min(config.height * dpi, labelHeight * dpi));
     
+    element.style.position = 'absolute';
     element.style.left = `${x}px`;
     element.style.top = `${y}px`;
     element.style.width = `${width}px`;
     element.style.height = `${height}px`;
     element.style.fontSize = `${config.fontSize}px`;
     element.style.textAlign = config.align;
+    element.style.boxSizing = 'border-box';
     
     // Update label size
     const previewLabel = document.getElementById('design-preview-label');
-    previewLabel.style.width = `${labelWidth * dpi}px`;
-    previewLabel.style.height = `${labelHeight * dpi}px`;
+    if (previewLabel) {
+        previewLabel.style.width = `${labelWidth * dpi}px`;
+        previewLabel.style.height = `${labelHeight * dpi}px`;
+    }
 }
 
 function handleElementMouseDown(e) {
@@ -1126,11 +1138,12 @@ function initializeStaticTextManager() {
 function addStaticTextField() {
     const text = prompt('Enter static text:');
     if (text && text.trim()) {
+        const staticIndex = appState.labelSettings.staticTexts.length;
         const staticText = {
             id: Date.now(),
             text: text.trim(),
             x: 0.1,
-            y: 0.9,
+            y: 0.5 + (staticIndex * 0.15),
             width: 1.8,
             height: 0.1,
             fontSize: 8,
@@ -1287,14 +1300,29 @@ function updateDesignPreview() {
             // If we have mapped data, use the first row's barcode data
             if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
                 const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
-                if (sampleBarcode && sampleBarcode.toString().length >= 8) {
-                    barcodeData = sampleBarcode.toString();
+                if (sampleBarcode) {
+                    const sampleData = sampleBarcode.toString().trim();
+                    if (validateBarcodeData(sampleData, appState.labelSettings.barcodeType)) {
+                        barcodeData = sampleData;
+                    }
                 }
+            }
+            
+            // Validate the barcode data before generation
+            if (!validateBarcodeData(barcodeData, appState.labelSettings.barcodeType)) {
+                console.warn('Invalid barcode data for type:', appState.labelSettings.barcodeType, 'data:', barcodeData);
+                barcodeData = getExampleBarcodeData(appState.labelSettings.barcodeType);
             }
             
             try {
                 // Generate barcode with appropriate settings
                 const barcodeOptions = getBarcodeOptions(appState.labelSettings.barcodeType);
+                
+                // Check if JsBarcode is available
+                if (typeof JsBarcode === 'undefined') {
+                    throw new Error('JsBarcode library not loaded');
+                }
+                
                 JsBarcode(svg, barcodeData, barcodeOptions);
                 
                 // Update barcode number display
@@ -1302,10 +1330,22 @@ function updateDesignPreview() {
                     barcodeNumber.textContent = barcodeData;
                 }
             } catch (error) {
-                console.error('Barcode generation error:', error);
-                svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="12">Invalid Barcode</text>';
+                console.error('Barcode generation error:', error, {
+                    barcodeData,
+                    barcodeType: appState.labelSettings.barcodeType,
+                    barcodeOptions: getBarcodeOptions(appState.labelSettings.barcodeType),
+                    jsbarcodeAvailable: typeof JsBarcode !== 'undefined'
+                });
+                
+                // Create a fallback display
+                svg.innerHTML = `
+                    <rect x="10" y="10" width="180" height="30" fill="none" stroke="#ccc" stroke-width="1"/>
+                    <text x="100" y="30" text-anchor="middle" font-size="12" fill="#666">Barcode Preview</text>
+                    <text x="100" y="45" text-anchor="middle" font-size="10" fill="#999">${barcodeData}</text>
+                `;
+                
                 if (barcodeNumber) {
-                    barcodeNumber.textContent = 'Invalid';
+                    barcodeNumber.textContent = barcodeData;
                 }
             }
         }
@@ -1354,6 +1394,26 @@ function getExampleBarcodeData(barcodeType) {
             return '12345678901234'; // 14-digit ITF-14
         default:
             return '1234567890123';
+    }
+}
+
+function validateBarcodeData(data, barcodeType) {
+    if (!data || typeof data !== 'string') {
+        return false;
+    }
+    
+    switch (barcodeType) {
+        case 'EAN13':
+            return /^\d{13}$/.test(data);
+        case 'UPC':
+            return /^\d{12}$/.test(data);
+        case 'ITF':
+            return /^\d{14}$/.test(data);
+        case 'CODE128':
+        case 'CODE39':
+            return data.length > 0 && data.length <= 50;
+        default:
+            return data.length > 0;
     }
 }
 
