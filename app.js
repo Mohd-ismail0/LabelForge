@@ -458,6 +458,12 @@ function handleZoneDrop(e) {
     updateColumnMapping();
     updateMappingPreview();
     updateContinueButton();
+    
+    console.log('After drop:', { 
+        zoneType, 
+        columnName: data.columnName, 
+        mappedColumns: appState.mappedColumns 
+    });
 }
 
 function removeColumnFromAllZones(columnName) {
@@ -508,6 +514,9 @@ function updateColumnMapping() {
             name: barcodeColumn.dataset.columnName,
             index: parseInt(barcodeColumn.dataset.columnIndex)
         };
+        console.log('Barcode mapped:', appState.mappedColumns.barcode);
+    } else {
+        console.log('No barcode column found in zone');
     }
     
     // Update text mappings
@@ -567,7 +576,8 @@ function updateMappingPreview() {
 function updateContinueButton() {
     const continueBtn = document.getElementById('continue-mapping');
     if (continueBtn) {
-        continueBtn.disabled = appState.mappedColumns.barcode === null;
+        const hasBarcode = appState.mappedColumns.barcode !== null;
+        continueBtn.disabled = !hasBarcode;
     }
 }
 
