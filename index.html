@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Barcode Label Generator</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1>Professional Barcode Label Generator</h1>
+                <p class="header-subtitle">Transform Excel data into print-ready barcode labels for manufacturing and retail</p>
+            </div>
+        </header>
+
+        <!-- Progress Steps -->
+        <div class="progress-steps">
+            <div class="step active" data-step="1">
+                <div class="step-circle">
+                    <span class="step-number">1</span>
+                </div>
+                <span class="step-label">Upload Data</span>
+            </div>
+            <div class="step" data-step="2">
+                <div class="step-circle">
+                    <span class="step-number">2</span>
+                </div>
+                <span class="step-label">Map Columns</span>
+            </div>
+            <div class="step" data-step="3">
+                <div class="step-circle">
+                    <span class="step-number">3</span>
+                </div>
+                <span class="step-label">Design Labels</span>
+            </div>
+            <div class="step" data-step="4">
+                <div class="step-circle">
+                    <span class="step-number">4</span>
+                </div>
+                <span class="step-label">Set Quantities</span>
+            </div>
+            <div class="step" data-step="5">
+                <div class="step-circle">
+                    <span class="step-number">5</span>
+                </div>
+                <span class="step-label">Generate & Export</span>
+            </div>
+        </div>
+
+        <!-- Step 1: Data Upload -->
+        <div class="step-content active" id="step-1">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Step 1: Upload Excel Data</h2>
+                    <p class="card-description">Upload your Excel file containing product data with barcodes, descriptions, and quantities</p>
+                </div>
+                <div class="card-body">
+                    <div class="upload-area" id="upload-area">
+                        <div class="upload-icon">📊</div>
+                        <h3>Drag & Drop Excel File Here</h3>
+                        <p>or <button type="button" class="btn btn-outline" onclick="document.getElementById('file-input').click()">Browse Files</button></p>
+                        <p class="upload-hint">Supports .xlsx and .xls files up to 10MB</p>
+                        <input type="file" id="file-input" accept=".xlsx,.xls" style="display: none;">
+                    </div>
+                    
+                    <div class="upload-progress hidden" id="upload-progress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                        <p id="progress-text">Processing file...</p>
+                    </div>
+
+                    <div class="file-info hidden" id="file-info">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">File Name:</span>
+                                <span class="info-value" id="file-name">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Total Rows:</span>
+                                <span class="info-value" id="total-rows">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Columns:</span>
+                                <span class="info-value" id="total-columns">-</span>
+                            </div>
+                        </div>
+                        <div class="preview-table-container">
+                            <h4>Data Preview</h4>
+                            <div class="table-wrapper">
+                                <table class="preview-table" id="preview-table">
+                                    <thead id="preview-headers"></thead>
+                                    <tbody id="preview-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary btn-large" onclick="nextStep()">Continue to Column Mapping</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Column Mapping -->
+        <div class="step-content" id="step-2">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Step 2: Map Columns to Label Elements</h2>
+                    <p class="card-description">Drag columns from your data to the appropriate label sections</p>
+                </div>
+                <div class="card-body">
+                    <div class="mapping-container">
+                        <div class="available-columns">
+                            <h3>Available Columns</h3>
+                            <div class="columns-grid" id="available-columns"></div>
+                        </div>
+                        
+                        <div class="mapping-zones">
+                            <div class="mapping-zone required" data-type="barcode">
+                                <div class="zone-header">
+                                    <h4>Barcode Data</h4>
+                                    <span class="required-badge">Required</span>
+                                </div>
+                                <p class="zone-description">Drag the column containing barcode/EAN codes</p>
+                                <div class="dropped-columns" id="barcode-zone"></div>
+                            </div>
+
+                            <div class="mapping-zone" data-type="text">
+                                <div class="zone-header">
+                                    <h4>Label Text</h4>
+                                    <span class="optional-badge">Optional</span>
+                                </div>
+                                <p class="zone-description">Drag columns for product information (size, style, description)</p>
+                                <div class="dropped-columns" id="text-zone"></div>
+                            </div>
+
+                            <div class="mapping-zone" data-type="quantity">
+                                <div class="zone-header">
+                                    <h4>Quantity</h4>
+                                    <span class="optional-badge">Optional</span>
+                                </div>
+                                <p class="zone-description">Drag column containing quantity values for label duplication</p>
+                                <div class="dropped-columns" id="quantity-zone"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mapping-preview">
+                        <h4>Label Preview</h4>
+                        <div class="preview-label" id="mapping-preview-label">
+                            <div class="preview-barcode">
+                                <svg id="mapping-preview-barcode"></svg>
+                            </div>
+                            <div class="preview-text" id="mapping-preview-text">Sample Product Information</div>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button class="btn btn-outline" onclick="previousStep()">Previous</button>
+                        <button class="btn btn-primary" onclick="nextStep()" id="continue-mapping" disabled>Continue to Label Design</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Label Design -->
+        <div class="step-content" id="step-3">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Step 3: Design Your Labels</h2>
+                    <p class="card-description">Configure label size, barcode type, and layout options</p>
+                </div>
+                <div class="card-body">
+                    <div class="design-grid">
+                        <div class="design-controls">
+                            <div class="control-group">
+                                <label for="label-size">Label Size</label>
+                                <select class="form-control" id="label-size">
+                                    <option value="2x1">2" x 1" (Standard)</option>
+                                    <option value="3x1">3" x 1" (Large)</option>
+                                    <option value="2.5x1">2.5" x 1" (Medium)</option>
+                                    <option value="4x2">4" x 2" (Extra Large)</option>
+                                    <option value="custom">Custom Size</option>
+                                </select>
+                            </div>
+
+                            <div class="control-group hidden" id="custom-size-group">
+                                <label for="custom-width">Width (inches)</label>
+                                <input type="number" class="form-control" id="custom-width" value="2" step="0.1" min="0.5" max="10">
+                                <label for="custom-height">Height (inches)</label>
+                                <input type="number" class="form-control" id="custom-height" value="1" step="0.1" min="0.5" max="10">
+                            </div>
+
+                            <div class="control-group">
+                                <label for="barcode-type">Barcode Type</label>
+                                <select class="form-control" id="barcode-type">
+                                    <option value="EAN13">EAN-13 (Retail)</option>
+                                    <option value="CODE128">Code 128 (Universal)</option>
+                                    <option value="CODE39">Code 39 (Industrial)</option>
+                                    <option value="UPC">UPC-A (US Retail)</option>
+                                    <option value="ITF">ITF-14 (Shipping)</option>
+                                </select>
+                            </div>
+
+                            <div class="control-group">
+                                <label for="static-text">Company Text</label>
+                                <input type="text" class="form-control" id="static-text" placeholder="e.g., Imported by: Advista Marketing P Ltd">
+                            </div>
+
+                            <div class="control-group">
+                                <label for="font-size">Text Size</label>
+                                <select class="form-control" id="font-size">
+                                    <option value="small">Small (8pt)</option>
+                                    <option value="medium" selected>Medium (10pt)</option>
+                                    <option value="large">Large (12pt)</option>
+                                </select>
+                            </div>
+
+                            <div class="control-group">
+                                <label for="label-spacing">Label Spacing</label>
+                                <select class="form-control" id="label-spacing">
+                                    <option value="tight">Tight (0.1")</option>
+                                    <option value="normal" selected>Normal (0.2")</option>
+                                    <option value="loose">Loose (0.3")</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="design-preview">
+                            <h4>Live Preview</h4>
+                            <div class="preview-container">
+                                <div class="preview-label" id="design-preview-label">
+                                    <div class="preview-barcode">
+                                        <svg id="design-preview-barcode"></svg>
+                                    </div>
+                                    <div class="preview-text" id="design-preview-text">Sample Product Information</div>
+                                    <div class="preview-static" id="design-preview-static"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button class="btn btn-outline" onclick="previousStep()">Previous</button>
+                        <button class="btn btn-primary" onclick="nextStep()">Continue to Quantities</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Quantity Management -->
+        <div class="step-content" id="step-4">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Step 4: Set Label Quantities</h2>
+                    <p class="card-description">Configure how many labels to generate for each product</p>
+                </div>
+                <div class="card-body">
+                    <div class="quantity-options">
+                        <div class="option-group">
+                            <input type="radio" id="qty-column" name="quantity-type" value="column" checked>
+                            <label for="qty-column">
+                                <span class="option-title">Use quantity from Excel column</span>
+                                <span class="option-description">Generate labels based on quantity values in your data</span>
+                            </label>
+                        </div>
+                        
+                        <div class="option-group">
+                            <input type="radio" id="qty-manual" name="quantity-type" value="manual">
+                            <label for="qty-manual">
+                                <span class="option-title">Set quantity manually for each row</span>
+                                <span class="option-description">Specify custom quantities for individual products</span>
+                            </label>
+                        </div>
+                        
+                        <div class="option-group">
+                            <input type="radio" id="qty-fixed" name="quantity-type" value="fixed">
+                            <label for="qty-fixed">
+                                <span class="option-title">Use fixed quantity for all products</span>
+                                <span class="option-description">Generate the same number of labels for every product</span>
+                            </label>
+                            <div class="fixed-quantity-input">
+                                <input type="number" class="form-control" id="fixed-quantity" value="1" min="1" max="1000">
+                                <span class="input-label">labels per product</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="manual-quantities hidden" id="manual-quantities">
+                        <h4>Set Quantities for Each Product</h4>
+                        <div class="quantities-table-container">
+                            <table class="quantities-table" id="quantities-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Barcode</th>
+                                        <th>Quantity</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="quantities-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="quantity-summary">
+                        <div class="summary-card">
+                            <h4>Generation Summary</h4>
+                            <div class="summary-grid">
+                                <div class="summary-item">
+                                    <span class="summary-label">Total Products:</span>
+                                    <span class="summary-value" id="summary-products">-</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Total Labels:</span>
+                                    <span class="summary-value" id="summary-labels">-</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Estimated Pages:</span>
+                                    <span class="summary-value" id="summary-pages">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button class="btn btn-outline" onclick="previousStep()">Previous</button>
+                        <button class="btn btn-primary" onclick="nextStep()">Continue to Generation</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: Generate & Export -->
+        <div class="step-content" id="step-5">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Step 5: Generate & Export Labels</h2>
+                    <p class="card-description">Generate your labels and download in your preferred format</p>
+                </div>
+                <div class="card-body">
+                    <div class="generation-summary">
+                        <div class="summary-card">
+                            <h4>Final Summary</h4>
+                            <div class="summary-grid">
+                                <div class="summary-item">
+                                    <span class="summary-label">File:</span>
+                                    <span class="summary-value" id="final-file-name">-</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Products:</span>
+                                    <span class="summary-value" id="final-products">-</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Total Labels:</span>
+                                    <span class="summary-value" id="final-labels">-</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Label Size:</span>
+                                    <span class="summary-value" id="final-size">-</span>
+                                </div>
+                                <div class="summary-item">
+                                    <span class="summary-label">Barcode Type:</span>
+                                    <span class="summary-value" id="final-barcode-type">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="generation-actions">
+                        <button class="btn btn-primary btn-large" onclick="generateLabels()" id="generate-btn">
+                            <span class="btn-icon">🚀</span>
+                            Generate All Labels
+                        </button>
+                    </div>
+
+                    <div class="generation-progress hidden" id="generation-progress">
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="generation-progress-fill"></div>
+                            </div>
+                            <p id="generation-status">Preparing labels...</p>
+                        </div>
+                    </div>
+
+                    <div class="download-section hidden" id="download-section">
+                        <h4>Download Your Labels</h4>
+                        <div class="download-options">
+                            <button class="btn btn-primary btn-large" onclick="downloadPDF()" id="download-pdf">
+                                <span class="btn-icon">📄</span>
+                                Download PDF
+                                <span class="btn-description">Print-ready labels in PDF format</span>
+                            </button>
+                            <button class="btn btn-secondary btn-large" onclick="downloadZIP()" id="download-zip">
+                                <span class="btn-icon">📦</span>
+                                Download ZIP
+                                <span class="btn-description">Individual label images</span>
+                            </button>
+                        </div>
+                        <div class="download-info">
+                            <p><strong>PDF Format:</strong> Optimized for printing with proper margins and cut lines. Compatible with Avery label sheets.</p>
+                            <p><strong>ZIP Format:</strong> Contains individual high-resolution label images for custom printing or integration.</p>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button class="btn btn-outline" onclick="previousStep()">Previous</button>
+                        <button class="btn btn-secondary" onclick="startOver()">Start Over</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div class="modal hidden" id="loading-modal">
+        <div class="modal-content">
+            <div class="loading-spinner"></div>
+            <h3 id="loading-title">Processing...</h3>
+            <p id="loading-message">Please wait while we process your request.</p>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div class="modal hidden" id="error-modal">
+        <div class="modal-content">
+            <div class="error-icon">⚠️</div>
+            <h3 id="error-title">Error</h3>
+            <p id="error-message">An error occurred while processing your request.</p>
+            <button class="btn btn-primary" onclick="closeErrorModal()">OK</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
