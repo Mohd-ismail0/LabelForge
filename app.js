@@ -842,7 +842,23 @@ function renderElement(element, labelData) {
     // Add selection handling
     div.addEventListener('click', (e) => {
         e.stopPropagation();
-        selectElement(element.id, e.shiftKey);
+        if (e.shiftKey) {
+            // Additive selection
+            if (selectedElements.has(element.id)) {
+                selectedElements.delete(element.id);
+            } else {
+                selectedElements.add(element.id);
+            }
+        } else {
+            // Single selection
+            selectedElements.clear();
+            selectedElements.add(element.id);
+        }
+        appState.labelSettings.selectedElementId = element.id;
+        updateSelectionUI();
+        renderElementTree();
+        renderProperties();
+        updateGroupButtons();
     });
     
     // Render content based on type
@@ -990,7 +1006,23 @@ function renderTreeItem(container, element, depth) {
     // Click handler
     item.addEventListener('click', (e) => {
         e.stopPropagation();
-        selectElement(element.id, e.shiftKey);
+        if (e.shiftKey) {
+            // Additive selection
+            if (selectedElements.has(element.id)) {
+                selectedElements.delete(element.id);
+            } else {
+                selectedElements.add(element.id);
+            }
+        } else {
+            // Single selection
+            selectedElements.clear();
+            selectedElements.add(element.id);
+        }
+        appState.labelSettings.selectedElementId = element.id;
+        updateSelectionUI();
+        renderElementTree();
+        renderProperties();
+        updateGroupButtons();
     });
     
     container.appendChild(item);
@@ -1223,15 +1255,24 @@ function updateSelectedElementProperties() {
     // Update properties based on element type
     switch (element.type) {
         case 'text':
-            element.properties.content = document.getElementById('text-content').value;
-            element.properties.fontSize = parseInt(document.getElementById('font-size').value) || 12;
-            element.properties.textAlign = document.getElementById('text-align').value;
-            element.properties.fontWeight = document.getElementById('font-weight').value;
-            element.properties.color = document.getElementById('color').value;
+            const textContent = document.getElementById('text-content');
+            const fontSize = document.getElementById('font-size');
+            const textAlign = document.getElementById('text-align');
+            const fontWeight = document.getElementById('font-weight');
+            const color = document.getElementById('color');
+            
+            if (textContent) element.properties.content = textContent.value;
+            if (fontSize) element.properties.fontSize = parseInt(fontSize.value) || 12;
+            if (textAlign) element.properties.textAlign = textAlign.value;
+            if (fontWeight) element.properties.fontWeight = fontWeight.value;
+            if (color) element.properties.color = color.value;
             break;
         case 'barcode':
-            element.properties.height = parseInt(document.getElementById('barcode-height').value) || 50;
-            element.properties.showText = document.getElementById('show-text').checked;
+            const barcodeHeight = document.getElementById('barcode-height');
+            const showText = document.getElementById('show-text');
+            
+            if (barcodeHeight) element.properties.height = parseInt(barcodeHeight.value) || 50;
+            if (showText) element.properties.showText = showText.checked;
             break;
     }
     
@@ -1240,7 +1281,10 @@ function updateSelectedElementProperties() {
 
 // Grouping Functions (Global functions accessible from HTML onclick)
 window.groupSelected = function() {
-    if (selectedElements.size < 2) return;
+    if (selectedElements.size < 2) {
+        showError('Grouping Error', 'Please select at least 2 elements to group.');
+        return;
+    }
     
     const selectedIds = Array.from(selectedElements);
     const elementsToGroup = selectedIds.map(id => getElementById(id)).filter(Boolean);
@@ -1278,10 +1322,14 @@ window.groupSelected = function() {
     
     // Select the new container
     selectedElements.clear();
-    selectElement(container.id);
+    selectedElements.add(container.id);
+    appState.labelSettings.selectedElementId = container.id;
+    updateSelectionUI();
+    renderElementTree();
+    renderProperties();
+    updateGroupButtons();
     
     renderCanvas();
-    renderElementTree();
 };
 
 window.ungroupSelected = function() {
@@ -1543,17 +1591,6 @@ function handleMouseUp(e) {
     document.removeEventListener('mouseup', handleMouseUp);
 }
 
-function selectElement(element) {
-    deselectAllElements();
-    element.classList.add('selected');
-    selectedElement = element;
-    
-    // Show element properties
-    showElementProperties(element);
-    
-    // Add resize handles
-    addResizeHandles(element);
-}
 
 function deselectAllElements() {
     document.querySelectorAll('.preview-barcode, .preview-text, .preview-static').forEach(el => {
@@ -2447,14 +2484,19 @@ function showPageSizeSelection() {
     const pageSizeSelection = document.getElementById('page-size-selection');
     pageSizeSelection.style.display = 'block';
     
-    // Add generate PDF button
-    const generatePdfBtn = document.createElement('button');
-    generatePdfBtn.className = 'btn btn-primary btn-large';
-    generatePdfBtn.innerHTML = '<span class="btn-icon">📄</span> Generate PDF';
-    generatePdfBtn.onclick = downloadPDF;
-    
-    const downloadOptions = document.querySelector('.download-options');
-    downloadOptions.appendChild(generatePdfBtn);
+    // Check if PDF button already exists
+    const existingPdfBtn = document.getElementById('generate-pdf-btn');
+    if (!existingPdfBtn) {
+        // Add generate PDF button
+        const generatePdfBtn = document.createElement('button');
+        generatePdfBtn.id = 'generate-pdf-btn';
+        generatePdfBtn.className = 'btn btn-primary btn-large';
+        generatePdfBtn.innerHTML = '<span class="btn-icon">📄</span> Generate PDF';
+        generatePdfBtn.onclick = downloadPDF;
+        
+        const downloadOptions = document.querySelector('.download-options');
+        downloadOptions.appendChild(generatePdfBtn);
+    }
 }
 
 async function downloadPDF() {
