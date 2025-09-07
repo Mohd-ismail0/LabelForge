@@ -1444,21 +1444,26 @@ function getElementPositionForLayout(id, textLayout, textGap) {
         const textIndex = parseInt(id.split('-')[1]) || 0;
         const totalTextElements = appState.mappedColumns.text ? appState.mappedColumns.text.length : 0;
         
-        if (textLayout === 'horizontal' || textLayout === 'row') {
-            // Horizontal layout: position elements side by side
-            const elementWidth = (labelWidth - 0.2) / totalTextElements;
-            const x = 0.1 + (textIndex * elementWidth);
-            return { x: x, y: 0.6, width: elementWidth - 0.05, height: 0.15, fontSize: 10, align: 'center' };
+        if (textLayout === 'horizontal') {
+            // Horizontal flexbox layout: position elements side by side with gap
+            const containerWidth = labelWidth - 0.2; // 0.1 margin on each side
+            const totalGap = (totalTextElements - 1) * (textGap / 96); // Convert px to inches
+            const availableWidth = containerWidth - totalGap;
+            const elementWidth = availableWidth / totalTextElements;
+            const x = 0.1 + (textIndex * (elementWidth + (textGap / 96)));
+            return { x: x, y: 0.6, width: elementWidth, height: 0.15, fontSize: 10, align: 'center' };
         } else {
-            // Vertical layout: position elements stacked
+            // Vertical layout: position elements stacked (match current system)
             return { x: 0.1, y: 0.6 + (textIndex * 0.15), width: 'auto', height: 'auto', fontSize: 10, align: 'center' };
         }
     }
     
     if (id.startsWith('static-')) {
         const staticIndex = parseInt(id.split('-')[1]) || 0;
-        // Position static text elements below text elements
-        return { x: 0.1, y: 0.8 + (staticIndex * 0.1), width: 'auto', height: 'auto', fontSize: 8, align: 'center' };
+        // Position static text elements below text elements to avoid overlap
+        const textElementsCount = appState.mappedColumns.text ? appState.mappedColumns.text.length : 0;
+        const baseY = textLayout === 'horizontal' ? 0.8 : 0.6 + (textElementsCount * 0.15);
+        return { x: 0.1, y: baseY + (staticIndex * 0.1), width: 'auto', height: 'auto', fontSize: 8, align: 'center' };
     }
     
     // Default positioning
