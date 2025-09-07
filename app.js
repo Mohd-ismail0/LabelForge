@@ -2475,11 +2475,8 @@ function createLabelCanvas(label) {
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, width - 2, height - 2);
     
-    // Add elements based on positioning
-    const elements = label.elements || appState.labelSettings.elements;
-    
     // Add barcode with number display
-    if (elements.barcode) {
+    if (appState.labelSettings.elements.barcode) {
         try {
             const barcodeCanvas = document.createElement('canvas');
             const displayValue = label.barcodeType === 'EAN13';
@@ -2490,10 +2487,11 @@ function createLabelCanvas(label) {
                 displayValue: displayValue
             });
             
-            const barcodeX = elements.barcode.x * dpi;
-            const barcodeY = elements.barcode.y * dpi;
-            const barcodeWidth = elements.barcode.width * dpi;
-            const barcodeHeight = elements.barcode.height * dpi;
+            const barcodeConfig = appState.labelSettings.elements.barcode;
+            const barcodeX = barcodeConfig.x * dpi;
+            const barcodeY = barcodeConfig.y * dpi;
+            const barcodeWidth = barcodeConfig.width * dpi;
+            const barcodeHeight = barcodeConfig.height * dpi;
             
             // Scale barcode to fit the element size
             ctx.drawImage(barcodeCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight);
@@ -2506,12 +2504,13 @@ function createLabelCanvas(label) {
                 ctx.fillText(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 15);
             }
         } catch (error) {
+            const barcodeConfig = appState.labelSettings.elements.barcode;
             ctx.fillStyle = '#000000';
-            ctx.font = `${elements.barcode.fontSize || 16}px Arial`;
-            ctx.textAlign = elements.barcode.align || 'center';
+            ctx.font = `${barcodeConfig.fontSize || 16}px Arial`;
+            ctx.textAlign = barcodeConfig.align || 'center';
             ctx.fillText('Invalid barcode', 
-                elements.barcode.x * dpi + (elements.barcode.width * dpi) / 2,
-                elements.barcode.y * dpi + (elements.barcode.height * dpi) / 2);
+                barcodeConfig.x * dpi + (barcodeConfig.width * dpi) / 2,
+                barcodeConfig.y * dpi + (barcodeConfig.height * dpi) / 2);
         }
     }
     
@@ -2519,36 +2518,30 @@ function createLabelCanvas(label) {
     if (label.textElements && label.textElements.length > 0) {
         label.textElements.forEach((textElement, index) => {
             const elementId = `text-${index}`;
-            if (elements[elementId]) {
+            const textConfig = appState.labelSettings.elements[elementId];
+            if (textConfig) {
                 ctx.fillStyle = '#000000';
-                ctx.font = `${elements[elementId].fontSize || 14}px Arial`;
-                ctx.textAlign = elements[elementId].align || 'center';
+                ctx.font = `${textConfig.fontSize || 14}px Arial`;
+                ctx.textAlign = textConfig.align || 'center';
                 ctx.fillText(textElement.text, 
-                    elements[elementId].x * dpi + (elements[elementId].width * dpi) / 2,
-                    elements[elementId].y * dpi + (elements[elementId].height * dpi) / 2);
+                    textConfig.x * dpi + (textConfig.width * dpi) / 2,
+                    textConfig.y * dpi + (textConfig.height * dpi) / 2);
             }
         });
-    } else if (label.text && elements.textContainer) {
-        // Fallback to single text element
-        ctx.fillStyle = '#000000';
-        ctx.font = `${elements.textContainer.fontSize || 14}px Arial`;
-        ctx.textAlign = elements.textContainer.align || 'center';
-        ctx.fillText(label.text, 
-            elements.textContainer.x * dpi + (elements.textContainer.width * dpi) / 2,
-            elements.textContainer.y * dpi + (elements.textContainer.height * dpi) / 2);
     }
     
     // Add static texts
     if (label.staticTexts && label.staticTexts.length > 0) {
         label.staticTexts.forEach((staticText, index) => {
             const elementId = `static-${index}`;
-            if (elements[elementId]) {
+            const staticConfig = appState.labelSettings.elements[elementId];
+            if (staticConfig) {
                 ctx.fillStyle = '#000000';
-                ctx.font = `${elements[elementId].fontSize || 12}px Arial`;
-                ctx.textAlign = elements[elementId].align || 'center';
+                ctx.font = `${staticConfig.fontSize || 12}px Arial`;
+                ctx.textAlign = staticConfig.align || 'center';
                 ctx.fillText(staticText.text, 
-                    elements[elementId].x * dpi + (elements[elementId].width * dpi) / 2,
-                    elements[elementId].y * dpi + (elements[elementId].height * dpi) / 2);
+                    staticConfig.x * dpi + (staticConfig.width * dpi) / 2,
+                    staticConfig.y * dpi + (staticConfig.height * dpi) / 2);
             }
         });
     }
@@ -2684,11 +2677,8 @@ function downloadPDF() {
             // Draw label border
             doc.rect(x, y, labelWidth, labelHeight);
             
-            // Add elements based on positioning
-            const elements = label.elements || appState.labelSettings.elements;
-            
             // Add barcode with number display
-            if (elements.barcode) {
+            if (appState.labelSettings.elements.barcode) {
                 try {
                     const canvas = document.createElement('canvas');
                     const displayValue = label.barcodeType === 'EAN13';
@@ -2699,11 +2689,12 @@ function downloadPDF() {
                         displayValue: displayValue
                     });
                     
+                    const barcodeConfig = appState.labelSettings.elements.barcode;
                     const barcodeDataURL = canvas.toDataURL();
-                    const barcodeX = x + (elements.barcode.x * 25.4);
-                    const barcodeY = y + (elements.barcode.y * 25.4);
-                    const barcodeWidth = elements.barcode.width * 25.4;
-                    const barcodeHeight = elements.barcode.height * 25.4;
+                    const barcodeX = x + (barcodeConfig.x * 25.4);
+                    const barcodeY = y + (barcodeConfig.y * 25.4);
+                    const barcodeWidth = barcodeConfig.width * 25.4;
+                    const barcodeHeight = barcodeConfig.height * 25.4;
                     
                     doc.addImage(barcodeDataURL, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
                     
@@ -2713,8 +2704,9 @@ function downloadPDF() {
                         doc.text(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 3, { align: 'center' });
                     }
                 } catch (error) {
+                    const barcodeConfig = appState.labelSettings.elements.barcode;
                     doc.setFontSize(8);
-                    doc.text('Invalid barcode', x + (elements.barcode.x * 25.4), y + (elements.barcode.y * 25.4) + 5);
+                    doc.text('Invalid barcode', x + (barcodeConfig.x * 25.4), y + (barcodeConfig.y * 25.4) + 5);
                 }
             }
             
@@ -2722,20 +2714,14 @@ function downloadPDF() {
             if (label.textElements && label.textElements.length > 0) {
                 label.textElements.forEach((textElement, index) => {
                     const elementId = `text-${index}`;
-                    if (elements[elementId]) {
-                        doc.setFontSize(elements[elementId].fontSize || 8);
-                        doc.text(textElement.text, x + (elements[elementId].x * 25.4), y + (elements[elementId].y * 25.4) + 5, {
-                            maxWidth: elements[elementId].width * 25.4,
-                            align: elements[elementId].align || 'left'
+                    const textConfig = appState.labelSettings.elements[elementId];
+                    if (textConfig) {
+                        doc.setFontSize(textConfig.fontSize || 8);
+                        doc.text(textElement.text, x + (textConfig.x * 25.4), y + (textConfig.y * 25.4) + 5, {
+                            maxWidth: textConfig.width * 25.4,
+                            align: textConfig.align || 'left'
                         });
                     }
-                });
-            } else if (label.text && elements.textContainer) {
-                // Fallback to single text element
-                doc.setFontSize(elements.textContainer.fontSize || 8);
-                doc.text(label.text, x + (elements.textContainer.x * 25.4), y + (elements.textContainer.y * 25.4) + 5, {
-                    maxWidth: elements.textContainer.width * 25.4,
-                    align: elements.textContainer.align || 'left'
                 });
             }
             
@@ -2743,11 +2729,12 @@ function downloadPDF() {
             if (label.staticTexts && label.staticTexts.length > 0) {
                 label.staticTexts.forEach((staticText, index) => {
                     const elementId = `static-${index}`;
-                    if (elements[elementId]) {
-                        doc.setFontSize(elements[elementId].fontSize || 6);
-                        doc.text(staticText.text, x + (elements[elementId].x * 25.4), y + (elements[elementId].y * 25.4) + 3, {
-                            maxWidth: elements[elementId].width * 25.4,
-                            align: elements[elementId].align || 'left'
+                    const staticConfig = appState.labelSettings.elements[elementId];
+                    if (staticConfig) {
+                        doc.setFontSize(staticConfig.fontSize || 6);
+                        doc.text(staticText.text, x + (staticConfig.x * 25.4), y + (staticConfig.y * 25.4) + 3, {
+                            maxWidth: staticConfig.width * 25.4,
+                            align: staticConfig.align || 'left'
                         });
                     }
                 });
