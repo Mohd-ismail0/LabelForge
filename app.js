@@ -1120,158 +1120,149 @@ function updateDesignPreview() {
     // Update label size
     const labelWidth = getLabelWidth();
     const labelHeight = getLabelHeight();
-    previewLabel.style.width = `${labelWidth * DISPLAY_DPI}px`; // Convert inches to pixels for display
+    previewLabel.style.width = `${labelWidth * DISPLAY_DPI}px`;
     previewLabel.style.height = `${labelHeight * DISPLAY_DPI}px`;
 
-    // Barcode element
-    let barcodeElement = document.getElementById('element-barcode');
-    if (!barcodeElement) {
-        barcodeElement = document.createElement('div');
-        barcodeElement.className = 'preview-barcode';
-        barcodeElement.id = 'element-barcode';
-        barcodeElement.dataset.elementId = 'barcode';
-        
-        const barcodeContainer = document.createElement('div');
-        barcodeContainer.className = 'barcode-container';
-        
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.id = 'design-preview-barcode';
-        svg.className = 'barcode-svg';
-        
-        const barcodeNumber = document.createElement('div');
-        barcodeNumber.className = 'barcode-number';
-        
-        barcodeContainer.appendChild(svg);
-        barcodeContainer.appendChild(barcodeNumber);
-        barcodeElement.appendChild(barcodeContainer);
-        
-        barcodeElement.addEventListener('mousedown', handleElementMouseDown);
-        barcodeElement.addEventListener('click', (e) => {
-            e.stopPropagation();
-            selectElement(barcodeElement);
-        });
-        
-        previewLabel.appendChild(barcodeElement);
-    }
+    // Clear and rebuild the preview using Step 2's approach
+    previewLabel.innerHTML = '';
 
-    // Update barcode content
+    // Create barcode element (like Step 2 but draggable)
+    const barcodeDiv = document.createElement('div');
+    barcodeDiv.className = 'preview-barcode';
+    barcodeDiv.id = 'element-barcode';
+    barcodeDiv.dataset.elementId = 'barcode';
+
+    const barcodeContainer = document.createElement('div');
+    barcodeContainer.className = 'barcode-container';
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'design-preview-barcode';
+    svg.className = 'barcode-svg';
+
+    const barcodeNumber = document.createElement('div');
+    barcodeNumber.className = 'barcode-number';
+
+    barcodeContainer.appendChild(svg);
+    barcodeContainer.appendChild(barcodeNumber);
+    barcodeDiv.appendChild(barcodeContainer);
+
+    // Add drag functionality
+    barcodeDiv.addEventListener('mousedown', handleElementMouseDown);
+    barcodeDiv.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(barcodeDiv);
+    });
+
+    previewLabel.appendChild(barcodeDiv);
+
+    // Position and generate barcode content (same as Step 2 logic)
     let barcodeConfig = appState.labelSettings.elements.barcode;
     if (!barcodeConfig) {
         barcodeConfig = getDefaultElementConfig('barcode');
         appState.labelSettings.elements.barcode = barcodeConfig;
     }
-    updateElementPosition(barcodeElement, barcodeConfig);
-    
-    const sampleBarcode = (appState.mappedColumns.barcode && appState.excelData.length > 0)
-        ? appState.excelData[0][appState.mappedColumns.barcode.index]
-        : getSampleBarcodeData(appState.labelSettings.barcodeType);
-    
-    const barcodeSvg = barcodeElement.querySelector('.barcode-svg');
-    const barcodeNumberDisplay = barcodeElement.querySelector('.barcode-number');
-    
-    if (sampleBarcode) {
-        try {
-            JsBarcode(barcodeSvg, sampleBarcode, {
-                format: appState.labelSettings.barcodeType,
-                width: 2,
-                height: 50,
-                displayValue: false
-            });
-            barcodeNumberDisplay.textContent = sampleBarcode;
-        } catch (error) {
-            barcodeSvg.innerHTML = '<text>Invalid Barcode</text>';
-            barcodeNumberDisplay.textContent = 'Invalid Data';
-        }
-    }
+    updateElementPosition(barcodeDiv, barcodeConfig);
 
-    // Text container - DEPRECATED, replaced by individual text elements
-    let textContainer = document.getElementById('element-textContainer');
-    if (textContainer) {
-        textContainer.remove();
-    }
-    
-    // Create/update individual text elements for each mapped column
-    appState.mappedColumns.text.forEach((column, index) => {
-        const elementId = `text-${index}`;
-        let textElement = document.getElementById(`element-${elementId}`);
-
-        if (!textElement) {
-            textElement = document.createElement('div');
-            textElement.className = 'preview-text';
-            textElement.id = `element-${elementId}`;
-            textElement.dataset.elementId = elementId;
-            
-            textElement.addEventListener('mousedown', handleElementMouseDown);
-            textElement.addEventListener('click', (e) => {
-                e.stopPropagation();
-                selectElement(textElement);
-            });
-            
-            previewLabel.appendChild(textElement);
-        }
-
-        // Set content
-        textElement.textContent = (appState.excelData && appState.excelData.length > 0)
-            ? (appState.excelData[0][column.index] || column.name)
-            : column.name;
-
-        // Get or create config
-        let textConfig = appState.labelSettings.elements[elementId];
-        if (!textConfig) {
-            textConfig = getDefaultElementConfig(elementId);
-            appState.labelSettings.elements[elementId] = textConfig;
-        }
-        updateElementPosition(textElement, textConfig);
-    });
-
-    // Remove text elements that are no longer mapped
-    const textElements = previewLabel.querySelectorAll('.preview-text');
-    textElements.forEach(el => {
-        const elementId = el.dataset.elementId;
-        if (elementId.startsWith('text-')) {
-            const index = parseInt(elementId.split('-')[1]);
-            if (index >= appState.mappedColumns.text.length) {
-                el.remove();
-                delete appState.labelSettings.elements[elementId];
+    // Generate barcode using Step 2's logic
+    if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
+        const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
+        if (sampleBarcode) {
+            try {
+                JsBarcode(svg, sampleBarcode, {
+                    format: appState.labelSettings.barcodeType,
+                    width: 2,
+                    height: 50,
+                    displayValue: false
+                });
+                barcodeNumber.textContent = sampleBarcode;
+            } catch (error) {
+                svg.innerHTML = '<text>Invalid barcode</text>';
+                barcodeNumber.textContent = 'Invalid Data';
             }
         }
-    });
-
-    // Static text elements
-    appState.labelSettings.staticTexts.forEach((staticText, index) => {
-        const elementId = `static-${index}`;
-        let staticElement = document.getElementById(`element-${elementId}`);
-        if (!staticElement) {
-            staticElement = document.createElement('div');
-            staticElement.className = 'preview-static';
-            staticElement.id = `element-${elementId}`;
-            staticElement.dataset.elementId = elementId;
-            
-            staticElement.addEventListener('mousedown', handleElementMouseDown);
-            staticElement.addEventListener('click', (e) => {
-                e.stopPropagation();
-                selectElement(staticElement);
-            });
-            
-            previewLabel.appendChild(staticElement);
-        }
-        
-        staticElement.textContent = staticText.text;
-        let staticConfig = appState.labelSettings.elements[elementId];
-        if (!staticConfig) {
-            staticConfig = getDefaultElementConfig(elementId);
-            appState.labelSettings.elements[elementId] = staticConfig;
-        }
-        updateElementPosition(staticElement, staticConfig);
-    });
-
-    // Remove deleted static text elements
-    const staticElements = previewLabel.querySelectorAll('.preview-static');
-    if (staticElements.length > appState.labelSettings.staticTexts.length) {
-        for (let i = appState.labelSettings.staticTexts.length; i < staticElements.length; i++) {
-            staticElements[i].remove();
-        }
+    } else {
+        svg.innerHTML = '';
+        barcodeNumber.textContent = getSampleBarcodeData(appState.labelSettings.barcodeType);
     }
+
+    // Create individual text elements for each mapped column (like Step 2 but draggable)
+    if (appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
+        appState.mappedColumns.text.forEach((column, index) => {
+            const textDiv = document.createElement('div');
+            textDiv.className = 'preview-text';
+            textDiv.id = `element-text-${index}`;
+            textDiv.dataset.elementId = `text-${index}`;
+
+            // Set content using Step 2's logic
+            const value = appState.excelData[0][column.index];
+            textDiv.textContent = value ? value.toString() : column.name;
+
+            // Add drag functionality
+            textDiv.addEventListener('mousedown', handleElementMouseDown);
+            textDiv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectElement(textDiv);
+            });
+
+            previewLabel.appendChild(textDiv);
+
+            // Position element
+            let textConfig = appState.labelSettings.elements[`text-${index}`];
+            if (!textConfig) {
+                textConfig = getDefaultElementConfig(`text-${index}`);
+                appState.labelSettings.elements[`text-${index}`] = textConfig;
+            }
+            updateElementPosition(textDiv, textConfig);
+        });
+    } else if (appState.mappedColumns.text.length > 0) {
+        // Handle case where we have mapped columns but no data yet
+        appState.mappedColumns.text.forEach((column, index) => {
+            const textDiv = document.createElement('div');
+            textDiv.className = 'preview-text';
+            textDiv.id = `element-text-${index}`;
+            textDiv.dataset.elementId = `text-${index}`;
+            textDiv.textContent = column.name;
+
+            textDiv.addEventListener('mousedown', handleElementMouseDown);
+            textDiv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectElement(textDiv);
+            });
+
+            previewLabel.appendChild(textDiv);
+
+            let textConfig = appState.labelSettings.elements[`text-${index}`];
+            if (!textConfig) {
+                textConfig = getDefaultElementConfig(`text-${index}`);
+                appState.labelSettings.elements[`text-${index}`] = textConfig;
+            }
+            updateElementPosition(textDiv, textConfig);
+        });
+    }
+
+    // Add static text elements
+    appState.labelSettings.staticTexts.forEach((staticText, index) => {
+        const staticDiv = document.createElement('div');
+        staticDiv.className = 'preview-static';
+        staticDiv.id = `element-static-${index}`;
+        staticDiv.dataset.elementId = `static-${index}`;
+        staticDiv.textContent = staticText.text;
+
+        staticDiv.addEventListener('mousedown', handleElementMouseDown);
+        staticDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectElement(staticDiv);
+        });
+
+        previewLabel.appendChild(staticDiv);
+
+        let staticConfig = appState.labelSettings.elements[`static-${index}`];
+        if (!staticConfig) {
+            staticConfig = getDefaultElementConfig(`static-${index}`);
+            appState.labelSettings.elements[`static-${index}`] = staticConfig;
+        }
+        updateElementPosition(staticDiv, staticConfig);
+    });
 }
 
 function getBarcodeImageUrl(barcodeType) {
