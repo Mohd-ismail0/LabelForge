@@ -96,19 +96,19 @@ function setupEventListeners() {
     }
     
     if (barcodeType) {
-        barcodeType.addEventListener('change', updatePreview);
+        barcodeType.addEventListener('change', updateDesignPreview);
     }
     
     if (staticText) {
-        staticText.addEventListener('input', updatePreview);
+        staticText.addEventListener('input', updateDesignPreview);
     }
     
     if (fontSize) {
-        fontSize.addEventListener('change', updatePreview);
+        fontSize.addEventListener('change', updateDesignPreview);
     }
     
     if (spacing) {
-        spacing.addEventListener('change', updatePreview);
+        spacing.addEventListener('change', updateDesignPreview);
     }
     
     // Quantity management
@@ -1261,52 +1261,38 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
-    // Update barcode content with number display
+    // Update barcode content with example barcodes
     const barcodeElement = document.getElementById('element-barcode');
     if (barcodeElement) {
         const svg = barcodeElement.querySelector('svg');
         const barcodeNumber = barcodeElement.querySelector('.barcode-number');
         
-        if (svg && appState.mappedColumns.barcode && appState.excelData.length > 0) {
-            const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
-            if (sampleBarcode) {
-                try {
-                    // Generate barcode with number display for EAN-13
-                    const displayValue = appState.labelSettings.barcodeType === 'EAN13';
-                    JsBarcode(svg, sampleBarcode, {
-                        format: appState.labelSettings.barcodeType,
-                        width: 2,
-                        height: 50,
-                        displayValue: displayValue
-                    });
-                    
-                    // Update barcode number display
-                    if (barcodeNumber) {
-                        barcodeNumber.textContent = sampleBarcode.toString();
-                    }
-                } catch (error) {
-                    svg.innerHTML = '<text>Invalid barcode</text>';
-                    if (barcodeNumber) {
-                        barcodeNumber.textContent = 'Invalid';
-                    }
+        if (svg) {
+            // Get example barcode data based on selected type
+            let barcodeData = getExampleBarcodeData(appState.labelSettings.barcodeType);
+            
+            // If we have mapped data, use the first row's barcode data
+            if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
+                const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
+                if (sampleBarcode && sampleBarcode.toString().length >= 8) {
+                    barcodeData = sampleBarcode.toString();
                 }
             }
-        } else {
-            // Show sample barcode
+            
             try {
-                JsBarcode(svg, '1234567890123', {
-                    format: appState.labelSettings.barcodeType,
-                    width: 2,
-                    height: 50,
-                    displayValue: appState.labelSettings.barcodeType === 'EAN13'
-                });
+                // Generate barcode with appropriate settings
+                const barcodeOptions = getBarcodeOptions(appState.labelSettings.barcodeType);
+                JsBarcode(svg, barcodeData, barcodeOptions);
+                
+                // Update barcode number display
                 if (barcodeNumber) {
-                    barcodeNumber.textContent = '1234567890123';
+                    barcodeNumber.textContent = barcodeData;
                 }
             } catch (error) {
-                svg.innerHTML = '<text>Sample Barcode</text>';
+                console.error('Barcode generation error:', error);
+                svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="12">Invalid Barcode</text>';
                 if (barcodeNumber) {
-                    barcodeNumber.textContent = 'Sample';
+                    barcodeNumber.textContent = 'Invalid';
                 }
             }
         }
@@ -1338,6 +1324,83 @@ function updateDesignPreview() {
     
     // Update all element positions when size changes
     createLabelElements();
+}
+
+function getExampleBarcodeData(barcodeType) {
+    // Return appropriate example barcode data based on type
+    switch (barcodeType) {
+        case 'EAN13':
+            return '1234567890123'; // 13-digit EAN-13
+        case 'CODE128':
+            return 'SAMPLE123'; // Alphanumeric Code 128
+        case 'CODE39':
+            return 'SAMPLE'; // Alphanumeric Code 39
+        case 'UPC':
+            return '123456789012'; // 12-digit UPC-A
+        case 'ITF':
+            return '12345678901234'; // 14-digit ITF-14
+        default:
+            return '1234567890123';
+    }
+}
+
+function getBarcodeOptions(barcodeType) {
+    const baseOptions = {
+        width: 2,
+        height: 50,
+        margin: 10
+    };
+    
+    switch (barcodeType) {
+        case 'EAN13':
+            return {
+                ...baseOptions,
+                format: 'EAN13',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        case 'CODE128':
+            return {
+                ...baseOptions,
+                format: 'CODE128',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        case 'CODE39':
+            return {
+                ...baseOptions,
+                format: 'CODE39',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        case 'UPC':
+            return {
+                ...baseOptions,
+                format: 'UPC',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        case 'ITF':
+            return {
+                ...baseOptions,
+                format: 'ITF',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        default:
+            return {
+                ...baseOptions,
+                format: 'EAN13',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+    }
 }
 
 // Quantity Management
