@@ -2476,7 +2476,13 @@ function createLabelCanvas(label) {
     ctx.strokeRect(1, 1, width - 2, height - 2);
     
     // Add barcode with number display
-    if (appState.labelSettings.elements.barcode) {
+    let barcodeConfig = appState.labelSettings.elements.barcode;
+    if (!barcodeConfig) {
+        barcodeConfig = getDefaultElementConfig('barcode');
+        appState.labelSettings.elements.barcode = barcodeConfig;
+    }
+    
+    if (barcodeConfig) {
         try {
             const barcodeCanvas = document.createElement('canvas');
             const displayValue = label.barcodeType === 'EAN13';
@@ -2487,7 +2493,6 @@ function createLabelCanvas(label) {
                 displayValue: displayValue
             });
             
-            const barcodeConfig = appState.labelSettings.elements.barcode;
             const barcodeX = barcodeConfig.x * dpi;
             const barcodeY = barcodeConfig.y * dpi;
             const barcodeWidth = barcodeConfig.width * dpi;
@@ -2504,7 +2509,6 @@ function createLabelCanvas(label) {
                 ctx.fillText(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 15);
             }
         } catch (error) {
-            const barcodeConfig = appState.labelSettings.elements.barcode;
             ctx.fillStyle = '#000000';
             ctx.font = `${barcodeConfig.fontSize || 16}px Arial`;
             ctx.textAlign = barcodeConfig.align || 'center';
@@ -2518,7 +2522,12 @@ function createLabelCanvas(label) {
     if (label.textElements && label.textElements.length > 0) {
         label.textElements.forEach((textElement, index) => {
             const elementId = `text-${index}`;
-            const textConfig = appState.labelSettings.elements[elementId];
+            let textConfig = appState.labelSettings.elements[elementId];
+            if (!textConfig) {
+                textConfig = getDefaultElementConfig(elementId);
+                appState.labelSettings.elements[elementId] = textConfig;
+            }
+            
             if (textConfig) {
                 ctx.fillStyle = '#000000';
                 ctx.font = `${textConfig.fontSize || 14}px Arial`;
@@ -2534,7 +2543,12 @@ function createLabelCanvas(label) {
     if (label.staticTexts && label.staticTexts.length > 0) {
         label.staticTexts.forEach((staticText, index) => {
             const elementId = `static-${index}`;
-            const staticConfig = appState.labelSettings.elements[elementId];
+            let staticConfig = appState.labelSettings.elements[elementId];
+            if (!staticConfig) {
+                staticConfig = getDefaultElementConfig(elementId);
+                appState.labelSettings.elements[elementId] = staticConfig;
+            }
+            
             if (staticConfig) {
                 ctx.fillStyle = '#000000';
                 ctx.font = `${staticConfig.fontSize || 12}px Arial`;
@@ -2678,7 +2692,13 @@ function downloadPDF() {
             doc.rect(x, y, labelWidth, labelHeight);
             
             // Add barcode with number display
-            if (appState.labelSettings.elements.barcode) {
+            let barcodeConfig = appState.labelSettings.elements.barcode;
+            if (!barcodeConfig) {
+                barcodeConfig = getDefaultElementConfig('barcode');
+                appState.labelSettings.elements.barcode = barcodeConfig;
+            }
+            
+            if (barcodeConfig) {
                 try {
                     const canvas = document.createElement('canvas');
                     const displayValue = label.barcodeType === 'EAN13';
@@ -2689,7 +2709,6 @@ function downloadPDF() {
                         displayValue: displayValue
                     });
                     
-                    const barcodeConfig = appState.labelSettings.elements.barcode;
                     const barcodeDataURL = canvas.toDataURL();
                     const barcodeX = x + (barcodeConfig.x * 25.4);
                     const barcodeY = y + (barcodeConfig.y * 25.4);
@@ -2704,7 +2723,6 @@ function downloadPDF() {
                         doc.text(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 3, { align: 'center' });
                     }
                 } catch (error) {
-                    const barcodeConfig = appState.labelSettings.elements.barcode;
                     doc.setFontSize(8);
                     doc.text('Invalid barcode', x + (barcodeConfig.x * 25.4), y + (barcodeConfig.y * 25.4) + 5);
                 }
@@ -2714,7 +2732,12 @@ function downloadPDF() {
             if (label.textElements && label.textElements.length > 0) {
                 label.textElements.forEach((textElement, index) => {
                     const elementId = `text-${index}`;
-                    const textConfig = appState.labelSettings.elements[elementId];
+                    let textConfig = appState.labelSettings.elements[elementId];
+                    if (!textConfig) {
+                        textConfig = getDefaultElementConfig(elementId);
+                        appState.labelSettings.elements[elementId] = textConfig;
+                    }
+                    
                     if (textConfig) {
                         doc.setFontSize(textConfig.fontSize || 8);
                         doc.text(textElement.text, x + (textConfig.x * 25.4), y + (textConfig.y * 25.4) + 5, {
@@ -2729,7 +2752,12 @@ function downloadPDF() {
             if (label.staticTexts && label.staticTexts.length > 0) {
                 label.staticTexts.forEach((staticText, index) => {
                     const elementId = `static-${index}`;
-                    const staticConfig = appState.labelSettings.elements[elementId];
+                    let staticConfig = appState.labelSettings.elements[elementId];
+                    if (!staticConfig) {
+                        staticConfig = getDefaultElementConfig(elementId);
+                        appState.labelSettings.elements[elementId] = staticConfig;
+                    }
+                    
                     if (staticConfig) {
                         doc.setFontSize(staticConfig.fontSize || 6);
                         doc.text(staticText.text, x + (staticConfig.x * 25.4), y + (staticConfig.y * 25.4) + 3, {
