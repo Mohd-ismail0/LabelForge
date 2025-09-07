@@ -155,7 +155,12 @@ function setStep(stepNumber) {
             updateContinueButton();
             break;
         case 3:
-            initializeLabelDesigner();
+            // Initialize design mode class and setup drag and drop
+            const previewLabel = document.getElementById('design-preview-label');
+            if (previewLabel) {
+                previewLabel.classList.add('design-mode');
+                setupDragAndDrop();
+            }
             updateDesignPreview();
             break;
         case 4:
