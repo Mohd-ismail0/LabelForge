@@ -2533,7 +2533,12 @@ function createLabelCanvas(label) {
         const textContainerWidth = labelWidth - 0.2; // 0.1 margin on each side
         const textGap = (label.textGap || 4) / 96; // Convert pixels to inches
         
-        if (label.textLayout === 'horizontal') {
+        // Use the actual text layout from appState instead of label.textLayout
+        const actualTextLayout = appState.labelSettings.textLayout;
+        console.log('Actual text layout from appState:', actualTextLayout);
+        console.log('Label text layout:', label.textLayout, 'Text gap:', label.textGap, 'Text elements:', label.textElements.length);
+        
+        if (actualTextLayout === 'horizontal') {
             // Horizontal layout: distribute text elements across the width
             const totalGap = (label.textElements.length - 1) * textGap;
             const availableWidth = textContainerWidth - totalGap;
@@ -2572,12 +2577,14 @@ function createLabelCanvas(label) {
     
     // Add static texts below the text elements
     if (label.staticTexts && label.staticTexts.length > 0) {
+        console.log('Static texts:', label.staticTexts.length, 'Text layout:', label.textLayout);
         const labelWidth = appState.labelSettings.size === 'custom' 
             ? appState.labelSettings.customWidth 
             : LABEL_SIZES[appState.labelSettings.size].width;
         
-        // Position static text below text elements
-        const baseY = label.textLayout === 'horizontal' ? 0.8 : 0.6 + (label.textElements.length * 0.15);
+        // Position static text below text elements using actual layout
+        const actualTextLayout = appState.labelSettings.textLayout;
+        const baseY = actualTextLayout === 'horizontal' ? 0.8 : 0.6 + (label.textElements.length * 0.15);
         
         label.staticTexts.forEach((staticText, index) => {
             const x = 0.1;
