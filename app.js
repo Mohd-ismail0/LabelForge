@@ -802,9 +802,6 @@ function renderCanvas() {
     const canvas = document.getElementById('label-canvas');
     if (!canvas) return;
     
-    // Clear template cache when design changes
-    clearLabelTemplate();
-    
     // Set canvas size based on label dimensions (96 DPI for screen display)
     const labelWidth = getLabelWidth();
     const labelHeight = getLabelHeight();
@@ -2454,134 +2451,11 @@ function updateGenerationProgress(processed, total) {
 
 // Export Functions
 let isExporting = false; // Prevent multiple simultaneous exports
-let labelTemplate = null; // Cache the template for fast generation
 
-// Clear template cache when label design changes
-function clearLabelTemplate() {
-    if (labelTemplate && labelTemplate.container) {
-        document.body.removeChild(labelTemplate.container);
-    }
-    labelTemplate = null;
-}
-
-// Create a template once and reuse it for all labels
-function createLabelTemplate() {
-    if (labelTemplate) return labelTemplate;
-    
-    console.log('Creating label template...');
-    
-    // Check if we have generated labels
-    if (!appState.generatedLabels || appState.generatedLabels.length === 0) {
-        console.error('No generated labels available for template creation');
-        return null;
-    }
-    
-    // Create template container
-    const templateId = 'label-template-container';
-    let template = document.getElementById(templateId);
-    
-    if (!template) {
-        template = document.createElement('div');
-        template.id = templateId;
-        template.style.position = 'absolute';
-        template.style.left = '-9999px';
-        template.style.top = '-9999px';
-        template.style.visibility = 'hidden';
-        document.body.appendChild(template);
-    }
-    
-    // Clear template
-    template.innerHTML = '';
-    
-    // Create canvas with proper dimensions
-    const canvas = document.createElement('div');
-    canvas.className = 'label-canvas';
-    canvas.style.background = '#ffffff';
-    canvas.style.border = 'none';
-    canvas.style.boxShadow = 'none';
-    canvas.style.position = 'relative';
-    
-    // Set canvas size for high-quality export (300 DPI)
-    const dpi = 300;
-    const labelWidthInches = getLabelWidth();
-    const labelHeightInches = getLabelHeight();
-    const labelWidthPx = labelWidthInches * dpi;
-    const labelHeightPx = labelHeightInches * dpi;
-    
-    canvas.style.width = `${labelWidthPx}px`;
-    canvas.style.height = `${labelHeightPx}px`;
-    
-    template.appendChild(canvas);
-    
-    // Get the first label's structure to create the template
-    const firstLabel = appState.generatedLabels[0];
-    console.log('First label structure:', firstLabel);
-    
-    if (!firstLabel.elements) {
-        console.error('First label has no elements property');
-        return null;
-    }
-    
-    const rootElement = firstLabel.elements.find(el => el.id === 'root');
-    if (!rootElement) {
-        console.error('No root element found in first label');
-        return null;
-    }
-    
-    console.log('Root element found:', rootElement);
-    const rootDiv = renderElement(rootElement, firstLabel);
-    canvas.appendChild(rootDiv);
-    
-    labelTemplate = {
-        container: template,
-        canvas: canvas,
-        width: labelWidthPx,
-        height: labelHeightPx
-    };
-    
-    console.log('Label template created successfully');
-    return labelTemplate;
-}
-
-// Fast label generation using template
+// Simple, reliable label generation (reverted to working approach)
 async function getLabelBlob(label, labelIndex = 0) {
     try {
         console.log(`getLabelBlob: Generating label ${labelIndex + 1}...`);
-        
-        const template = createLabelTemplate();
-        if (!template) {
-            console.warn('Template creation failed, falling back to individual rendering');
-            return await getLabelBlobFallback(label, labelIndex);
-        }
-        
-        // Update dynamic content in the template
-        updateTemplateContent(template.canvas, label);
-        
-        // Use html2canvas on the updated template
-        const outputCanvas = await html2canvas(template.canvas, {
-            width: template.width,
-            height: template.height,
-            scale: 1,
-            backgroundColor: '#ffffff',
-            useCORS: true,
-            allowTaint: true,
-            logging: false
-        });
-        
-        const blob = await new Promise(resolve => outputCanvas.toBlob(resolve, 'image/png', 1.0));
-        return blob;
-        
-    } catch (error) {
-        console.error('Error in getLabelBlob:', error);
-        console.warn('Falling back to individual rendering');
-        return await getLabelBlobFallback(label, labelIndex);
-    }
-}
-
-// Fallback method using individual DOM creation
-async function getLabelBlobFallback(label, labelIndex = 0) {
-    try {
-        console.log(`getLabelBlobFallback: Generating label ${labelIndex + 1}...`);
         
         // Create a unique container for this label
         const uniqueId = `label-renderer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -2617,7 +2491,7 @@ async function getLabelBlobFallback(label, labelIndex = 0) {
             const rootDiv = renderElement(rootElement, label);
             canvas.appendChild(rootDiv);
         } else {
-            console.warn('getLabelBlobFallback: No root element found in label');
+            console.warn('getLabelBlob: No root element found in label');
         }
 
         // Use html2canvas to get a canvas of the rendered label
@@ -2638,57 +2512,11 @@ async function getLabelBlobFallback(label, labelIndex = 0) {
         
         return blob;
     } catch (error) {
-        console.error('Error in getLabelBlobFallback:', error);
+        console.error('Error in getLabelBlob:', error);
         throw error;
     }
 }
 
-// Update template content for a specific label
-function updateTemplateContent(canvas, label) {
-    // Find and update barcode elements
-    const barcodeElements = canvas.querySelectorAll('.flex-barcode');
-    barcodeElements.forEach(barcodeEl => {
-        const elementId = barcodeEl.dataset.elementId;
-        const element = label.elements.find(el => el.id === elementId);
-        
-        if (element && element.properties.columnIndex !== undefined) {
-            const barcodeValue = label.data[element.properties.columnIndex];
-            if (barcodeValue) {
-                // Update barcode SVG
-                const svg = barcodeEl.querySelector('svg');
-                if (svg) {
-                    try {
-                        JsBarcode(svg, barcodeValue, {
-                            format: appState.labelSettings.barcodeType,
-                            width: 2,
-                            height: element.properties.height || 50,
-                            displayValue: element.properties.showText !== false
-                        });
-                    } catch (error) {
-                        svg.innerHTML = '<text>Invalid barcode</text>';
-                    }
-                }
-            }
-        }
-    });
-    
-    // Find and update text elements
-    const textElements = canvas.querySelectorAll('.flex-text');
-    textElements.forEach(textEl => {
-        const elementId = textEl.dataset.elementId;
-        const element = label.elements.find(el => el.id === elementId);
-        
-        if (element && element.properties.columnIndex !== undefined) {
-            const textValue = label.data[element.properties.columnIndex];
-            if (textValue) {
-                const textSpan = textEl.querySelector('span');
-                if (textSpan) {
-                    textSpan.textContent = textValue;
-                }
-            }
-        }
-    });
-}
 
 function createFallbackBlob(canvas, width, height) {
     console.log('createFallbackBlob: Creating fallback blob...');
@@ -2821,7 +2649,7 @@ async function downloadPDF() {
         showProgress(`Generating ${appState.generatedLabels.length} label images...`);
         
         // Generate label blobs in batches to prevent browser overload
-        const batchSize = 10; // Process 10 labels at a time (faster with template)
+        const batchSize = 3; // Process 3 labels at a time (reliable individual approach)
         const labelBlobs = [];
         
         for (let i = 0; i < appState.generatedLabels.length; i += batchSize) {
@@ -2936,7 +2764,7 @@ async function downloadZIP() {
         showProgress(`Generating ${appState.generatedLabels.length} label images...`);
         
         // Generate label blobs in batches to prevent browser overload
-        const batchSize = 10; // Process 10 labels at a time (faster with template)
+        const batchSize = 3; // Process 3 labels at a time (reliable individual approach)
         const labelBlobs = [];
         
         for (let i = 0; i < appState.generatedLabels.length; i += batchSize) {
