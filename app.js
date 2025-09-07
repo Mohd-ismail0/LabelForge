@@ -1314,12 +1314,18 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
+    console.log('updateDesignPreview called');
+    console.log('Mapped columns:', appState.mappedColumns);
+    console.log('Excel data length:', appState.excelData ? appState.excelData.length : 0);
+    
     // Ensure elements exist before updating
     if (!document.getElementById('element-barcode')) {
+        console.log('Barcode element not found, creating elements...');
         createLabelElements();
         return; // Elements will be created and this function will be called again
     }
     
+    console.log('Barcode element found, updating...');
     // Update barcode content with example barcodes
     const barcodeElement = document.getElementById('element-barcode');
     if (barcodeElement) {
@@ -1381,13 +1387,18 @@ function updateDesignPreview() {
     
     // Update text elements in container
     if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
+        console.log('Updating text elements:', appState.mappedColumns.text);
         appState.mappedColumns.text.forEach((column, index) => {
             const textElement = document.getElementById(`text-element-${index}`);
+            console.log(`Text element ${index}:`, textElement);
             if (textElement && appState.excelData && appState.excelData.length > 0) {
                 const sampleValue = appState.excelData[0][column.index];
+                console.log(`Sample value for ${column.name}:`, sampleValue);
                 textElement.textContent = sampleValue ? sampleValue.toString() : column.name;
             }
         });
+    } else {
+        console.log('No text columns mapped or no Excel data');
     }
     
     // Update static text elements
