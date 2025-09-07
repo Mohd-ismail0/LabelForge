@@ -831,7 +831,7 @@ function renderCanvas() {
     }
 }
 
-function renderElement(element) {
+function renderElement(element, labelData) {
     const div = document.createElement('div');
     div.className = `flex-element flex-${element.type}`;
     div.dataset.elementId = element.id;
@@ -851,10 +851,10 @@ function renderElement(element) {
             renderContainer(div, element);
             break;
         case 'text':
-            renderText(div, element);
+            renderText(div, element, labelData);
             break;
         case 'barcode':
-            renderBarcode(div, element);
+            renderBarcode(div, element, labelData);
             break;
     }
     
@@ -862,7 +862,7 @@ function renderElement(element) {
     element.children.forEach(childId => {
         const childElement = getElementById(childId);
         if (childElement) {
-            const childDiv = renderElement(childElement);
+            const childDiv = renderElement(childElement, labelData);
             div.appendChild(childDiv);
         }
     });
@@ -889,12 +889,19 @@ function renderContainer(div, element) {
     }
 }
 
-function renderText(div, element) {
+function renderText(div, element, labelData) {
     const textSpan = document.createElement('span');
     
     // Use actual Excel data if available and element is mapped to a column
     let textContent = element.properties.content || 'Text';
-    if (element.properties.columnIndex !== undefined && appState.excelData && appState.excelData.length > 0) {
+    if (labelData && element.properties.columnIndex !== undefined) {
+        const mappedText = labelData.textElements.find(t => t.columnIndex === element.properties.columnIndex);
+        if (mappedText) {
+            textContent = mappedText.text;
+        } else {
+            textContent = element.properties.columnName; // Fallback
+        }
+    } else if (element.properties.columnIndex !== undefined && appState.excelData && appState.excelData.length > 0) {
         const value = appState.excelData[0][element.properties.columnIndex];
         textContent = value ? value.toString() : element.properties.columnName || textContent;
     }
@@ -907,14 +914,16 @@ function renderText(div, element) {
     div.appendChild(textSpan);
 }
 
-function renderBarcode(div, element) {
+function renderBarcode(div, element, labelData) {
     // Create barcode SVG
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.className = 'barcode-svg';
     
     // Get sample barcode data
     let barcodeData = '1234567890123';
-    if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
+    if (labelData) {
+        barcodeData = labelData.barcode;
+    } else if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
         barcodeData = appState.excelData[0][appState.mappedColumns.barcode.index] || barcodeData;
     }
     
@@ -946,24 +955,26 @@ function renderElementTree() {
 
 function renderTreeItem(container, element, depth) {
     const item = document.createElement('div');
-    item.className = `tree-item ${depth > 0 ? 'child' : ''}`;
+    item.className = `tree-item depth-${depth}`;
     item.dataset.elementId = element.id;
+    item.style.paddingLeft = `${depth * 20}px`;
     
-    if (appState.labelSettings.selectedElementId === element.id) {
+    if (selectedElements.has(element.id)) {
         item.classList.add('selected');
     }
+
+    // Add drag-and-drop handlers
+    item.draggable = true;
+    item.addEventListener('dragstart', e => handleTreeDragStart(e, element.id));
+    item.addEventListener('dragover', e => handleTreeDragOver(e));
+    item.addEventListener('dragleave', e => handleTreeDragLeave(e));
+    item.addEventListener('drop', e => handleTreeDrop(e, element.id));
     
     // Toggle button for containers with children
-    if (element.type === 'container' && element.children.length > 0) {
-        const toggle = document.createElement('button');
-        toggle.className = 'tree-toggle';
-        toggle.textContent = '▼';
-        item.appendChild(toggle);
-    } else {
-        const spacer = document.createElement('div');
-        spacer.style.width = '16px';
-        item.appendChild(spacer);
-    }
+    const toggleContainer = document.createElement('div');
+    toggleContainer.className = 'tree-toggle';
+    toggleContainer.textContent = '▼';
+    item.appendChild(toggleContainer);
     
     // Element icon
     const icon = document.createElement('span');
@@ -985,12 +996,18 @@ function renderTreeItem(container, element, depth) {
     container.appendChild(item);
     
     // Render children
-    element.children.forEach(childId => {
-        const childElement = getElementById(childId);
-        if (childElement) {
-            renderTreeItem(container, childElement, depth + 1);
-        }
-    });
+    if (element.children.length > 0) {
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'tree-item-children';
+        container.appendChild(childrenContainer);
+        
+        element.children.forEach(childId => {
+            const childElement = getElementById(childId);
+            if (childElement) {
+                renderTreeItem(childrenContainer, childElement, depth + 1);
+            }
+        });
+    }
 }
 
 function getElementIcon(type) {
@@ -1016,6 +1033,15 @@ function selectElement(id, additive = false) {
     renderElementTree();
     renderProperties();
     updateGroupButtons();
+
+    const element = getElementById(id);
+    if (element && element.type === 'text') {
+        const textInput = document.getElementById('text-content');
+        if (textInput) {
+            textInput.focus();
+            textInput.select();
+        }
+    }
 }
 
 function updateSelectionUI() {
@@ -2287,7 +2313,7 @@ function updateFinalSummary() {
 }
 
 // Label Generation
-function generateLabels() {
+async function generateLabels() {
     if (!appState.excelData || appState.excelData.length === 0) {
         showError('No data', 'Please upload and process an Excel file first');
         return;
@@ -2384,6 +2410,39 @@ function updateGenerationProgress(processed, total) {
 }
 
 // Export Functions
+async function getLabelBlob(label) {
+    const renderer = document.getElementById('offscreen-renderer');
+    renderer.innerHTML = ''; // Clear previous
+
+    const canvas = document.createElement('div');
+    canvas.className = 'label-canvas';
+    renderer.appendChild(canvas);
+    
+    // Set canvas size for high-quality export
+    const dpi = 300;
+    const labelWidth = getLabelWidth() * dpi / 96; // Scale from screen size to export size
+    const labelHeight = getLabelHeight() * dpi / 96;
+    canvas.style.width = `${labelWidth}px`;
+    canvas.style.height = `${labelHeight}px`;
+
+    // Render root element with the specific label data
+    const rootElement = label.elements.find(el => el.id === 'root');
+    if (rootElement) {
+        // We need to pass the label data down to the render functions
+        const rootDiv = renderElement(rootElement, label);
+        canvas.appendChild(rootDiv);
+    }
+
+    // Use html2canvas to get a canvas of the rendered label
+    const outputCanvas = await html2canvas(canvas, {
+        width: labelWidth,
+        height: labelHeight,
+        scale: 1 
+    });
+    
+    return new Promise(resolve => outputCanvas.toBlob(resolve, 'image/png'));
+}
+
 function showPageSizeSelection() {
     const pageSizeSelection = document.getElementById('page-size-selection');
     pageSizeSelection.style.display = 'block';
@@ -2398,7 +2457,7 @@ function showPageSizeSelection() {
     downloadOptions.appendChild(generatePdfBtn);
 }
 
-function downloadPDF() {
+async function downloadPDF() {
     if (appState.generatedLabels.length === 0) {
         showError('No labels', 'Please generate labels first');
         return;
@@ -2408,8 +2467,6 @@ function downloadPDF() {
     
     try {
         const { jsPDF } = window.jspdf;
-        
-        // Get selected page size
         const selectedPageSize = document.querySelector('input[name="page-size"]:checked').value;
         const doc = new jsPDF({
             orientation: 'p',
@@ -2423,46 +2480,42 @@ function downloadPDF() {
         const usableWidth = pageWidth - (margin * 2);
         const usableHeight = pageHeight - (margin * 2);
         
-        // Calculate label dimensions in mm (convert inches to mm)
         const labelWidthInch = getLabelWidth();
         const labelHeightInch = getLabelHeight();
-        const labelWidth = labelWidthInch * 25.4;
-        const labelHeight = labelHeightInch * 25.4;
+        const labelWidthMm = labelWidthInch * 25.4;
+        const labelHeightMm = labelHeightInch * 25.4;
         
-        // Calculate grid
-        const labelsPerRow = Math.floor(usableWidth / labelWidth);
-        const labelsPerCol = Math.floor(usableHeight / labelHeight);
+        const labelsPerRow = Math.floor(usableWidth / labelWidthMm);
+        const labelsPerCol = Math.floor(usableHeight / labelHeightMm);
         const labelsPerPage = labelsPerRow * labelsPerCol;
         
         let currentRow = 0;
         let currentCol = 0;
         
-        appState.generatedLabels.forEach((label, index) => {
-            if (index > 0 && index % labelsPerPage === 0) {
+        for (let i = 0; i < appState.generatedLabels.length; i++) {
+            const label = appState.generatedLabels[i];
+            
+            if (i > 0 && i % labelsPerPage === 0) {
                 doc.addPage();
                 currentRow = 0;
                 currentCol = 0;
             }
             
-            const x = margin + (currentCol * labelWidth);
-            const y = margin + (currentRow * labelHeight);
+            const x = margin + (currentCol * labelWidthMm);
+            const y = margin + (currentRow * labelHeightMm);
             
-            // Draw label border (for debugging)
-            doc.rect(x, y, labelWidth, labelHeight);
+            const blob = await getLabelBlob(label);
+            const imageUrl = URL.createObjectURL(blob);
             
-            // Render elements recursively
-            const rootElement = label.elements.find(el => el.id === 'root');
-            if (rootElement) {
-                drawElementOnPdf(doc, rootElement, label, x, y, labelWidth, labelHeight);
-            }
+            doc.addImage(imageUrl, 'PNG', x, y, labelWidthMm, labelHeightMm);
+            URL.revokeObjectURL(imageUrl);
             
-            // Update position
             currentCol++;
             if (currentCol >= labelsPerRow) {
                 currentCol = 0;
                 currentRow++;
             }
-        });
+        }
         
         doc.save('barcode-labels.pdf');
         hideProgress();
@@ -2474,70 +2527,7 @@ function downloadPDF() {
     }
 }
 
-function drawElementOnPdf(doc, element, label, parentX, parentY, parentWidth, parentHeight) {
-    // Basic conversion from px-based flex styles to mm-based PDF coordinates
-    const dpi = 96; // The DPI used for on-screen rendering
-    const scale = 25.4 / dpi; // mm per pixel
-
-    // Calculate element's position and size in mm
-    // This is a simplified model, assuming top-left positioning within the parent
-    const elementX = parentX + (element.style.padding || 0) * scale;
-    const elementY = parentY + (element.style.padding || 0) * scale;
-    
-    switch (element.type) {
-        case 'barcode':
-            try {
-                const canvas = document.createElement('canvas');
-                JsBarcode(canvas, label.barcode, {
-                    format: label.barcodeType,
-                    width: 2,
-                    height: element.properties.height || 50,
-                    displayValue: element.properties.showText || false
-                });
-                
-                const barcodeDataURL = canvas.toDataURL();
-                const barcodeWidth = (element.properties.width || 150) * scale;
-                const barcodeHeight = (element.properties.height || 50) * scale;
-                
-                doc.addImage(barcodeDataURL, 'PNG', elementX, elementY, barcodeWidth, barcodeHeight);
-            } catch (error) {
-                doc.setFontSize(8);
-                doc.text('Invalid barcode', elementX, elementY + 5);
-            }
-            break;
-            
-        case 'text':
-            let textContent = element.properties.content;
-            if (element.properties.columnIndex !== undefined) {
-                const mappedText = label.textElements.find(t => t.columnIndex === element.properties.columnIndex);
-                if (mappedText) {
-                    textContent = mappedText.text;
-                } else {
-                    textContent = element.properties.columnName; // Fallback to column name
-                }
-            }
-            
-            doc.setFontSize(element.properties.fontSize || 12);
-            doc.setTextColor(element.properties.color || '#000000');
-            doc.text(textContent, elementX, elementY + (element.properties.fontSize / 2), { 
-                align: element.properties.textAlign || 'left'
-            });
-            break;
-            
-        case 'container':
-            // Recursively draw children
-            element.children.forEach(childId => {
-                const childElement = label.elements.find(el => el.id === childId);
-                if (childElement) {
-                    // This positioning model needs to be improved to handle flex layouts
-                    drawElementOnPdf(doc, childElement, label, elementX, elementY, parentWidth, parentHeight);
-                }
-            });
-            break;
-    }
-}
-
-function downloadZIP() {
+async function downloadZIP() {
     if (appState.generatedLabels.length === 0) {
         showError('No labels', 'Please generate labels first');
         return;
@@ -2547,121 +2537,26 @@ function downloadZIP() {
     
     try {
         const zip = new JSZip();
-        let processedCount = 0;
         
-        appState.generatedLabels.forEach((label, index) => {
-            try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                // Set canvas size based on label size (300 DPI for high quality)
-                const dpi = 300;
-                const width = getLabelWidth() * dpi;
-                const height = getLabelHeight() * dpi;
-                
-                canvas.width = width;
-                canvas.height = height;
-                
-                // Fill background
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, width, height);
-                
-                // Add border
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(1, 1, width - 2, height - 2);
-                
-                // Render elements recursively
-                const rootElement = label.elements.find(el => el.id === 'root');
-                if (rootElement) {
-                    drawElementOnCanvas(ctx, rootElement, label, 0, 0, width, height, dpi);
-                }
-                
-                // Convert to blob and add to ZIP
-                canvas.toBlob((blob) => {
-                    zip.file(`label-${index + 1}.png`, blob);
-                    processedCount++;
-                    
-                    if (processedCount === appState.generatedLabels.length) {
-                        zip.generateAsync({ type: 'blob' }).then((content) => {
-                            const url = URL.createObjectURL(content);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = 'barcode-labels.zip';
-                            a.click();
-                            URL.revokeObjectURL(url);
-                            hideProgress();
-                        });
-                    }
-                }, 'image/png');
-                
-            } catch (error) {
-                console.error('Error creating label image:', error);
-                processedCount++;
-            }
-        });
+        for (let i = 0; i < appState.generatedLabels.length; i++) {
+            const label = appState.generatedLabels[i];
+            const blob = await getLabelBlob(label);
+            zip.file(`label-${i + 1}.png`, blob);
+        }
+        
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'barcode-labels.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+        hideProgress();
         
     } catch (error) {
         console.error('ZIP generation error:', error);
         showError('ZIP Error', 'There was an error generating the ZIP file');
         hideProgress();
-    }
-}
-
-function drawElementOnCanvas(ctx, element, label, parentX, parentY, parentWidth, parentHeight, dpi) {
-    const scale = dpi / 96; // Scale from screen DPI to canvas DPI
-
-    const elementX = parentX + (element.style.padding || 0) * scale;
-    const elementY = parentY + (element.style.padding || 0) * scale;
-    
-    switch (element.type) {
-        case 'barcode':
-            try {
-                const barcodeCanvas = document.createElement('canvas');
-                JsBarcode(barcodeCanvas, label.barcode, {
-                    format: label.barcodeType,
-                    width: 3,
-                    height: 60,
-                    displayValue: element.properties.showText || false
-                });
-                
-                const barcodeWidth = (element.properties.width || 150) * scale;
-                const barcodeHeight = (element.properties.height || 50) * scale;
-                
-                ctx.drawImage(barcodeCanvas, elementX, elementY, barcodeWidth, barcodeHeight);
-            } catch (error) {
-                ctx.fillStyle = '#000000';
-                ctx.font = `${(element.properties.fontSize || 16) * scale}px Arial`;
-                ctx.textAlign = element.properties.textAlign || 'center';
-                ctx.fillText('Invalid barcode', elementX + (parentWidth / 2), elementY + (parentHeight / 2));
-            }
-            break;
-            
-        case 'text':
-            let textContent = element.properties.content;
-            if (element.properties.columnIndex !== undefined) {
-                const mappedText = label.textElements.find(t => t.columnIndex === element.properties.columnIndex);
-                if (mappedText) {
-                    textContent = mappedText.text;
-                } else {
-                    textContent = element.properties.columnName; // Fallback
-                }
-            }
-            
-            ctx.fillStyle = element.properties.color || '#000000';
-            ctx.font = `${(element.properties.fontSize || 14) * scale}px Arial`;
-            ctx.textAlign = element.properties.textAlign || 'center';
-            ctx.fillText(textContent, elementX + (parentWidth / 2), elementY + (parentHeight / 2));
-            break;
-            
-        case 'container':
-            element.children.forEach(childId => {
-                const childElement = label.elements.find(el => el.id === childId);
-                if (childElement) {
-                    drawElementOnCanvas(ctx, childElement, label, elementX, elementY, parentWidth, parentHeight, dpi);
-                }
-            });
-            break;
     }
 }
 
@@ -2711,3 +2606,89 @@ style.textContent = `
     .font-large { font-size: 12px; }
 `;
 document.head.appendChild(style);
+
+// Drag and Drop for Element Tree
+let draggedElementId = null;
+
+function handleTreeDragStart(e, id) {
+    e.stopPropagation();
+    draggedElementId = id;
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleTreeDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Provide visual feedback
+    const targetItem = e.currentTarget.closest('.tree-item');
+    if (targetItem) {
+        targetItem.classList.add('drag-over');
+    }
+}
+
+function handleTreeDragLeave(e) {
+    e.stopPropagation();
+    const targetItem = e.currentTarget.closest('.tree-item');
+    if (targetItem) {
+        targetItem.classList.remove('drag-over');
+    }
+}
+
+function handleTreeDrop(e, targetId) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const targetItem = e.currentTarget.closest('.tree-item');
+    if (targetItem) {
+        targetItem.classList.remove('drag-over');
+    }
+
+    if (!draggedElementId || draggedElementId === targetId) {
+        return;
+    }
+
+    const draggedElement = getElementById(draggedElementId);
+    const targetElement = getElementById(targetId);
+
+    if (!draggedElement || !targetElement || draggedElement.id === 'root') {
+        return; // Cannot move root or invalid elements
+    }
+
+    // Prevent dropping an element into its own descendant
+    let current = targetElement;
+    while (current) {
+        if (current.id === draggedElement.id) {
+            showError('Invalid Move', 'Cannot move an element into one of its own children.');
+            return;
+        }
+        current = getElementById(current.parent);
+    }
+    
+    // Remove from old parent
+    const oldParent = getElementById(draggedElement.parent);
+    if (oldParent) {
+        oldParent.children = oldParent.children.filter(id => id !== draggedElement.id);
+    }
+
+    // Add to new parent (if target is a container) or as sibling
+    if (targetElement.type === 'container') {
+        targetElement.children.push(draggedElement.id);
+        draggedElement.parent = targetElement.id;
+    } else {
+        // Insert as sibling after the target
+        const newParent = getElementById(targetElement.parent);
+        if (newParent) {
+            const targetIndex = newParent.children.indexOf(targetId);
+            newParent.children.splice(targetIndex + 1, 0, draggedElement.id);
+            draggedElement.parent = newParent.id;
+        }
+    }
+
+    draggedElementId = null;
+    
+    // Re-render everything
+    renderCanvas();
+    renderElementTree();
+}
