@@ -2456,8 +2456,12 @@ function createLabelCanvas(label) {
     
     // Set canvas size based on label size (300 DPI for high quality)
     const dpi = 300;
-    const width = getLabelWidth() * dpi;
-    const height = getLabelHeight() * dpi;
+    const width = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customWidth * dpi 
+        : LABEL_SIZES[appState.labelSettings.size].width * dpi;
+    const height = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customHeight * dpi 
+        : LABEL_SIZES[appState.labelSettings.size].height * dpi;
     
     canvas.width = width;
     canvas.height = height;
@@ -2650,8 +2654,12 @@ function downloadPDF() {
         const usableHeight = pageHeight - (margin * 2);
         
         // Calculate label dimensions in mm (convert inches to mm)
-        const labelWidth = getLabelWidth() * 25.4;
-        const labelHeight = getLabelHeight() * 25.4;
+        const labelWidth = appState.labelSettings.size === 'custom' 
+            ? appState.labelSettings.customWidth * 25.4 
+            : LABEL_SIZES[appState.labelSettings.size].width * 25.4;
+        const labelHeight = appState.labelSettings.size === 'custom' 
+            ? appState.labelSettings.customHeight * 25.4 
+            : LABEL_SIZES[appState.labelSettings.size].height * 25.4;
         
         // Calculate grid
         const labelsPerRow = Math.floor(usableWidth / labelWidth);
