@@ -2452,116 +2452,149 @@ function updateGenerationProgress(processed, total) {
 }
 
 // Export Functions
-async function createLabelCanvas(label) {
-    // Create a temporary DOM structure that matches Step 3's flexbox layout
-    const tempContainer = document.createElement('div');
-    tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px';
-    tempContainer.style.top = '-9999px';
-    tempContainer.style.width = '2in';
-    tempContainer.style.height = '1in';
-    tempContainer.style.display = 'flex';
-    tempContainer.style.flexDirection = 'column';
-    tempContainer.style.alignItems = 'center';
-    tempContainer.style.justifyContent = 'center';
-    tempContainer.style.gap = '4px';
-    tempContainer.style.padding = '8px';
-    tempContainer.style.backgroundColor = '#ffffff';
-    tempContainer.style.border = '1px solid #000000';
-    document.body.appendChild(tempContainer);
-
-    // Create barcode element
-    if (appState.labelSettings.elements.barcode) {
-        const barcodeDiv = document.createElement('div');
-        barcodeDiv.style.display = 'flex';
-        barcodeDiv.style.flexDirection = 'column';
-        barcodeDiv.style.alignItems = 'center';
-        barcodeDiv.style.textAlign = 'center';
-
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        const barcodeNumber = document.createElement('div');
-        barcodeNumber.style.fontSize = '10px';
-        barcodeNumber.style.marginTop = '2px';
-
+function createLabelCanvas(label) {
+    console.log('Creating label canvas for:', label);
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas size based on label size (300 DPI for high quality)
+    const dpi = 300;
+    const width = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customWidth * dpi 
+        : LABEL_SIZES[appState.labelSettings.size].width * dpi;
+    const height = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customHeight * dpi 
+        : LABEL_SIZES[appState.labelSettings.size].height * dpi;
+    
+    canvas.width = width;
+    canvas.height = height;
+    
+    // Fill background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Add border
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, width - 2, height - 2);
+    
+    // Add barcode with number display
+    let barcodeConfig = appState.labelSettings.elements.barcode;
+    if (!barcodeConfig) {
+        barcodeConfig = getDefaultElementConfig('barcode');
+        appState.labelSettings.elements.barcode = barcodeConfig;
+    }
+    
+    if (barcodeConfig) {
         try {
+            const barcodeCanvas = document.createElement('canvas');
             const displayValue = label.barcodeType === 'EAN13';
-            JsBarcode(svg, label.barcode, {
+            JsBarcode(barcodeCanvas, label.barcode, {
                 format: label.barcodeType,
-                width: 2,
-                height: 30,
+                width: 3,
+                height: 60,
                 displayValue: displayValue
             });
+            
+            const barcodeX = barcodeConfig.x * dpi;
+            const barcodeY = barcodeConfig.y * dpi;
+            const barcodeWidth = barcodeConfig.width * dpi;
+            const barcodeHeight = barcodeConfig.height * dpi;
+            
+            // Scale barcode to fit the element size
+            ctx.drawImage(barcodeCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+            
+            // Add barcode number if not displayed in barcode
             if (!displayValue) {
-                barcodeNumber.textContent = label.barcode;
+                ctx.fillStyle = '#000000';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 15);
             }
         } catch (error) {
-            svg.innerHTML = '<text>Invalid barcode</text>';
-            barcodeNumber.textContent = 'Invalid Data';
+            ctx.fillStyle = '#000000';
+            ctx.font = `${barcodeConfig.fontSize || 16}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText('Invalid barcode', 
+                barcodeConfig.x * dpi + (barcodeConfig.width * dpi) / 2,
+                barcodeConfig.y * dpi + (barcodeConfig.height * dpi) / 2);
         }
-
-        barcodeDiv.appendChild(svg);
-        barcodeDiv.appendChild(barcodeNumber);
-        tempContainer.appendChild(barcodeDiv);
     }
-
-    // Create text container with flexbox layout
-    if (label.textElements && label.textElements.length > 0) {
-        const textContainer = document.createElement('div');
-        textContainer.style.display = 'flex';
-        textContainer.style.flexDirection = label.textLayout === 'horizontal' ? 'row' : 'column';
-        textContainer.style.alignItems = 'center';
-        textContainer.style.justifyContent = 'center';
-        textContainer.style.gap = `${label.textGap}px`;
-        textContainer.style.flexWrap = 'wrap';
-
-        label.textElements.forEach((textElement, index) => {
-            const textDiv = document.createElement('div');
-            textDiv.textContent = textElement.text;
-            textDiv.style.fontSize = '10px';
-            textDiv.style.textAlign = 'center';
-            textDiv.style.padding = '2px 4px';
-            textDiv.style.borderRadius = '2px';
-            
-            if (label.textLayout === 'horizontal') {
-                textDiv.style.flex = '1';
-                textDiv.style.minWidth = '0'; // Allow shrinking
-            }
-            
-            textContainer.appendChild(textDiv);
-        });
-
-        tempContainer.appendChild(textContainer);
-    }
-
-    // Create static text elements
-    if (label.staticTexts && label.staticTexts.length > 0) {
-        const staticContainer = document.createElement('div');
-        staticContainer.style.display = 'flex';
-        staticContainer.style.flexDirection = 'column';
-        staticContainer.style.alignItems = 'center';
-        staticContainer.style.gap = '2px';
-
-        label.staticTexts.forEach((staticText, index) => {
-            const staticDiv = document.createElement('div');
-            staticDiv.textContent = staticText.text;
-            staticDiv.style.fontSize = '8px';
-            staticDiv.style.textAlign = 'center';
-            staticDiv.style.padding = '1px 2px';
-            staticContainer.appendChild(staticDiv);
-        });
-
-        tempContainer.appendChild(staticContainer);
-    }
-
-    // Convert to canvas using html2canvas
-    const canvas = await html2canvas(tempContainer, {
-        width: 600, // 2 inches at 300 DPI
-        height: 300, // 1 inch at 300 DPI
-        scale: 1,
-        backgroundColor: '#ffffff'
-    });
     
-    document.body.removeChild(tempContainer);
+    // Add product text elements with proper flexbox-like positioning
+    if (label.textElements && label.textElements.length > 0) {
+        const labelWidth = appState.labelSettings.size === 'custom' 
+            ? appState.labelSettings.customWidth 
+            : LABEL_SIZES[appState.labelSettings.size].width;
+        
+        // Calculate text container position (center of label)
+        const textContainerY = 0.6; // Fixed Y position for text container
+        const textContainerWidth = labelWidth - 0.2; // 0.1 margin on each side
+        const textGap = (label.textGap || 4) / 96; // Convert pixels to inches
+        
+        if (label.textLayout === 'horizontal') {
+            // Horizontal layout: distribute text elements across the width
+            const totalGap = (label.textElements.length - 1) * textGap;
+            const availableWidth = textContainerWidth - totalGap;
+            const elementWidth = availableWidth / label.textElements.length;
+            
+            label.textElements.forEach((textElement, index) => {
+                const x = 0.1 + (index * (elementWidth + textGap));
+                const y = textContainerY;
+                
+                ctx.fillStyle = '#000000';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                
+                const textX = x * dpi + (elementWidth * dpi) / 2;
+                const textY = y * dpi + 15; // Offset for baseline
+                
+                ctx.fillText(textElement.text, textX, textY);
+            });
+        } else {
+            // Vertical layout: stack text elements
+            label.textElements.forEach((textElement, index) => {
+                const x = 0.1;
+                const y = textContainerY + (index * 0.15);
+                
+                ctx.fillStyle = '#000000';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                
+                const textX = x * dpi + (textContainerWidth * dpi) / 2;
+                const textY = y * dpi + 15; // Offset for baseline
+                
+                ctx.fillText(textElement.text, textX, textY);
+            });
+        }
+    }
+    
+    // Add static texts below the text elements
+    if (label.staticTexts && label.staticTexts.length > 0) {
+        const labelWidth = appState.labelSettings.size === 'custom' 
+            ? appState.labelSettings.customWidth 
+            : LABEL_SIZES[appState.labelSettings.size].width;
+        
+        // Position static text below text elements
+        const baseY = label.textLayout === 'horizontal' ? 0.8 : 0.6 + (label.textElements.length * 0.15);
+        
+        label.staticTexts.forEach((staticText, index) => {
+            const x = 0.1;
+            const y = baseY + (index * 0.1);
+            
+            ctx.fillStyle = '#000000';
+            ctx.font = '8px Arial';
+            ctx.textAlign = 'center';
+            
+            const textX = x * dpi + ((labelWidth - 0.2) * dpi) / 2;
+            const textY = y * dpi + 12; // Offset for baseline
+            
+            ctx.fillText(staticText.text, textX, textY);
+        });
+    }
+    
+    console.log('Canvas created successfully:', canvas);
     return canvas;
 }
 
@@ -2622,7 +2655,9 @@ function showPageSizeSelection() {
     }
 }
 
-async function downloadPDF() {
+function downloadPDF() {
+    console.log('Starting PDF download, labels count:', appState.generatedLabels.length);
+    
     if (appState.generatedLabels.length === 0) {
         showError('No labels', 'Please generate labels first');
         return;
@@ -2679,7 +2714,7 @@ async function downloadPDF() {
         let currentRow = 0;
         let currentCol = 0;
         
-        // Process labels sequentially to handle async createLabelCanvas
+        // Process labels sequentially
         for (let index = 0; index < appState.generatedLabels.length; index++) {
             const label = appState.generatedLabels[index];
             
@@ -2696,8 +2731,8 @@ async function downloadPDF() {
             // Draw label border
             doc.rect(x, y, labelWidth, labelHeight);
             
-            // Create canvas for this label using the new flexbox approach
-            const canvas = await createLabelCanvas(label);
+            // Create canvas for this label
+            const canvas = createLabelCanvas(label);
             const imageDataURL = canvas.toDataURL('image/png');
             
             // Add the canvas image to PDF
@@ -2722,6 +2757,8 @@ async function downloadPDF() {
 }
 
 function downloadZIP() {
+    console.log('Starting ZIP download, labels count:', appState.generatedLabels.length);
+    
     if (appState.generatedLabels.length === 0) {
         showError('No labels', 'Please generate labels first');
         return;
@@ -2733,12 +2770,12 @@ function downloadZIP() {
         const zip = new JSZip();
         let processedCount = 0;
         
-        // Process labels sequentially to handle async createLabelCanvas
+        // Process labels sequentially
         const processLabels = async () => {
             for (let i = 0; i < appState.generatedLabels.length; i++) {
                 try {
                     const label = appState.generatedLabels[i];
-                    const canvas = await createLabelCanvas(label);
+                    const canvas = createLabelCanvas(label);
                     const blob = await new Promise((resolve) => {
                         canvas.toBlob(resolve, 'image/png');
                     });
