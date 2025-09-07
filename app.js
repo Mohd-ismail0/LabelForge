@@ -2476,7 +2476,7 @@ function createLabelCanvas(label) {
     ctx.strokeRect(1, 1, width - 2, height - 2);
     
     // Add elements based on positioning
-    const elements = appState.labelSettings.elements;
+    const elements = label.elements || appState.labelSettings.elements;
     
     // Add barcode with number display
     if (elements.barcode) {
@@ -2685,7 +2685,7 @@ function downloadPDF() {
             doc.rect(x, y, labelWidth, labelHeight);
             
             // Add elements based on positioning
-            const elements = appState.labelSettings.elements;
+            const elements = label.elements || appState.labelSettings.elements;
             
             // Add barcode with number display
             if (elements.barcode) {
