@@ -175,7 +175,7 @@
             <div class="card">
                 <div class="card-header">
                     <h2>Step 3: Design Your Labels</h2>
-                    <p class="card-description">Configure label size, barcode type, and layout options</p>
+                    <p class="card-description">Configure label size, barcode type, and drag elements to position them on your label</p>
                 </div>
                 <div class="card-body">
                     <div class="design-grid">
@@ -210,11 +210,6 @@
                             </div>
 
                             <div class="control-group">
-                                <label for="static-text">Company Text</label>
-                                <input type="text" class="form-control" id="static-text" placeholder="e.g., Imported by: Advista Marketing P Ltd">
-                            </div>
-
-                            <div class="control-group">
                                 <label for="font-size">Text Size</label>
                                 <select class="form-control" id="font-size">
                                     <option value="small">Small (8pt)</option>
@@ -231,18 +226,92 @@
                                     <option value="loose">Loose (0.3")</option>
                                 </select>
                             </div>
+
+                            <!-- Static Text Management -->
+                            <div class="control-group">
+                                <label>Static Text Fields</label>
+                                <div class="static-text-manager">
+                                    <div class="static-text-list" id="static-text-list">
+                                        <!-- Static text items will be added here -->
+                                    </div>
+                                    <button type="button" class="btn btn-outline btn-sm" onclick="addStaticTextField()">
+                                        <span class="btn-icon">+</span>
+                                        Add Static Text
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Text Layout Controls -->
+                            <div class="control-group">
+                                <label>Text Layout</label>
+                                <div class="layout-controls">
+                                    <div class="prop-row">
+                                        <label for="text-layout">Layout Direction:</label>
+                                        <select class="form-control" id="text-layout">
+                                            <option value="vertical">Vertical (Stacked)</option>
+                                            <option value="horizontal">Horizontal (Side by Side)</option>
+                                        </select>
+                                    </div>
+                                    <div class="prop-row">
+                                        <label for="text-gap">Gap Between Elements:</label>
+                                        <input type="number" class="form-control" id="text-gap" value="2" step="1" min="0" max="20">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Element Properties -->
+                            <div class="control-group" id="element-properties" style="display: none;">
+                                <label>Element Properties</label>
+                                <div class="element-props">
+                                    <div class="prop-row">
+                                        <label for="element-x">X Position:</label>
+                                        <input type="number" class="form-control" id="element-x" step="0.1" min="0">
+                                    </div>
+                                    <div class="prop-row">
+                                        <label for="element-y">Y Position:</label>
+                                        <input type="number" class="form-control" id="element-y" step="0.1" min="0">
+                                    </div>
+                                    <div class="prop-row">
+                                        <label for="element-width">Width:</label>
+                                        <input type="number" class="form-control" id="element-width" step="0.1" min="0.1">
+                                    </div>
+                                    <div class="prop-row">
+                                        <label for="element-height">Height:</label>
+                                        <input type="number" class="form-control" id="element-height" step="0.1" min="0.1">
+                                    </div>
+                                    <div class="prop-row">
+                                        <label for="element-font-size">Font Size:</label>
+                                        <input type="number" class="form-control" id="element-font-size" step="1" min="6" max="24">
+                                    </div>
+                                    <div class="prop-row">
+                                        <label for="element-align">Text Align:</label>
+                                        <select class="form-control" id="element-align">
+                                            <option value="left">Left</option>
+                                            <option value="center" selected>Center</option>
+                                            <option value="right">Right</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="design-preview">
-                            <h4>Live Preview</h4>
+                            <h4>Drag & Drop Label Designer</h4>
                             <div class="preview-container">
                                 <div class="preview-label" id="design-preview-label">
-                                    <div class="preview-barcode">
-                                        <svg id="design-preview-barcode"></svg>
-                                    </div>
-                                    <div class="preview-text" id="design-preview-text">Sample Product Information</div>
-                                    <div class="preview-static" id="design-preview-static"></div>
+                                    <!-- Draggable elements will be added here -->
                                 </div>
+                                <div class="preview-grid" id="preview-grid"></div>
+                            </div>
+                            <div class="preview-controls">
+                                <button class="btn btn-outline btn-sm" onclick="toggleGrid()" id="grid-toggle">
+                                    <span class="btn-icon">⊞</span>
+                                    Toggle Grid
+                                </button>
+                                <button class="btn btn-outline btn-sm" onclick="resetElementPositions()">
+                                    <span class="btn-icon">↺</span>
+                                    Reset Positions
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -391,21 +460,50 @@
 
                     <div class="download-section hidden" id="download-section">
                         <h4>Download Your Labels</h4>
+                        
+                        <!-- Page Size Selection for PDF -->
+                        <div class="page-size-selection" id="page-size-selection" style="display: none;">
+                            <h5>Select Page Size for PDF</h5>
+                            <div class="page-size-options">
+                                <div class="option-group">
+                                    <input type="radio" id="page-a4" name="page-size" value="a4" checked>
+                                    <label for="page-a4">
+                                        <span class="option-title">A4 (210 × 297 mm)</span>
+                                        <span class="option-description">Standard international size</span>
+                                    </label>
+                                </div>
+                                <div class="option-group">
+                                    <input type="radio" id="page-letter" name="page-size" value="letter">
+                                    <label for="page-letter">
+                                        <span class="option-title">Letter (8.5 × 11 in)</span>
+                                        <span class="option-description">Standard US size</span>
+                                    </label>
+                                </div>
+                                <div class="option-group">
+                                    <input type="radio" id="page-legal" name="page-size" value="legal">
+                                    <label for="page-legal">
+                                        <span class="option-title">Legal (8.5 × 14 in)</span>
+                                        <span class="option-description">Extended length</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="download-options">
-                            <button class="btn btn-primary btn-large" onclick="downloadPDF()" id="download-pdf">
-                                <span class="btn-icon">📄</span>
-                                Download PDF
-                                <span class="btn-description">Print-ready labels in PDF format</span>
-                            </button>
-                            <button class="btn btn-secondary btn-large" onclick="downloadZIP()" id="download-zip">
+                            <button class="btn btn-primary btn-large" onclick="downloadZIP()" id="download-zip">
                                 <span class="btn-icon">📦</span>
                                 Download ZIP
                                 <span class="btn-description">Individual label images</span>
                             </button>
+                            <button class="btn btn-secondary btn-large" onclick="showPageSizeSelection()" id="download-pdf">
+                                <span class="btn-icon">📄</span>
+                                Download PDF
+                                <span class="btn-description">Print-ready labels in PDF format</span>
+                            </button>
                         </div>
                         <div class="download-info">
-                            <p><strong>PDF Format:</strong> Optimized for printing with proper margins and cut lines. Compatible with Avery label sheets.</p>
                             <p><strong>ZIP Format:</strong> Contains individual high-resolution label images for custom printing or integration.</p>
+                            <p><strong>PDF Format:</strong> Optimized for printing with proper margins and cut lines. Compatible with Avery label sheets.</p>
                         </div>
                     </div>
 
