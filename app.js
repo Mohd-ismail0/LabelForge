@@ -615,10 +615,25 @@ function initializeLabelDesigner() {
     // Setup element property controls
     setupElementPropertyControls();
     
+    // Convert any existing static text to auto-sizing
+    convertExistingStaticTextToAutoSize();
+    
     // Create initial elements
     updateDesignPreview();
     
     console.log('Label designer initialized');
+}
+
+// Helper function to convert existing static text to auto-sizing
+function convertExistingStaticTextToAutoSize() {
+    appState.labelSettings.staticTexts.forEach((staticText, index) => {
+        const elementId = `static-${index}`;
+        if (appState.labelSettings.elements[elementId]) {
+            // Convert to auto sizing while keeping position
+            appState.labelSettings.elements[elementId].width = 'auto';
+            appState.labelSettings.elements[elementId].height = 'auto';
+        }
+    });
 }
 
 function setupDragAndDrop() {
@@ -631,6 +646,18 @@ function setupDragAndDrop() {
     previewLabel.addEventListener('click', (e) => {
         if (e.target === previewLabel) {
             deselectAllElements();
+        }
+    });
+    
+    // Delegated mousedown event for all draggable elements
+    previewLabel.addEventListener('mousedown', (e) => {
+        const target = e.target;
+        // Check if the target or its parent is a draggable element
+        const draggableElement = target.closest('.preview-barcode, .preview-text, .preview-static');
+        
+        if (draggableElement && draggableElement.dataset.elementId) {
+            console.log('Delegated drag started for:', draggableElement.dataset.elementId);
+            handleElementMouseDown.call(draggableElement, e);
         }
     });
 }
@@ -652,11 +679,11 @@ function getDefaultElementConfig(id) {
             if (id.startsWith('static-')) {
                 // Position static text elements in a vertical stack below other elements
                 const staticIndex = parseInt(id.split('-')[1]) || 0;
-                return { x: 0.1, y: 0.5 + (staticIndex * 0.15), width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
+                return { x: 0.1, y: 0.5 + (staticIndex * 0.15), width: 'auto', height: 'auto', fontSize: 8, align: 'center' };
             }
             if (id.startsWith('text-')) {
                 const textIndex = parseInt(id.split('-')[1]) || 0;
-                return { x: 0.1, y: 0.6 + (textIndex * 0.15), width: labelWidth - 0.2, height: 0.1, fontSize: 10, align: 'center' };
+                return { x: 0.1, y: 0.6 + (textIndex * 0.15), width: 'auto', height: 'auto', fontSize: 10, align: 'center' };
             }
             return { x: 0.1, y: 0.5, width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
     }
@@ -674,22 +701,39 @@ function updateElementPosition(element, config) {
         ? appState.labelSettings.customHeight 
         : LABEL_SIZES[appState.labelSettings.size].height;
     
-    // Convert inches to pixels (using same DPI as print for accuracy)
-    const x = Math.max(0, Math.min(config.x * DISPLAY_DPI, (labelWidth - config.width) * DISPLAY_DPI));
-    const y = Math.max(0, Math.min(config.y * DISPLAY_DPI, (labelHeight - config.height) * DISPLAY_DPI));
-    const width = Math.max(20, Math.min(config.width * DISPLAY_DPI, labelWidth * DISPLAY_DPI));
-    const height = Math.max(15, Math.min(config.height * DISPLAY_DPI, labelHeight * DISPLAY_DPI));
+    // Convert inches to pixels
+    const x = Math.max(0, config.x * DISPLAY_DPI);
+    const y = Math.max(0, config.y * DISPLAY_DPI);
     
     // Set basic positioning
     element.style.position = 'absolute';
     element.style.left = `${x}px`;
     element.style.top = `${y}px`;
-    element.style.width = `${width}px`;
-    element.style.height = `${height}px`;
     element.style.fontSize = `${config.fontSize}px`;
     element.style.textAlign = config.align;
     element.style.boxSizing = 'border-box';
-    element.style.overflow = 'hidden';
+    element.style.cursor = 'move';
+    element.style.userSelect = 'none';
+    element.style.padding = '2px 4px';
+    element.style.whiteSpace = 'nowrap';
+    
+    // Handle width and height
+    if (config.width === 'auto') {
+        element.style.width = 'auto';
+        element.style.minWidth = '20px';
+        element.style.maxWidth = `${(labelWidth - config.x) * DISPLAY_DPI}px`;
+    } else {
+        const width = Math.max(20, Math.min(config.width * DISPLAY_DPI, labelWidth * DISPLAY_DPI));
+        element.style.width = `${width}px`;
+    }
+    
+    if (config.height === 'auto') {
+        element.style.height = 'auto';
+        element.style.minHeight = `${config.fontSize + 4}px`;
+    } else {
+        const height = Math.max(15, Math.min(config.height * DISPLAY_DPI, labelHeight * DISPLAY_DPI));
+        element.style.height = `${height}px`;
+    }
 }
 
 function handleElementMouseDown(e) {
@@ -946,12 +990,24 @@ function getLabelHeight() {
 
 function getElementWidth(element) {
     const config = appState.labelSettings.elements[element.dataset.elementId];
-    return config ? config.width : 0.1;
+    if (!config) return 0.1;
+    
+    if (config.width === 'auto') {
+        // Get actual rendered width in inches
+        return element.offsetWidth / DISPLAY_DPI;
+    }
+    return config.width;
 }
 
 function getElementHeight(element) {
     const config = appState.labelSettings.elements[element.dataset.elementId];
-    return config ? config.height : 0.1;
+    if (!config) return 0.1;
+    
+    if (config.height === 'auto') {
+        // Get actual rendered height in inches
+        return element.offsetHeight / DISPLAY_DPI;
+    }
+    return config.height;
 }
 
 // Static Text Management
@@ -968,21 +1024,21 @@ function addStaticTextField() {
             text: text.trim(),
             x: 0.1,
             y: 0.5 + (staticIndex * 0.15),
-            width: 1.8,
-            height: 0.1,
+            width: 'auto',
+            height: 'auto',
             fontSize: 8,
             align: 'center'
         };
         
         appState.labelSettings.staticTexts.push(staticText);
         
-        // Add to elements config
+        // Add to elements config with auto sizing
         const elementId = `static-${appState.labelSettings.staticTexts.length - 1}`;
         appState.labelSettings.elements[elementId] = {
             x: staticText.x,
             y: staticText.y,
-            width: staticText.width,
-            height: staticText.height,
+            width: 'auto',
+            height: 'auto',
             fontSize: staticText.fontSize,
             align: staticText.align
         };
@@ -1203,6 +1259,12 @@ function updateDesignPreview() {
                 e.stopPropagation();
                 selectElement(textDiv);
             });
+            
+            // Ensure element is properly styled for dragging
+            textDiv.style.cursor = 'move';
+            textDiv.style.userSelect = 'none';
+            
+            console.log('Created draggable text element:', `text-${index}`, textDiv);
 
             previewLabel.appendChild(textDiv);
 
@@ -1228,6 +1290,12 @@ function updateDesignPreview() {
                 e.stopPropagation();
                 selectElement(textDiv);
             });
+            
+            // Ensure element is properly styled for dragging
+            textDiv.style.cursor = 'move';
+            textDiv.style.userSelect = 'none';
+            
+            console.log('Created draggable text element (no data):', `text-${index}`, textDiv);
 
             previewLabel.appendChild(textDiv);
 
