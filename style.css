@@ -580,7 +580,7 @@ body {
 /* Only apply scaling to design preview, not mapping preview */
 #design-preview-label {
   /* Scale down for screen display while maintaining print accuracy */
-  transform: scale(0.33);
+  transform: scale(0.5);
   transform-origin: top left;
 }
 
