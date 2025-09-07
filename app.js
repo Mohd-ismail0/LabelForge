@@ -860,7 +860,6 @@ function getDefaultElementConfig(id) {
 
 function updateElementPosition(element, config) {
     if (!element || !config) {
-        console.error('Invalid element or config for positioning:', { element, config });
         return;
     }
     
@@ -875,9 +874,10 @@ function updateElementPosition(element, config) {
     const dpi = 100;
     const x = Math.max(0, Math.min(config.x * dpi, (labelWidth - config.width) * dpi));
     const y = Math.max(0, Math.min(config.y * dpi, (labelHeight - config.height) * dpi));
-    const width = Math.max(10, Math.min(config.width * dpi, labelWidth * dpi));
-    const height = Math.max(10, Math.min(config.height * dpi, labelHeight * dpi));
+    const width = Math.max(20, Math.min(config.width * dpi, labelWidth * dpi));
+    const height = Math.max(15, Math.min(config.height * dpi, labelHeight * dpi));
     
+    // Set basic positioning
     element.style.position = 'absolute';
     element.style.left = `${x}px`;
     element.style.top = `${y}px`;
@@ -886,6 +886,7 @@ function updateElementPosition(element, config) {
     element.style.fontSize = `${config.fontSize}px`;
     element.style.textAlign = config.align;
     element.style.boxSizing = 'border-box';
+    element.style.overflow = 'hidden';
     
     // Update label size
     const previewLabel = document.getElementById('design-preview-label');
@@ -1313,6 +1314,11 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
+    // Ensure elements exist before updating
+    if (!document.getElementById('element-barcode')) {
+        createLabelElements();
+        return; // Elements will be created and this function will be called again
+    }
     
     // Update barcode content with example barcodes
     const barcodeElement = document.getElementById('element-barcode');
