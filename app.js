@@ -1432,36 +1432,7 @@ function getDefaultElementConfig(id) {
     }
 }
 
-function getElementPositionForLayout(id, textLayout, textGap) {
-    const labelWidth = appState.labelSettings.size === 'custom' 
-        ? appState.labelSettings.customWidth 
-        : LABEL_SIZES[appState.labelSettings.size].width;
-    const labelHeight = appState.labelSettings.size === 'custom' 
-        ? appState.labelSettings.customHeight 
-        : LABEL_SIZES[appState.labelSettings.size].height;
-    
-    if (id.startsWith('text-')) {
-        const textIndex = parseInt(id.split('-')[1]) || 0;
-        const totalTextElements = appState.mappedColumns.text ? appState.mappedColumns.text.length : 0;
-        
-        // Always use horizontal layout for text elements (grouped row)
-        const containerWidth = labelWidth - 0.2; // 0.1 margin on each side
-        const totalGap = (totalTextElements - 1) * 0.05; // 0.05 inch gap between elements
-        const availableWidth = containerWidth - totalGap;
-        const elementWidth = availableWidth / totalTextElements;
-        const x = 0.1 + (textIndex * (elementWidth + 0.05));
-        return { x: x, y: 0.6, width: elementWidth, height: 0.15, fontSize: 10, align: 'center' };
-    }
-    
-    if (id.startsWith('static-')) {
-        const staticIndex = parseInt(id.split('-')[1]) || 0;
-        // Position static text elements below text elements in another row
-        return { x: 0.1, y: 0.8 + (staticIndex * 0.1), width: 'auto', height: 'auto', fontSize: 8, align: 'center' };
-    }
-    
-    // Default positioning
-    return getDefaultElementConfig(id);
-}
+// This function is no longer needed as we use flexbox layout directly
 
 function updateElementPosition(element, config) {
     if (!element || !config) {
@@ -2481,142 +2452,116 @@ function updateGenerationProgress(processed, total) {
 }
 
 // Export Functions
-function createLabelCanvas(label) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // Set canvas size based on label size (300 DPI for high quality)
-    const dpi = 300;
-    const width = appState.labelSettings.size === 'custom' 
-        ? appState.labelSettings.customWidth * dpi 
-        : LABEL_SIZES[appState.labelSettings.size].width * dpi;
-    const height = appState.labelSettings.size === 'custom' 
-        ? appState.labelSettings.customHeight * dpi 
-        : LABEL_SIZES[appState.labelSettings.size].height * dpi;
-    
-    canvas.width = width;
-    canvas.height = height;
-    
-    // Fill background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-    
-    // Add border
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, width - 2, height - 2);
-    
-    // Add barcode with number display
-    let barcodeConfig = appState.labelSettings.elements.barcode;
-    if (!barcodeConfig) {
-        barcodeConfig = getDefaultElementConfig('barcode');
-        appState.labelSettings.elements.barcode = barcodeConfig;
-    }
-    
-    if (barcodeConfig) {
+async function createLabelCanvas(label) {
+    // Create a temporary DOM structure that matches Step 3's flexbox layout
+    const tempContainer = document.createElement('div');
+    tempContainer.style.position = 'absolute';
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.top = '-9999px';
+    tempContainer.style.width = '2in';
+    tempContainer.style.height = '1in';
+    tempContainer.style.display = 'flex';
+    tempContainer.style.flexDirection = 'column';
+    tempContainer.style.alignItems = 'center';
+    tempContainer.style.justifyContent = 'center';
+    tempContainer.style.gap = '4px';
+    tempContainer.style.padding = '8px';
+    tempContainer.style.backgroundColor = '#ffffff';
+    tempContainer.style.border = '1px solid #000000';
+    document.body.appendChild(tempContainer);
+
+    // Create barcode element
+    if (appState.labelSettings.elements.barcode) {
+        const barcodeDiv = document.createElement('div');
+        barcodeDiv.style.display = 'flex';
+        barcodeDiv.style.flexDirection = 'column';
+        barcodeDiv.style.alignItems = 'center';
+        barcodeDiv.style.textAlign = 'center';
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const barcodeNumber = document.createElement('div');
+        barcodeNumber.style.fontSize = '10px';
+        barcodeNumber.style.marginTop = '2px';
+
         try {
-            const barcodeCanvas = document.createElement('canvas');
             const displayValue = label.barcodeType === 'EAN13';
-            JsBarcode(barcodeCanvas, label.barcode, {
+            JsBarcode(svg, label.barcode, {
                 format: label.barcodeType,
-                width: 3,
-                height: 60,
+                width: 2,
+                height: 30,
                 displayValue: displayValue
             });
-            
-            const barcodeX = barcodeConfig.x * dpi;
-            const barcodeY = barcodeConfig.y * dpi;
-            const barcodeWidth = barcodeConfig.width * dpi;
-            const barcodeHeight = barcodeConfig.height * dpi;
-            
-            // Scale barcode to fit the element size
-            ctx.drawImage(barcodeCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight);
-            
-            // Add barcode number if not displayed in barcode
             if (!displayValue) {
-                ctx.fillStyle = '#000000';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 15);
+                barcodeNumber.textContent = label.barcode;
             }
         } catch (error) {
-            ctx.fillStyle = '#000000';
-            ctx.font = `${barcodeConfig.fontSize || 16}px Arial`;
-            ctx.textAlign = barcodeConfig.align || 'center';
-            ctx.fillText('Invalid barcode', 
-                barcodeConfig.x * dpi + (barcodeConfig.width * dpi) / 2,
-                barcodeConfig.y * dpi + (barcodeConfig.height * dpi) / 2);
+            svg.innerHTML = '<text>Invalid barcode</text>';
+            barcodeNumber.textContent = 'Invalid Data';
         }
+
+        barcodeDiv.appendChild(svg);
+        barcodeDiv.appendChild(barcodeNumber);
+        tempContainer.appendChild(barcodeDiv);
     }
-    
-    // Add product text elements
+
+    // Create text container with flexbox layout
     if (label.textElements && label.textElements.length > 0) {
+        const textContainer = document.createElement('div');
+        textContainer.style.display = 'flex';
+        textContainer.style.flexDirection = label.textLayout === 'horizontal' ? 'row' : 'column';
+        textContainer.style.alignItems = 'center';
+        textContainer.style.justifyContent = 'center';
+        textContainer.style.gap = `${label.textGap}px`;
+        textContainer.style.flexWrap = 'wrap';
+
         label.textElements.forEach((textElement, index) => {
-            const elementId = `text-${index}`;
-            let textConfig = appState.labelSettings.elements[elementId];
-            if (!textConfig) {
-                // Use layout-aware positioning
-                textConfig = getElementPositionForLayout(elementId, label.textLayout, label.textGap);
-                appState.labelSettings.elements[elementId] = textConfig;
+            const textDiv = document.createElement('div');
+            textDiv.textContent = textElement.text;
+            textDiv.style.fontSize = '10px';
+            textDiv.style.textAlign = 'center';
+            textDiv.style.padding = '2px 4px';
+            textDiv.style.borderRadius = '2px';
+            
+            if (label.textLayout === 'horizontal') {
+                textDiv.style.flex = '1';
+                textDiv.style.minWidth = '0'; // Allow shrinking
             }
             
-            if (textConfig) {
-                ctx.fillStyle = '#000000';
-                ctx.font = `${textConfig.fontSize || 14}px Arial`;
-                ctx.textAlign = textConfig.align || 'center';
-                
-                // Calculate text position based on layout
-                let textX, textY;
-                if (textConfig.width === 'auto') {
-                    const labelWidth = appState.labelSettings.size === 'custom' 
-                        ? appState.labelSettings.customWidth 
-                        : LABEL_SIZES[appState.labelSettings.size].width;
-                    textX = textConfig.x * dpi + (labelWidth * dpi) / 2;
-                    textY = textConfig.y * dpi + 15; // Offset for baseline
-                } else {
-                    textX = textConfig.x * dpi + (textConfig.width * dpi) / 2;
-                    textY = textConfig.y * dpi + (textConfig.height * dpi) / 2;
-                }
-                
-                ctx.fillText(textElement.text, textX, textY);
-            }
+            textContainer.appendChild(textDiv);
         });
+
+        tempContainer.appendChild(textContainer);
     }
-    
-    // Add static texts
+
+    // Create static text elements
     if (label.staticTexts && label.staticTexts.length > 0) {
+        const staticContainer = document.createElement('div');
+        staticContainer.style.display = 'flex';
+        staticContainer.style.flexDirection = 'column';
+        staticContainer.style.alignItems = 'center';
+        staticContainer.style.gap = '2px';
+
         label.staticTexts.forEach((staticText, index) => {
-            const elementId = `static-${index}`;
-            let staticConfig = appState.labelSettings.elements[elementId];
-            if (!staticConfig) {
-                // Use layout-aware positioning
-                staticConfig = getElementPositionForLayout(elementId, label.textLayout, label.textGap);
-                appState.labelSettings.elements[elementId] = staticConfig;
-            }
-            
-            if (staticConfig) {
-                ctx.fillStyle = '#000000';
-                ctx.font = `${staticConfig.fontSize || 12}px Arial`;
-                ctx.textAlign = staticConfig.align || 'center';
-                
-                // Calculate text position based on layout
-                let textX, textY;
-                if (staticConfig.width === 'auto') {
-                    const labelWidth = appState.labelSettings.size === 'custom' 
-                        ? appState.labelSettings.customWidth 
-                        : LABEL_SIZES[appState.labelSettings.size].width;
-                    textX = staticConfig.x * dpi + (labelWidth * dpi) / 2;
-                    textY = staticConfig.y * dpi + 12; // Offset for baseline
-                } else {
-                    textX = staticConfig.x * dpi + (staticConfig.width * dpi) / 2;
-                    textY = staticConfig.y * dpi + (staticConfig.height * dpi) / 2;
-                }
-                
-                ctx.fillText(staticText.text, textX, textY);
-            }
+            const staticDiv = document.createElement('div');
+            staticDiv.textContent = staticText.text;
+            staticDiv.style.fontSize = '8px';
+            staticDiv.style.textAlign = 'center';
+            staticDiv.style.padding = '1px 2px';
+            staticContainer.appendChild(staticDiv);
         });
+
+        tempContainer.appendChild(staticContainer);
     }
+
+    // Convert to canvas using html2canvas
+    const canvas = await html2canvas(tempContainer, {
+        width: 600, // 2 inches at 300 DPI
+        height: 300, // 1 inch at 300 DPI
+        scale: 1,
+        backgroundColor: '#ffffff'
+    });
     
+    document.body.removeChild(tempContainer);
     return canvas;
 }
 
@@ -2677,7 +2622,7 @@ function showPageSizeSelection() {
     }
 }
 
-function downloadPDF() {
+async function downloadPDF() {
     if (appState.generatedLabels.length === 0) {
         showError('No labels', 'Please generate labels first');
         return;
@@ -2734,7 +2679,10 @@ function downloadPDF() {
         let currentRow = 0;
         let currentCol = 0;
         
-        appState.generatedLabels.forEach((label, index) => {
+        // Process labels sequentially to handle async createLabelCanvas
+        for (let index = 0; index < appState.generatedLabels.length; index++) {
+            const label = appState.generatedLabels[index];
+            
             if (index > 0 && index % labelsPerPage === 0) {
                 doc.addPage();
                 currentPage++;
@@ -2748,96 +2696,12 @@ function downloadPDF() {
             // Draw label border
             doc.rect(x, y, labelWidth, labelHeight);
             
-            // Add barcode with number display
-            let barcodeConfig = appState.labelSettings.elements.barcode;
-            if (!barcodeConfig) {
-                barcodeConfig = getDefaultElementConfig('barcode');
-                appState.labelSettings.elements.barcode = barcodeConfig;
-            }
+            // Create canvas for this label using the new flexbox approach
+            const canvas = await createLabelCanvas(label);
+            const imageDataURL = canvas.toDataURL('image/png');
             
-            if (barcodeConfig) {
-                try {
-                    const canvas = document.createElement('canvas');
-                    const displayValue = label.barcodeType === 'EAN13';
-                    JsBarcode(canvas, label.barcode, {
-                        format: label.barcodeType,
-                        width: 2,
-                        height: 30,
-                        displayValue: displayValue
-                    });
-                    
-                    const barcodeDataURL = canvas.toDataURL();
-                    const barcodeX = x + (barcodeConfig.x * 25.4);
-                    const barcodeY = y + (barcodeConfig.y * 25.4);
-                    const barcodeWidth = barcodeConfig.width * 25.4;
-                    const barcodeHeight = barcodeConfig.height * 25.4;
-                    
-                    doc.addImage(barcodeDataURL, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
-                    
-                    // Add barcode number if not displayed in barcode
-                    if (!displayValue) {
-                        doc.setFontSize(6);
-                        doc.text(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 3, { align: 'center' });
-                    }
-                } catch (error) {
-                    doc.setFontSize(8);
-                    doc.text('Invalid barcode', x + (barcodeConfig.x * 25.4), y + (barcodeConfig.y * 25.4) + 5);
-                }
-            }
-            
-            // Add product text elements
-            if (label.textElements && label.textElements.length > 0) {
-                label.textElements.forEach((textElement, index) => {
-                    const elementId = `text-${index}`;
-                    let textConfig = appState.labelSettings.elements[elementId];
-                    if (!textConfig) {
-                        // Use layout-aware positioning
-                        textConfig = getElementPositionForLayout(elementId, label.textLayout, label.textGap);
-                        appState.labelSettings.elements[elementId] = textConfig;
-                    }
-                    
-                    if (textConfig) {
-                        doc.setFontSize(textConfig.fontSize || 8);
-                        
-                        // Calculate text position and width for PDF
-                        let textX = x + (textConfig.x * 25.4);
-                        let textY = y + (textConfig.y * 25.4) + 5;
-                        let maxWidth = textConfig.width === 'auto' ? labelWidth - 0.2 : textConfig.width;
-                        
-                        doc.text(textElement.text, textX, textY, {
-                            maxWidth: maxWidth * 25.4,
-                            align: textConfig.align || 'center'
-                        });
-                    }
-                });
-            }
-            
-            // Add static texts
-            if (label.staticTexts && label.staticTexts.length > 0) {
-                label.staticTexts.forEach((staticText, index) => {
-                    const elementId = `static-${index}`;
-                    let staticConfig = appState.labelSettings.elements[elementId];
-                    if (!staticConfig) {
-                        // Use layout-aware positioning
-                        staticConfig = getElementPositionForLayout(elementId, label.textLayout, label.textGap);
-                        appState.labelSettings.elements[elementId] = staticConfig;
-                    }
-                    
-                    if (staticConfig) {
-                        doc.setFontSize(staticConfig.fontSize || 6);
-                        
-                        // Calculate text position and width for PDF
-                        let textX = x + (staticConfig.x * 25.4);
-                        let textY = y + (staticConfig.y * 25.4) + 3;
-                        let maxWidth = staticConfig.width === 'auto' ? labelWidth - 0.2 : staticConfig.width;
-                        
-                        doc.text(staticText.text, textX, textY, {
-                            maxWidth: maxWidth * 25.4,
-                            align: staticConfig.align || 'center'
-                        });
-                    }
-                });
-            }
+            // Add the canvas image to PDF
+            doc.addImage(imageDataURL, 'PNG', x, y, labelWidth, labelHeight);
             
             // Update position
             currentCol++;
@@ -2845,7 +2709,7 @@ function downloadPDF() {
                 currentCol = 0;
                 currentRow++;
             }
-        });
+        }
         
         doc.save('barcode-labels.pdf');
         hideProgress();
@@ -2869,42 +2733,33 @@ function downloadZIP() {
         const zip = new JSZip();
         let processedCount = 0;
         
-        appState.generatedLabels.forEach((label, index) => {
-            try {
-                const canvas = createLabelCanvas(label);
-                const blob = canvas.toBlob((blob) => {
-                    zip.file(`label-${index + 1}.png`, blob);
-                    processedCount++;
-                    
-                    if (processedCount === appState.generatedLabels.length) {
-                        zip.generateAsync({ type: 'blob' }).then((content) => {
-                            const url = URL.createObjectURL(content);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = 'barcode-labels.zip';
-                            a.click();
-                            URL.revokeObjectURL(url);
-                            hideProgress();
-                        });
-                    }
-                }, 'image/png');
-            } catch (error) {
-                console.error(`Error creating label ${index + 1}:`, error);
-                processedCount++;
-                
-                if (processedCount === appState.generatedLabels.length) {
-                    zip.generateAsync({ type: 'blob' }).then((content) => {
-                        const url = URL.createObjectURL(content);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'barcode-labels.zip';
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        hideProgress();
+        // Process labels sequentially to handle async createLabelCanvas
+        const processLabels = async () => {
+            for (let i = 0; i < appState.generatedLabels.length; i++) {
+                try {
+                    const label = appState.generatedLabels[i];
+                    const canvas = await createLabelCanvas(label);
+                    const blob = await new Promise((resolve) => {
+                        canvas.toBlob(resolve, 'image/png');
                     });
+                    zip.file(`label-${i + 1}.png`, blob);
+                } catch (error) {
+                    console.error(`Error creating label ${i + 1}:`, error);
                 }
             }
-        });
+            
+            // Generate and download ZIP
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'barcode-labels.zip';
+            a.click();
+            URL.revokeObjectURL(url);
+            hideProgress();
+        };
+        
+        processLabels();
         
     } catch (error) {
         console.error('ZIP generation error:', error);
