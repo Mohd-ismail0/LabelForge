@@ -14,9 +14,16 @@ let appState = {
         customWidth: 2,
         customHeight: 1,
         barcodeType: 'EAN13',
-        staticText: '',
+        staticTexts: [],
         fontSize: 'medium',
-        spacing: 'normal'
+        spacing: 'normal',
+        textLayout: 'vertical',
+        textGap: 2,
+        elements: {
+            barcode: { x: 0.1, y: 0.1, width: 1.8, height: 0.4, fontSize: 10, align: 'center' },
+            textContainer: { x: 0.1, y: 0.6, width: 1.8, height: 0.3, fontSize: 10, align: 'center' }
+        },
+        textElements: []
     },
     generatedLabels: [],
     quantitySettings: {
@@ -89,19 +96,22 @@ function setupEventListeners() {
     }
     
     if (barcodeType) {
-        barcodeType.addEventListener('change', updatePreview);
+        barcodeType.addEventListener('change', (e) => {
+            appState.labelSettings.barcodeType = e.target.value;
+            updateDesignPreview();
+        });
     }
     
     if (staticText) {
-        staticText.addEventListener('input', updatePreview);
+        staticText.addEventListener('input', updateDesignPreview);
     }
     
     if (fontSize) {
-        fontSize.addEventListener('change', updatePreview);
+        fontSize.addEventListener('change', updateDesignPreview);
     }
     
     if (spacing) {
-        spacing.addEventListener('change', updatePreview);
+        spacing.addEventListener('change', updateDesignPreview);
     }
     
     // Quantity management
@@ -142,8 +152,15 @@ function setStep(stepNumber) {
     switch (stepNumber) {
         case 2:
             setupColumnMapping();
+            updateContinueButton();
             break;
         case 3:
+            // Initialize design mode class and setup drag and drop
+            const previewLabel = document.getElementById('design-preview-label');
+            if (previewLabel) {
+                previewLabel.classList.add('design-mode');
+                setupDragAndDrop();
+            }
             updateDesignPreview();
             break;
         case 4:
@@ -217,9 +234,16 @@ function startOver() {
                 customWidth: 2,
                 customHeight: 1,
                 barcodeType: 'EAN13',
-                staticText: '',
+                staticTexts: [],
                 fontSize: 'medium',
-                spacing: 'normal'
+                spacing: 'normal',
+                textLayout: 'vertical',
+                textGap: 2,
+                elements: {
+                    barcode: { x: 0.1, y: 0.1, width: 1.8, height: 0.4, fontSize: 10, align: 'center' },
+                    textContainer: { x: 0.1, y: 0.6, width: 1.8, height: 0.3, fontSize: 10, align: 'center' }
+                },
+                textElements: []
             },
             generatedLabels: [],
             quantitySettings: { type: 'column', fixedQuantity: 1, manualQuantities: {} }
@@ -552,14 +576,720 @@ function updateMappingPreview() {
 function updateContinueButton() {
     const continueBtn = document.getElementById('continue-mapping');
     if (continueBtn) {
-        continueBtn.disabled = appState.mappedColumns.barcode === null;
+        const hasBarcode = appState.mappedColumns.barcode !== null;
+        continueBtn.disabled = !hasBarcode;
     }
 }
 
 // Label Design
 function setupLabelDesign() {
     // Initialize with default values
+    // Note: initializeLabelDesigner() is called when step 3 is reached
+}
+
+// Global variables for drag and drop
+let selectedElement = null;
+let isDragging = false;
+let dragOffset = { x: 0, y: 0 };
+let isResizing = false;
+let resizeHandle = null;
+let gridVisible = false;
+
+function initializeLabelDesigner() {
+    console.log('Initializing label designer...');
+    const previewLabel = document.getElementById('design-preview-label');
+    const previewGrid = document.getElementById('preview-grid');
+    
+    if (!previewLabel) {
+        console.error('design-preview-label element not found');
+        return;
+    }
+    
+    console.log('Preview label found:', previewLabel);
+    
+    // Add design mode class
+    previewLabel.classList.add('design-mode');
+    
+    // Setup event listeners for drag and drop
+    setupDragAndDrop();
+    
+    // Initialize static text management
+    initializeStaticTextManager();
+    
+    // Setup element property controls
+    setupElementPropertyControls();
+    
+    // Create initial elements
+    createLabelElements();
+    
+    console.log('Label designer initialized');
+}
+
+function setupDragAndDrop() {
+    const previewLabel = document.getElementById('design-preview-label');
+    
+    // Prevent default drag behavior
+    previewLabel.addEventListener('dragstart', (e) => e.preventDefault());
+    
+    // Handle clicks on the label area
+    previewLabel.addEventListener('click', (e) => {
+        if (e.target === previewLabel) {
+            deselectAllElements();
+        }
+    });
+}
+
+function createLabelElements() {
+    const previewLabel = document.getElementById('design-preview-label');
+    if (!previewLabel) {
+        console.error('Preview label element not found');
+        return;
+    }
+    
+    console.log('Creating label elements...');
+    previewLabel.innerHTML = '';
+    
+    // Create barcode element with proper preview
+    createBarcodeElement();
+    
+    // Create text container with individual text elements
+    createTextContainer();
+    
+    // Create static text elements
+    appState.labelSettings.staticTexts.forEach((staticText, index) => {
+        createStaticTextElement(index, staticText);
+    });
+    
+    console.log('Label elements created:', {
+        barcodeElement: document.getElementById('element-barcode'),
+        textContainer: document.getElementById('element-textContainer'),
+        staticTexts: appState.labelSettings.staticTexts.length
+    });
+}
+
+function createBarcodeElement() {
+    const previewLabel = document.getElementById('design-preview-label');
+    if (!previewLabel) {
+        console.error('Preview label not found in createBarcodeElement');
+        return;
+    }
+    
+    console.log('Creating barcode element...');
+    const barcodeElement = document.createElement('div');
+    barcodeElement.className = 'preview-barcode';
+    barcodeElement.id = 'element-barcode';
+    barcodeElement.dataset.elementId = 'barcode';
+    
+    // Create barcode container
+    const barcodeContainer = document.createElement('div');
+    barcodeContainer.className = 'barcode-container';
+    
+    // Create SVG for barcode using proper namespace
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'design-preview-barcode';
+    svg.className = 'barcode-svg';
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.setAttribute('viewBox', '0 0 200 100');
+    
+    // Create barcode number display
+    const barcodeNumber = document.createElement('div');
+    barcodeNumber.className = 'barcode-number';
+    barcodeNumber.id = 'barcode-number-display';
+    
+    barcodeContainer.appendChild(svg);
+    barcodeContainer.appendChild(barcodeNumber);
+    barcodeElement.appendChild(barcodeContainer);
+    
+    // Set position and size
+    const elementConfig = appState.labelSettings.elements.barcode || getDefaultElementConfig('barcode');
+    updateElementPosition(barcodeElement, elementConfig);
+    
+    // Add event listeners
+    barcodeElement.addEventListener('mousedown', handleElementMouseDown);
+    barcodeElement.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(barcodeElement);
+    });
+    
+    previewLabel.appendChild(barcodeElement);
+    console.log('Barcode element appended to preview label');
+    
+    // Generate initial barcode preview
     updateDesignPreview();
+}
+
+function createTextContainer() {
+    const previewLabel = document.getElementById('design-preview-label');
+    const textContainer = document.createElement('div');
+    textContainer.className = 'preview-text text-container';
+    textContainer.id = 'element-textContainer';
+    textContainer.dataset.elementId = 'textContainer';
+    
+    console.log('Creating text container with mapped columns:', appState.mappedColumns.text);
+    
+    // Set layout direction
+    textContainer.classList.add(appState.labelSettings.textLayout);
+    textContainer.style.gap = `${appState.labelSettings.textGap}px`;
+    
+    // Create individual text elements for each mapped column
+    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
+        appState.mappedColumns.text.forEach((column, index) => {
+            const textElement = document.createElement('div');
+            textElement.className = 'text-element';
+            textElement.id = `text-element-${index}`;
+            textElement.dataset.elementId = `text-${index}`;
+            textElement.dataset.columnIndex = column.index;
+            textElement.dataset.columnName = column.name;
+            
+            // Set sample text
+            if (appState.excelData && appState.excelData.length > 0) {
+                const sampleValue = appState.excelData[0][column.index];
+                textElement.textContent = sampleValue ? sampleValue.toString() : column.name;
+            } else {
+                textElement.textContent = column.name;
+            }
+            
+            // Add event listeners
+            textElement.addEventListener('mousedown', handleElementMouseDown);
+            textElement.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectElement(textElement);
+            });
+            
+            textContainer.appendChild(textElement);
+        });
+    } else {
+        // Default text element
+        const textElement = document.createElement('div');
+        textElement.className = 'text-element';
+        textElement.id = 'text-element-default';
+        textElement.dataset.elementId = 'text-default';
+        textElement.textContent = 'Sample Product Information';
+        
+        textElement.addEventListener('mousedown', handleElementMouseDown);
+        textElement.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectElement(textElement);
+        });
+        
+        textContainer.appendChild(textElement);
+    }
+    
+    // Set position and size
+    const elementConfig = appState.labelSettings.elements.textContainer || getDefaultElementConfig('textContainer');
+    updateElementPosition(textContainer, elementConfig);
+    
+    // Add event listeners for container
+    textContainer.addEventListener('mousedown', handleElementMouseDown);
+    textContainer.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(textContainer);
+    });
+    
+    previewLabel.appendChild(textContainer);
+}
+
+function createStaticTextElement(index, staticText) {
+    const previewLabel = document.getElementById('design-preview-label');
+    const staticElement = document.createElement('div');
+    staticElement.className = 'preview-static';
+    staticElement.id = `element-static-${index}`;
+    staticElement.dataset.elementId = `static-${index}`;
+    staticElement.textContent = staticText.text;
+    
+    // Set position and size
+    const elementConfig = appState.labelSettings.elements[`static-${index}`] || getDefaultElementConfig(`static-${index}`);
+    updateElementPosition(staticElement, elementConfig);
+    
+    // Add event listeners
+    staticElement.addEventListener('mousedown', handleElementMouseDown);
+    staticElement.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(staticElement);
+    });
+    
+    previewLabel.appendChild(staticElement);
+}
+
+function createDraggableElement(id, content, className) {
+    const previewLabel = document.getElementById('design-preview-label');
+    const element = document.createElement('div');
+    element.className = className;
+    element.id = `element-${id}`;
+    element.dataset.elementId = id;
+    
+    // Set content
+    if (id === 'barcode') {
+        const svg = document.createElement('svg');
+        svg.id = 'design-preview-barcode';
+        element.appendChild(svg);
+    } else {
+        element.textContent = content;
+    }
+    
+    // Set position and size
+    const elementConfig = appState.labelSettings.elements[id] || getDefaultElementConfig(id);
+    updateElementPosition(element, elementConfig);
+    
+    // Add event listeners
+    element.addEventListener('mousedown', handleElementMouseDown);
+    element.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(element);
+    });
+    
+    previewLabel.appendChild(element);
+}
+
+function getDefaultElementConfig(id) {
+    const labelWidth = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customWidth 
+        : LABEL_SIZES[appState.labelSettings.size].width;
+    const labelHeight = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customHeight 
+        : LABEL_SIZES[appState.labelSettings.size].height;
+    
+    switch (id) {
+        case 'barcode':
+            return { x: 0.1, y: 0.1, width: labelWidth - 0.2, height: 0.4, fontSize: 10, align: 'center' };
+        case 'textContainer':
+            return { x: 0.1, y: 0.6, width: labelWidth - 0.2, height: 0.3, fontSize: 10, align: 'center' };
+        default:
+            if (id.startsWith('static-')) {
+                // Position static text elements in a vertical stack below other elements
+                const staticIndex = parseInt(id.split('-')[1]) || 0;
+                return { x: 0.1, y: 0.5 + (staticIndex * 0.15), width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
+            }
+            return { x: 0.1, y: 0.5, width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
+    }
+}
+
+function updateElementPosition(element, config) {
+    if (!element || !config) {
+        return;
+    }
+    
+    const labelWidth = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customWidth 
+        : LABEL_SIZES[appState.labelSettings.size].width;
+    const labelHeight = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customHeight 
+        : LABEL_SIZES[appState.labelSettings.size].height;
+    
+    // Convert inches to pixels (using same DPI as print for accuracy)
+    const dpi = 300;
+    const x = Math.max(0, Math.min(config.x * dpi, (labelWidth - config.width) * dpi));
+    const y = Math.max(0, Math.min(config.y * dpi, (labelHeight - config.height) * dpi));
+    const width = Math.max(20, Math.min(config.width * dpi, labelWidth * dpi));
+    const height = Math.max(15, Math.min(config.height * dpi, labelHeight * dpi));
+    
+    // Set basic positioning
+    element.style.position = 'absolute';
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+    element.style.width = `${width}px`;
+    element.style.height = `${height}px`;
+    element.style.fontSize = `${config.fontSize}px`;
+    element.style.textAlign = config.align;
+    element.style.boxSizing = 'border-box';
+    element.style.overflow = 'hidden';
+    
+    // Update label size
+    const previewLabel = document.getElementById('design-preview-label');
+    if (previewLabel) {
+        previewLabel.style.width = `${labelWidth * dpi}px`;
+        previewLabel.style.height = `${labelHeight * dpi}px`;
+    }
+}
+
+function handleElementMouseDown(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const element = e.currentTarget;
+    const rect = element.getBoundingClientRect();
+    const labelRect = document.getElementById('design-preview-label').getBoundingClientRect();
+    
+    // Check if clicking on a resize handle
+    if (e.target.classList.contains('element-handle')) {
+        isResizing = true;
+        resizeHandle = e.target.dataset.handle;
+        selectedElement = element;
+        selectElement(element);
+        return;
+    }
+    
+    // Start dragging
+    isDragging = true;
+    selectedElement = element;
+    selectElement(element);
+    
+    dragOffset.x = e.clientX - rect.left;
+    dragOffset.y = e.clientY - rect.top;
+    
+    element.classList.add('dragging');
+    
+    // Add global event listeners
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+}
+
+function handleMouseMove(e) {
+    if (!selectedElement) return;
+    
+    const labelRect = document.getElementById('design-preview-label').getBoundingClientRect();
+    
+    if (isDragging) {
+        const x = e.clientX - labelRect.left - dragOffset.x;
+        const y = e.clientY - labelRect.top - dragOffset.y;
+        
+        // Convert pixels to inches (using same DPI as print for accuracy)
+        const dpi = 300;
+        const xInches = Math.max(0, Math.min(x / dpi, getLabelWidth() - getElementWidth(selectedElement)));
+        const yInches = Math.max(0, Math.min(y / dpi, getLabelHeight() - getElementHeight(selectedElement)));
+        
+        selectedElement.style.left = `${xInches * dpi}px`;
+        selectedElement.style.top = `${yInches * dpi}px`;
+        
+        // Update element config
+        const elementId = selectedElement.dataset.elementId;
+        if (appState.labelSettings.elements[elementId]) {
+            appState.labelSettings.elements[elementId].x = xInches;
+            appState.labelSettings.elements[elementId].y = yInches;
+        }
+        
+        updateElementProperties();
+    } else if (isResizing) {
+        // Handle resizing
+        const x = e.clientX - labelRect.left;
+        const y = e.clientY - labelRect.top;
+        
+        const dpi = 300;
+        const elementId = selectedElement.dataset.elementId;
+        const config = appState.labelSettings.elements[elementId];
+        
+        if (config) {
+            switch (resizeHandle) {
+                case 'se':
+                    config.width = Math.max(0.1, (x / dpi) - config.x);
+                    config.height = Math.max(0.1, (y / dpi) - config.y);
+                    break;
+                case 'sw':
+                    const newWidth = config.width + (config.x - (x / dpi));
+                    const newX = Math.min(config.x + config.width - 0.1, x / dpi);
+                    config.width = Math.max(0.1, newWidth);
+                    config.x = newX;
+                    config.height = Math.max(0.1, (y / dpi) - config.y);
+                    break;
+                case 'ne':
+                    config.width = Math.max(0.1, (x / dpi) - config.x);
+                    const newHeight = config.height + (config.y - (y / dpi));
+                    const newY = Math.min(config.y + config.height - 0.1, y / dpi);
+                    config.height = Math.max(0.1, newHeight);
+                    config.y = newY;
+                    break;
+                case 'nw':
+                    const newWidthNW = config.width + (config.x - (x / dpi));
+                    const newXNW = Math.min(config.x + config.width - 0.1, x / dpi);
+                    config.width = Math.max(0.1, newWidthNW);
+                    config.x = newXNW;
+                    const newHeightNW = config.height + (config.y - (y / dpi));
+                    const newYNW = Math.min(config.y + config.height - 0.1, y / dpi);
+                    config.height = Math.max(0.1, newHeightNW);
+                    config.y = newYNW;
+                    break;
+            }
+            
+            updateElementPosition(selectedElement, config);
+            updateElementProperties();
+        }
+    }
+}
+
+function handleMouseUp(e) {
+    if (selectedElement) {
+        selectedElement.classList.remove('dragging');
+    }
+    
+    isDragging = false;
+    isResizing = false;
+    resizeHandle = null;
+    
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+}
+
+function selectElement(element) {
+    deselectAllElements();
+    element.classList.add('selected');
+    selectedElement = element;
+    
+    // Show element properties
+    showElementProperties(element);
+    
+    // Add resize handles
+    addResizeHandles(element);
+}
+
+function deselectAllElements() {
+    document.querySelectorAll('.preview-barcode, .preview-text, .preview-static').forEach(el => {
+        el.classList.remove('selected');
+        removeResizeHandles(el);
+    });
+    selectedElement = null;
+    hideElementProperties();
+}
+
+function addResizeHandles(element) {
+    const handles = ['nw', 'ne', 'sw', 'se'];
+    handles.forEach(handle => {
+        const handleEl = document.createElement('div');
+        handleEl.className = `element-handle ${handle}`;
+        handleEl.dataset.handle = handle;
+        element.appendChild(handleEl);
+    });
+}
+
+function removeResizeHandles(element) {
+    element.querySelectorAll('.element-handle').forEach(handle => handle.remove());
+}
+
+function showElementProperties(element) {
+    const elementId = element.dataset.elementId;
+    const config = appState.labelSettings.elements[elementId];
+    
+    if (config) {
+        document.getElementById('element-x').value = config.x.toFixed(2);
+        document.getElementById('element-y').value = config.y.toFixed(2);
+        document.getElementById('element-width').value = config.width.toFixed(2);
+        document.getElementById('element-height').value = config.height.toFixed(2);
+        document.getElementById('element-font-size').value = config.fontSize;
+        document.getElementById('element-align').value = config.align;
+        
+        document.getElementById('element-properties').style.display = 'block';
+    }
+}
+
+function hideElementProperties() {
+    document.getElementById('element-properties').style.display = 'none';
+}
+
+function updateElementProperties() {
+    if (!selectedElement) return;
+    
+    const elementId = selectedElement.dataset.elementId;
+    const config = appState.labelSettings.elements[elementId];
+    
+    if (config) {
+        document.getElementById('element-x').value = config.x.toFixed(2);
+        document.getElementById('element-y').value = config.y.toFixed(2);
+        document.getElementById('element-width').value = config.width.toFixed(2);
+        document.getElementById('element-height').value = config.height.toFixed(2);
+    }
+}
+
+function setupElementPropertyControls() {
+    const controls = ['element-x', 'element-y', 'element-width', 'element-height', 'element-font-size', 'element-align'];
+    
+    controls.forEach(controlId => {
+        const control = document.getElementById(controlId);
+        if (control) {
+            control.addEventListener('input', updateElementFromProperties);
+        }
+    });
+    
+    // Add layout controls
+    const textLayout = document.getElementById('text-layout');
+    const textGap = document.getElementById('text-gap');
+    
+    if (textLayout) {
+        textLayout.addEventListener('change', updateTextLayout);
+    }
+    
+    if (textGap) {
+        textGap.addEventListener('input', updateTextLayout);
+    }
+}
+
+function updateTextLayout() {
+    const textLayout = document.getElementById('text-layout').value;
+    const textGap = parseInt(document.getElementById('text-gap').value) || 2;
+    
+    appState.labelSettings.textLayout = textLayout;
+    appState.labelSettings.textGap = textGap;
+    
+    // Update text container
+    const textContainer = document.getElementById('element-textContainer');
+    if (textContainer) {
+        textContainer.className = `preview-text text-container ${textLayout}`;
+        textContainer.style.gap = `${textGap}px`;
+    }
+}
+
+function updateElementFromProperties() {
+    if (!selectedElement) return;
+    
+    const elementId = selectedElement.dataset.elementId;
+    const config = appState.labelSettings.elements[elementId];
+    
+    if (config) {
+        config.x = parseFloat(document.getElementById('element-x').value) || 0;
+        config.y = parseFloat(document.getElementById('element-y').value) || 0;
+        config.width = parseFloat(document.getElementById('element-width').value) || 0.1;
+        config.height = parseFloat(document.getElementById('element-height').value) || 0.1;
+        config.fontSize = parseInt(document.getElementById('element-font-size').value) || 10;
+        config.align = document.getElementById('element-align').value;
+        
+        updateElementPosition(selectedElement, config);
+    }
+}
+
+function getLabelWidth() {
+    return appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customWidth 
+        : LABEL_SIZES[appState.labelSettings.size].width;
+}
+
+function getLabelHeight() {
+    return appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customHeight 
+        : LABEL_SIZES[appState.labelSettings.size].height;
+}
+
+function getElementWidth(element) {
+    const config = appState.labelSettings.elements[element.dataset.elementId];
+    return config ? config.width : 0.1;
+}
+
+function getElementHeight(element) {
+    const config = appState.labelSettings.elements[element.dataset.elementId];
+    return config ? config.height : 0.1;
+}
+
+// Static Text Management
+function initializeStaticTextManager() {
+    updateStaticTextList();
+}
+
+function addStaticTextField() {
+    const text = prompt('Enter static text:');
+    if (text && text.trim()) {
+        const staticIndex = appState.labelSettings.staticTexts.length;
+        const staticText = {
+            id: Date.now(),
+            text: text.trim(),
+            x: 0.1,
+            y: 0.5 + (staticIndex * 0.15),
+            width: 1.8,
+            height: 0.1,
+            fontSize: 8,
+            align: 'center'
+        };
+        
+        appState.labelSettings.staticTexts.push(staticText);
+        
+        // Add to elements config
+        const elementId = `static-${appState.labelSettings.staticTexts.length - 1}`;
+        appState.labelSettings.elements[elementId] = {
+            x: staticText.x,
+            y: staticText.y,
+            width: staticText.width,
+            height: staticText.height,
+            fontSize: staticText.fontSize,
+            align: staticText.align
+        };
+        
+        updateStaticTextList();
+        createLabelElements();
+    }
+}
+
+function removeStaticTextField(index) {
+    appState.labelSettings.staticTexts.splice(index, 1);
+    
+    // Remove from elements config
+    const elementId = `static-${index}`;
+    delete appState.labelSettings.elements[elementId];
+    
+    // Reindex remaining static texts
+    const newElements = {};
+    Object.keys(appState.labelSettings.elements).forEach(key => {
+        if (key.startsWith('static-')) {
+            const oldIndex = parseInt(key.split('-')[1]);
+            if (oldIndex > index) {
+                newElements[`static-${oldIndex - 1}`] = appState.labelSettings.elements[key];
+            } else if (oldIndex < index) {
+                newElements[key] = appState.labelSettings.elements[key];
+            }
+        } else {
+            newElements[key] = appState.labelSettings.elements[key];
+        }
+    });
+    appState.labelSettings.elements = newElements;
+    
+    updateStaticTextList();
+    createLabelElements();
+}
+
+function updateStaticTextList() {
+    const list = document.getElementById('static-text-list');
+    list.innerHTML = '';
+    
+    appState.labelSettings.staticTexts.forEach((staticText, index) => {
+        const item = document.createElement('div');
+        item.className = 'static-text-item';
+        
+        item.innerHTML = `
+            <input type="text" class="static-text-input" value="${staticText.text}" 
+                   onchange="updateStaticText(${index}, this.value)">
+            <button class="static-text-remove" onclick="removeStaticTextField(${index})">×</button>
+        `;
+        
+        list.appendChild(item);
+    });
+}
+
+function updateStaticText(index, text) {
+    if (appState.labelSettings.staticTexts[index]) {
+        appState.labelSettings.staticTexts[index].text = text;
+        createLabelElements();
+    }
+}
+
+// Grid and Utility Functions
+function toggleGrid() {
+    const grid = document.getElementById('preview-grid');
+    const toggle = document.getElementById('grid-toggle');
+    
+    gridVisible = !gridVisible;
+    
+    if (gridVisible) {
+        grid.classList.add('visible');
+        toggle.innerHTML = '<span class="btn-icon">⊞</span> Hide Grid';
+    } else {
+        grid.classList.remove('visible');
+        toggle.innerHTML = '<span class="btn-icon">⊞</span> Show Grid';
+    }
+}
+
+function resetElementPositions() {
+    if (confirm('Reset all element positions to default?')) {
+        // Reset barcode position
+        appState.labelSettings.elements.barcode = getDefaultElementConfig('barcode');
+        
+        // Reset text position
+        appState.labelSettings.elements.text = getDefaultElementConfig('text');
+        
+        // Reset static text positions
+        appState.labelSettings.staticTexts.forEach((staticText, index) => {
+            const elementId = `static-${index}`;
+            appState.labelSettings.elements[elementId] = getDefaultElementConfig(`static-${index}`);
+        });
+        
+        createLabelElements();
+        deselectAllElements();
+    }
 }
 
 function handleLabelSizeChange(e) {
@@ -591,66 +1321,291 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
+    // Simple approach using static barcode images for preview
     const previewLabel = document.getElementById('design-preview-label');
-    const previewBarcode = document.getElementById('design-preview-barcode');
-    const previewText = document.getElementById('design-preview-text');
-    const previewStatic = document.getElementById('design-preview-static');
     
-    // Update barcode
+    if (!previewLabel) {
+        console.error('Preview label element not found');
+        return;
+    }
+    
+    // Clear existing content to prevent duplication
+    previewLabel.innerHTML = '';
+    
+    // Create barcode preview with static image
+    const barcodeDiv = document.createElement('div');
+    barcodeDiv.className = 'preview-barcode draggable-element';
+    barcodeDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; right: 10px; height: 60px; display: flex; flex-direction: column; align-items: center; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);';
+    
+    // Use static barcode image based on type
+    const barcodeImg = document.createElement('img');
+    barcodeImg.style.cssText = 'max-width: 100%; height: 40px; object-fit: contain;';
+    barcodeImg.src = getBarcodeImageUrl(appState.labelSettings.barcodeType);
+    barcodeImg.alt = `${appState.labelSettings.barcodeType} Barcode Preview`;
+    
+    const barcodeNumber = document.createElement('div');
+    barcodeNumber.className = 'barcode-number';
+    barcodeNumber.style.cssText = 'font-size: 10px; margin-top: 2px; text-align: center;';
+    
+    // Show sample data or Excel data
     if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
         const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
-        if (sampleBarcode) {
-            try {
-                JsBarcode(previewBarcode, sampleBarcode, {
-                    format: appState.labelSettings.barcodeType,
-                    width: 2,
-                    height: 50,
-                    displayValue: false
-                });
-            } catch (error) {
-                previewBarcode.innerHTML = '<text>Invalid barcode</text>';
+        barcodeNumber.textContent = sampleBarcode ? sampleBarcode.toString() : 'Sample Barcode';
+    } else {
+        barcodeNumber.textContent = getSampleBarcodeData(appState.labelSettings.barcodeType);
+    }
+    
+    // Add drag functionality
+    barcodeDiv.draggable = true;
+    barcodeDiv.addEventListener('mousedown', handleElementMouseDown);
+    barcodeDiv.addEventListener('mousemove', handleElementMouseMove);
+    barcodeDiv.addEventListener('mouseup', handleElementMouseUp);
+    barcodeDiv.dataset.elementId = 'barcode';
+    
+    // Create barcode element configuration for PDF generation
+    if (!appState.labelSettings.elements.barcode) {
+        appState.labelSettings.elements.barcode = {
+            x: 0.1,
+            y: 0.1,
+            width: 2.0,
+            height: 0.5,
+            fontSize: 8,
+            align: 'center'
+        };
+    }
+    
+    barcodeDiv.appendChild(barcodeImg);
+    barcodeDiv.appendChild(barcodeNumber);
+    previewLabel.appendChild(barcodeDiv);
+    
+    // Create separate draggable text elements for each mapped column
+    let currentTop = 80;
+    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
+        appState.mappedColumns.text.forEach((column, index) => {
+            const textDiv = document.createElement('div');
+            textDiv.className = 'preview-text draggable-element';
+            textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
+            
+            const sampleValue = appState.excelData[0][column.index];
+            textDiv.textContent = sampleValue ? sampleValue.toString() : column.name;
+            
+            // Add drag functionality
+            textDiv.draggable = true;
+            textDiv.addEventListener('mousedown', handleElementMouseDown);
+            textDiv.addEventListener('mousemove', handleElementMouseMove);
+            textDiv.addEventListener('mouseup', handleElementMouseUp);
+            
+            // Store column info for PDF generation
+            textDiv.dataset.columnIndex = column.index;
+            textDiv.dataset.columnName = column.name;
+            textDiv.dataset.elementId = `text-${index}`;
+            
+            // Create element configuration for PDF generation
+            const elementId = `text-${index}`;
+            if (!appState.labelSettings.elements[elementId]) {
+                appState.labelSettings.elements[elementId] = {
+                    x: 0.1, // 10px in inches
+                    y: currentTop / 300, // Convert pixels to inches (300 DPI)
+                    width: 2.0, // 2 inches
+                    height: 0.2, // 0.2 inches
+                    fontSize: 8,
+                    align: 'center'
+                };
             }
-        }
+            
+            previewLabel.appendChild(textDiv);
+            currentTop += 25; // Space between text elements
+        });
     } else {
-        previewBarcode.innerHTML = '';
-    }
-    
-    // Update text
-    if (appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
-        const textParts = appState.mappedColumns.text.map(col => {
-            const value = appState.excelData[0][col.index];
-            return value ? value.toString() : '';
-        }).filter(text => text.length > 0);
+        // Default text if no columns mapped
+        const textDiv = document.createElement('div');
+        textDiv.className = 'preview-text draggable-element';
+        textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
+        textDiv.textContent = 'Sample Product Information';
+        textDiv.draggable = true;
+        textDiv.addEventListener('mousedown', handleElementMouseDown);
+        textDiv.addEventListener('mousemove', handleElementMouseMove);
+        textDiv.addEventListener('mouseup', handleElementMouseUp);
+        textDiv.dataset.elementId = 'text-0';
         
-        previewText.textContent = textParts.join(' | ') || 'Sample Product Information';
-    } else {
-        previewText.textContent = 'Sample Product Information';
+        // Create default element configuration
+        if (!appState.labelSettings.elements['text-0']) {
+            appState.labelSettings.elements['text-0'] = {
+                x: 0.1,
+                y: currentTop / 300,
+                width: 2.0,
+                height: 0.2,
+                fontSize: 8,
+                align: 'center'
+            };
+        }
+        
+        previewLabel.appendChild(textDiv);
+        currentTop += 25;
     }
     
-    // Update static text
-    const staticText = document.getElementById('static-text').value;
-    if (staticText) {
-        previewStatic.textContent = staticText;
-        previewStatic.classList.remove('hidden');
-    } else {
-        previewStatic.classList.add('hidden');
+    // Add static text elements (only if they exist and not already added)
+    if (appState.labelSettings.staticTexts && appState.labelSettings.staticTexts.length > 0) {
+        appState.labelSettings.staticTexts.forEach((staticText, index) => {
+            const staticDiv = document.createElement('div');
+            staticDiv.className = 'preview-static draggable-element';
+            staticDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 8px; text-align: center; font-style: italic; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
+            staticDiv.textContent = staticText.text;
+            staticDiv.draggable = true;
+            staticDiv.addEventListener('mousedown', handleElementMouseDown);
+            staticDiv.addEventListener('mousemove', handleElementMouseMove);
+            staticDiv.addEventListener('mouseup', handleElementMouseUp);
+            staticDiv.dataset.elementId = `static-${index}`;
+            
+            // Create element configuration for PDF generation
+            const elementId = `static-${index}`;
+            if (!appState.labelSettings.elements[elementId]) {
+                appState.labelSettings.elements[elementId] = {
+                    x: 0.1,
+                    y: currentTop / 300,
+                    width: 2.0,
+                    height: 0.15,
+                    fontSize: 6,
+                    align: 'center'
+                };
+            }
+            
+            previewLabel.appendChild(staticDiv);
+            currentTop += 20; // Space between static text elements
+        });
+    }
+}
+
+function getBarcodeImageUrl(barcodeType) {
+    // Return static barcode image URLs for preview
+    const baseUrl = 'https://via.placeholder.com/200x40/000000/FFFFFF?text=';
+    switch (barcodeType) {
+        case 'EAN13':
+            return `${baseUrl}EAN-13+BARCODE`;
+        case 'CODE128':
+            return `${baseUrl}CODE+128+BARCODE`;
+        case 'CODE39':
+            return `${baseUrl}CODE+39+BARCODE`;
+        case 'UPC':
+            return `${baseUrl}UPC-A+BARCODE`;
+        case 'ITF':
+            return `${baseUrl}ITF-14+BARCODE`;
+        default:
+            return `${baseUrl}SAMPLE+BARCODE`;
+    }
+}
+
+function getSampleBarcodeData(barcodeType) {
+    switch (barcodeType) {
+        case 'EAN13':
+            return '1234567890123';
+        case 'CODE128':
+            return 'SAMPLE123';
+        case 'CODE39':
+            return 'SAMPLE';
+        case 'UPC':
+            return '123456789012';
+        case 'ITF':
+            return '12345678901234';
+        default:
+            return '1234567890123';
+    }
+}
+
+function getExampleBarcodeData(barcodeType) {
+    // Return appropriate example barcode data based on type
+    switch (barcodeType) {
+        case 'EAN13':
+            return '1234567890123'; // 13-digit EAN-13
+        case 'CODE128':
+            return 'SAMPLE123'; // Alphanumeric Code 128
+        case 'CODE39':
+            return 'SAMPLE'; // Alphanumeric Code 39
+        case 'UPC':
+            return '123456789012'; // 12-digit UPC-A
+        case 'ITF':
+            return '12345678901234'; // 14-digit ITF-14
+        default:
+            return '1234567890123';
+    }
+}
+
+function validateBarcodeData(data, barcodeType) {
+    if (!data || typeof data !== 'string') {
+        return false;
     }
     
-    // Apply font size
-    const fontSize = document.getElementById('font-size').value;
-    previewText.className = `preview-text font-${fontSize}`;
+    switch (barcodeType) {
+        case 'EAN13':
+            return /^\d{13}$/.test(data);
+        case 'UPC':
+            return /^\d{12}$/.test(data);
+        case 'ITF':
+            return /^\d{14}$/.test(data);
+        case 'CODE128':
+        case 'CODE39':
+            return data.length > 0 && data.length <= 50;
+        default:
+            return data.length > 0;
+    }
+}
+
+function getBarcodeOptions(barcodeType) {
+    const baseOptions = {
+        width: 2,
+        height: 50,
+        margin: 10
+    };
     
-    // Update label size
-    const size = appState.labelSettings.size;
-    if (size === 'custom') {
-        const width = appState.labelSettings.customWidth;
-        const height = appState.labelSettings.customHeight;
-        previewLabel.style.width = `${width * 100}px`;
-        previewLabel.style.height = `${height * 100}px`;
-    } else if (LABEL_SIZES[size]) {
-        const { width, height } = LABEL_SIZES[size];
-        previewLabel.style.width = `${width * 100}px`;
-        previewLabel.style.height = `${height * 100}px`;
+    switch (barcodeType) {
+        case 'EAN13':
+            return {
+                ...baseOptions,
+                format: 'EAN13',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        case 'CODE128':
+            return {
+                ...baseOptions,
+                format: 'CODE128',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        case 'CODE39':
+            return {
+                ...baseOptions,
+                format: 'CODE39',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        case 'UPC':
+            return {
+                ...baseOptions,
+                format: 'UPC',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        case 'ITF':
+            return {
+                ...baseOptions,
+                format: 'ITF',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
+        default:
+            return {
+                ...baseOptions,
+                format: 'EAN13',
+                displayValue: true,
+                fontSize: 12,
+                textMargin: 2
+            };
     }
 }
 
@@ -684,6 +1639,13 @@ function setupManualQuantities() {
     tbody.innerHTML = '';
     
     appState.excelData.forEach((row, index) => {
+        // Skip rows with blank or 0 quantity if quantity column is mapped
+        if (appState.mappedColumns.quantity) {
+            const qty = parseInt(row[appState.mappedColumns.quantity.index]);
+            if (!qty || qty <= 0) {
+                return; // Skip this row
+            }
+        }
         const tr = document.createElement('tr');
         
         // Product info
@@ -722,7 +1684,11 @@ function updateQuantitySummary() {
         case 'column':
             if (appState.mappedColumns.quantity) {
                 totalLabels = appState.excelData.reduce((sum, row) => {
-                    const qty = parseInt(row[appState.mappedColumns.quantity.index]) || 1;
+                    const qty = parseInt(row[appState.mappedColumns.quantity.index]);
+                    // Skip rows with blank, 0, or invalid quantity
+                    if (!qty || qty <= 0) {
+                        return sum;
+                    }
                     return sum + qty;
                 }, 0);
             } else {
@@ -765,7 +1731,11 @@ function updateFinalSummary() {
         case 'column':
             if (appState.mappedColumns.quantity) {
                 totalLabels = appState.excelData.reduce((sum, row) => {
-                    const qty = parseInt(row[appState.mappedColumns.quantity.index]) || 1;
+                    const qty = parseInt(row[appState.mappedColumns.quantity.index]);
+                    // Skip rows with blank, 0, or invalid quantity
+                    if (!qty || qty <= 0) {
+                        return sum;
+                    }
                     return sum + qty;
                 }, 0);
             } else {
@@ -824,7 +1794,12 @@ function generateLabels() {
         switch (appState.quantitySettings.type) {
             case 'column':
                 if (appState.mappedColumns.quantity) {
-                    quantity = parseInt(row[appState.mappedColumns.quantity.index]) || 1;
+                    const qty = parseInt(row[appState.mappedColumns.quantity.index]);
+                    // Skip rows with blank, 0, or invalid quantity
+                    if (!qty || qty <= 0) {
+                        return; // Skip this row entirely
+                    }
+                    quantity = qty;
                 }
                 break;
             case 'manual':
@@ -837,16 +1812,26 @@ function generateLabels() {
         
         // Generate labels for this product
         for (let i = 0; i < quantity; i++) {
+            // Create individual text elements
+            const textElements = appState.mappedColumns.text.map(col => ({
+                text: row[col.index] ? row[col.index].toString() : '',
+                columnName: col.name
+            }));
+            
             const label = {
                 barcode: barcode.toString(),
                 text: textFields.join(' | '),
-                staticText: appState.labelSettings.staticText,
+                textElements: textElements,
+                staticTexts: appState.labelSettings.staticTexts,
                 barcodeType: appState.labelSettings.barcodeType,
                 size: appState.labelSettings.size,
                 customWidth: appState.labelSettings.customWidth,
                 customHeight: appState.labelSettings.customHeight,
                 fontSize: appState.labelSettings.fontSize,
-                spacing: appState.labelSettings.spacing
+                spacing: appState.labelSettings.spacing,
+                textLayout: appState.labelSettings.textLayout,
+                textGap: appState.labelSettings.textGap,
+                elements: appState.labelSettings.elements
             };
             
             appState.generatedLabels.push(label);
@@ -875,6 +1860,20 @@ function updateGenerationProgress(processed, total) {
 }
 
 // Export Functions
+function showPageSizeSelection() {
+    const pageSizeSelection = document.getElementById('page-size-selection');
+    pageSizeSelection.style.display = 'block';
+    
+    // Add generate PDF button
+    const generatePdfBtn = document.createElement('button');
+    generatePdfBtn.className = 'btn btn-primary btn-large';
+    generatePdfBtn.innerHTML = '<span class="btn-icon">📄</span> Generate PDF';
+    generatePdfBtn.onclick = downloadPDF;
+    
+    const downloadOptions = document.querySelector('.download-options');
+    downloadOptions.appendChild(generatePdfBtn);
+}
+
 function downloadPDF() {
     if (appState.generatedLabels.length === 0) {
         showError('No labels', 'Please generate labels first');
@@ -885,7 +1884,28 @@ function downloadPDF() {
     
     try {
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'mm', 'a4');
+        
+        // Get selected page size
+        const selectedPageSize = document.querySelector('input[name="page-size"]:checked').value;
+        let pageSize, orientation;
+        
+        switch (selectedPageSize) {
+            case 'letter':
+                pageSize = 'letter';
+                orientation = 'p';
+                break;
+            case 'legal':
+                pageSize = 'legal';
+                orientation = 'p';
+                break;
+            case 'a4':
+            default:
+                pageSize = 'a4';
+                orientation = 'p';
+                break;
+        }
+        
+        const doc = new jsPDF(orientation, 'mm', pageSize);
         
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
@@ -893,7 +1913,7 @@ function downloadPDF() {
         const usableWidth = pageWidth - (margin * 2);
         const usableHeight = pageHeight - (margin * 2);
         
-        // Calculate label dimensions in mm
+        // Calculate label dimensions in mm (convert inches to mm)
         const labelWidth = appState.labelSettings.size === 'custom' 
             ? appState.labelSettings.customWidth * 25.4 
             : LABEL_SIZES[appState.labelSettings.size].width * 25.4;
@@ -924,32 +1944,73 @@ function downloadPDF() {
             // Draw label border
             doc.rect(x, y, labelWidth, labelHeight);
             
-            // Add barcode
-            try {
-                const canvas = document.createElement('canvas');
-                JsBarcode(canvas, label.barcode, {
-                    format: label.barcodeType,
-                    width: 2,
-                    height: 30,
-                    displayValue: false
+            // Add elements based on positioning
+            const elements = label.elements || appState.labelSettings.elements;
+            
+            // Add barcode with number display
+            if (elements.barcode) {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const displayValue = label.barcodeType === 'EAN13';
+                    JsBarcode(canvas, label.barcode, {
+                        format: label.barcodeType,
+                        width: 2,
+                        height: 30,
+                        displayValue: displayValue
+                    });
+                    
+                    const barcodeDataURL = canvas.toDataURL();
+                    const barcodeX = x + (elements.barcode.x * 25.4);
+                    const barcodeY = y + (elements.barcode.y * 25.4);
+                    const barcodeWidth = elements.barcode.width * 25.4;
+                    const barcodeHeight = elements.barcode.height * 25.4;
+                    
+                    doc.addImage(barcodeDataURL, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+                    
+                    // Add barcode number if not displayed in barcode
+                    if (!displayValue) {
+                        doc.setFontSize(6);
+                        doc.text(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 3, { align: 'center' });
+                    }
+                } catch (error) {
+                    doc.setFontSize(8);
+                    doc.text('Invalid barcode', x + (elements.barcode.x * 25.4), y + (elements.barcode.y * 25.4) + 5);
+                }
+            }
+            
+            // Add product text elements
+            if (label.textElements && label.textElements.length > 0) {
+                label.textElements.forEach((textElement, index) => {
+                    const elementId = `text-${index}`;
+                    if (elements[elementId]) {
+                        doc.setFontSize(elements[elementId].fontSize || 8);
+                        doc.text(textElement.text, x + (elements[elementId].x * 25.4), y + (elements[elementId].y * 25.4) + 5, { 
+                            maxWidth: elements[elementId].width * 25.4,
+                            align: elements[elementId].align || 'left'
+                        });
+                    }
                 });
-                
-                const barcodeDataURL = canvas.toDataURL();
-                doc.addImage(barcodeDataURL, 'PNG', x + 2, y + 2, labelWidth - 4, 15);
-            } catch (error) {
-                doc.text('Invalid barcode', x + 2, y + 10);
+            } else if (label.text && elements.textContainer) {
+                // Fallback to single text element
+                doc.setFontSize(elements.textContainer.fontSize || 8);
+                doc.text(label.text, x + (elements.textContainer.x * 25.4), y + (elements.textContainer.y * 25.4) + 5, { 
+                    maxWidth: elements.textContainer.width * 25.4,
+                    align: elements.textContainer.align || 'left'
+                });
             }
             
-            // Add text
-            if (label.text) {
-                doc.setFontSize(8);
-                doc.text(label.text, x + 2, y + 20, { maxWidth: labelWidth - 4 });
-            }
-            
-            // Add static text
-            if (label.staticText) {
-                doc.setFontSize(6);
-                doc.text(label.staticText, x + 2, y + labelHeight - 4);
+            // Add static texts
+            if (label.staticTexts && label.staticTexts.length > 0) {
+                label.staticTexts.forEach((staticText, index) => {
+                    const elementId = `static-${index}`;
+                    if (elements[elementId]) {
+                        doc.setFontSize(elements[elementId].fontSize || 6);
+                        doc.text(staticText.text, x + (elements[elementId].x * 25.4), y + (elements[elementId].y * 25.4) + 3, {
+                            maxWidth: elements[elementId].width * 25.4,
+                            align: elements[elementId].align || 'left'
+                        });
+                    }
+                });
             }
             
             // Update position
@@ -987,7 +2048,7 @@ function downloadZIP() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
-                // Set canvas size based on label size
+                // Set canvas size based on label size (300 DPI for high quality)
                 const dpi = 300;
                 const width = appState.labelSettings.size === 'custom' 
                     ? appState.labelSettings.customWidth * dpi 
@@ -1008,40 +2069,82 @@ function downloadZIP() {
                 ctx.lineWidth = 2;
                 ctx.strokeRect(1, 1, width - 2, height - 2);
                 
-                // Add barcode
-                try {
-                    const barcodeCanvas = document.createElement('canvas');
-                    JsBarcode(barcodeCanvas, label.barcode, {
-                        format: label.barcodeType,
-                        width: 3,
-                        height: 60,
-                        displayValue: false
+                // Add elements based on positioning
+                const elements = label.elements || appState.labelSettings.elements;
+                
+                // Add barcode with number display
+                if (elements.barcode) {
+                    try {
+                        const barcodeCanvas = document.createElement('canvas');
+                        const displayValue = label.barcodeType === 'EAN13';
+                        JsBarcode(barcodeCanvas, label.barcode, {
+                            format: label.barcodeType,
+                            width: 3,
+                            height: 60,
+                            displayValue: displayValue
+                        });
+                        
+                        const barcodeX = elements.barcode.x * dpi;
+                        const barcodeY = elements.barcode.y * dpi;
+                        const barcodeWidth = elements.barcode.width * dpi;
+                        const barcodeHeight = elements.barcode.height * dpi;
+                        
+                        // Scale barcode to fit the element size
+                        ctx.drawImage(barcodeCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+                        
+                        // Add barcode number if not displayed in barcode
+                        if (!displayValue) {
+                            ctx.fillStyle = '#000000';
+                            ctx.font = '12px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 15);
+                        }
+                    } catch (error) {
+                        ctx.fillStyle = '#000000';
+                        ctx.font = `${elements.barcode.fontSize || 16}px Arial`;
+                        ctx.textAlign = elements.barcode.align || 'center';
+                        ctx.fillText('Invalid barcode', 
+                            elements.barcode.x * dpi + (elements.barcode.width * dpi) / 2, 
+                            elements.barcode.y * dpi + (elements.barcode.height * dpi) / 2);
+                    }
+                }
+                
+                // Add product text elements
+                if (label.textElements && label.textElements.length > 0) {
+                    label.textElements.forEach((textElement, index) => {
+                        const elementId = `text-${index}`;
+                        if (elements[elementId]) {
+                            ctx.fillStyle = '#000000';
+                            ctx.font = `${elements[elementId].fontSize || 14}px Arial`;
+                            ctx.textAlign = elements[elementId].align || 'center';
+                            ctx.fillText(textElement.text, 
+                                elements[elementId].x * dpi + (elements[elementId].width * dpi) / 2, 
+                                elements[elementId].y * dpi + (elements[elementId].height * dpi) / 2);
+                        }
                     });
-                    
-                    const barcodeX = (width - barcodeCanvas.width) / 2;
-                    const barcodeY = 20;
-                    ctx.drawImage(barcodeCanvas, barcodeX, barcodeY);
-                } catch (error) {
+                } else if (label.text && elements.textContainer) {
+                    // Fallback to single text element
                     ctx.fillStyle = '#000000';
-                    ctx.font = '16px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('Invalid barcode', width / 2, height / 2);
+                    ctx.font = `${elements.textContainer.fontSize || 14}px Arial`;
+                    ctx.textAlign = elements.textContainer.align || 'center';
+                    ctx.fillText(label.text, 
+                        elements.textContainer.x * dpi + (elements.textContainer.width * dpi) / 2, 
+                        elements.textContainer.y * dpi + (elements.textContainer.height * dpi) / 2);
                 }
                 
-                // Add text
-                if (label.text) {
-                    ctx.fillStyle = '#000000';
-                    ctx.font = '14px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(label.text, width / 2, height - 30);
-                }
-                
-                // Add static text
-                if (label.staticText) {
-                    ctx.fillStyle = '#666666';
-                    ctx.font = '10px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(label.staticText, width / 2, height - 10);
+                // Add static texts
+                if (label.staticTexts && label.staticTexts.length > 0) {
+                    label.staticTexts.forEach((staticText, staticIndex) => {
+                        const elementId = `static-${staticIndex}`;
+                        if (elements[elementId]) {
+                            ctx.fillStyle = '#666666';
+                            ctx.font = `${elements[elementId].fontSize || 10}px Arial`;
+                            ctx.textAlign = elements[elementId].align || 'center';
+                            ctx.fillText(staticText.text, 
+                                elements[elementId].x * dpi + (elements[elementId].width * dpi) / 2, 
+                                elements[elementId].y * dpi + (elements[elementId].height * dpi) / 2);
+                        }
+                    });
                 }
                 
                 // Convert to blob and add to ZIP
