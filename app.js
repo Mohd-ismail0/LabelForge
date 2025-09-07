@@ -1319,7 +1319,7 @@ function updateDesignPreview() {
     // Simple approach using static barcode images for preview
     const previewLabel = document.getElementById('design-preview-label');
     
-    // Clear existing content
+    // Clear existing content to prevent duplication
     previewLabel.innerHTML = '';
     
     // Create barcode preview with static image
@@ -1349,32 +1349,41 @@ function updateDesignPreview() {
     barcodeDiv.appendChild(barcodeNumber);
     previewLabel.appendChild(barcodeDiv);
     
-    // Create text preview
-    const textDiv = document.createElement('div');
-    textDiv.className = 'preview-text';
-    textDiv.style.cssText = 'position: absolute; top: 80px; left: 10px; right: 10px; font-size: 10px; text-align: center;';
-    
-    if (appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
-        const textParts = appState.mappedColumns.text.map(col => {
-            const value = appState.excelData[0][col.index];
-            return value ? value.toString() : '';
-        }).filter(text => text.length > 0);
-        
-        textDiv.textContent = textParts.join(' | ') || 'Sample Product Information';
+    // Create separate text elements for each mapped column
+    let currentTop = 80;
+    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
+        appState.mappedColumns.text.forEach((column, index) => {
+            const textDiv = document.createElement('div');
+            textDiv.className = 'preview-text';
+            textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto;`;
+            
+            const sampleValue = appState.excelData[0][column.index];
+            textDiv.textContent = sampleValue ? sampleValue.toString() : column.name;
+            
+            previewLabel.appendChild(textDiv);
+            currentTop += 25; // Space between text elements
+        });
     } else {
+        // Default text if no columns mapped
+        const textDiv = document.createElement('div');
+        textDiv.className = 'preview-text';
+        textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto;`;
         textDiv.textContent = 'Sample Product Information';
+        previewLabel.appendChild(textDiv);
+        currentTop += 25;
     }
     
-    previewLabel.appendChild(textDiv);
-    
-    // Add static text elements
-    appState.labelSettings.staticTexts.forEach((staticText, index) => {
-        const staticDiv = document.createElement('div');
-        staticDiv.className = 'preview-static';
-        staticDiv.style.cssText = `position: absolute; top: ${100 + (index * 20)}px; left: 10px; right: 10px; font-size: 8px; text-align: center; font-style: italic;`;
-        staticDiv.textContent = staticText.text;
-        previewLabel.appendChild(staticDiv);
-    });
+    // Add static text elements (only if they exist and not already added)
+    if (appState.labelSettings.staticTexts && appState.labelSettings.staticTexts.length > 0) {
+        appState.labelSettings.staticTexts.forEach((staticText, index) => {
+            const staticDiv = document.createElement('div');
+            staticDiv.className = 'preview-static';
+            staticDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 8px; text-align: center; font-style: italic; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto;`;
+            staticDiv.textContent = staticText.text;
+            previewLabel.appendChild(staticDiv);
+            currentTop += 20; // Space between static text elements
+        });
+    }
 }
 
 function getBarcodeImageUrl(barcodeType) {
