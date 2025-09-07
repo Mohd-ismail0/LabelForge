@@ -1432,6 +1432,39 @@ function getDefaultElementConfig(id) {
     }
 }
 
+function getElementPositionForLayout(id, textLayout, textGap) {
+    const labelWidth = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customWidth 
+        : LABEL_SIZES[appState.labelSettings.size].width;
+    const labelHeight = appState.labelSettings.size === 'custom' 
+        ? appState.labelSettings.customHeight 
+        : LABEL_SIZES[appState.labelSettings.size].height;
+    
+    if (id.startsWith('text-')) {
+        const textIndex = parseInt(id.split('-')[1]) || 0;
+        const totalTextElements = appState.mappedColumns.text ? appState.mappedColumns.text.length : 0;
+        
+        if (textLayout === 'horizontal' || textLayout === 'row') {
+            // Horizontal layout: position elements side by side
+            const elementWidth = (labelWidth - 0.2) / totalTextElements;
+            const x = 0.1 + (textIndex * elementWidth);
+            return { x: x, y: 0.6, width: elementWidth - 0.05, height: 0.15, fontSize: 10, align: 'center' };
+        } else {
+            // Vertical layout: position elements stacked
+            return { x: 0.1, y: 0.6 + (textIndex * 0.15), width: 'auto', height: 'auto', fontSize: 10, align: 'center' };
+        }
+    }
+    
+    if (id.startsWith('static-')) {
+        const staticIndex = parseInt(id.split('-')[1]) || 0;
+        // Position static text elements below text elements
+        return { x: 0.1, y: 0.8 + (staticIndex * 0.1), width: 'auto', height: 'auto', fontSize: 8, align: 'center' };
+    }
+    
+    // Default positioning
+    return getDefaultElementConfig(id);
+}
+
 function updateElementPosition(element, config) {
     if (!element || !config) {
         return;
@@ -2524,7 +2557,8 @@ function createLabelCanvas(label) {
             const elementId = `text-${index}`;
             let textConfig = appState.labelSettings.elements[elementId];
             if (!textConfig) {
-                textConfig = getDefaultElementConfig(elementId);
+                // Use layout-aware positioning
+                textConfig = getElementPositionForLayout(elementId, label.textLayout, label.textGap);
                 appState.labelSettings.elements[elementId] = textConfig;
             }
             
@@ -2532,9 +2566,21 @@ function createLabelCanvas(label) {
                 ctx.fillStyle = '#000000';
                 ctx.font = `${textConfig.fontSize || 14}px Arial`;
                 ctx.textAlign = textConfig.align || 'center';
-                ctx.fillText(textElement.text, 
-                    textConfig.x * dpi + (textConfig.width * dpi) / 2,
-                    textConfig.y * dpi + (textConfig.height * dpi) / 2);
+                
+                // Calculate text position based on layout
+                let textX, textY;
+                if (textConfig.width === 'auto') {
+                    const labelWidth = appState.labelSettings.size === 'custom' 
+                        ? appState.labelSettings.customWidth 
+                        : LABEL_SIZES[appState.labelSettings.size].width;
+                    textX = textConfig.x * dpi + (labelWidth * dpi) / 2;
+                    textY = textConfig.y * dpi + 15; // Offset for baseline
+                } else {
+                    textX = textConfig.x * dpi + (textConfig.width * dpi) / 2;
+                    textY = textConfig.y * dpi + (textConfig.height * dpi) / 2;
+                }
+                
+                ctx.fillText(textElement.text, textX, textY);
             }
         });
     }
@@ -2545,7 +2591,8 @@ function createLabelCanvas(label) {
             const elementId = `static-${index}`;
             let staticConfig = appState.labelSettings.elements[elementId];
             if (!staticConfig) {
-                staticConfig = getDefaultElementConfig(elementId);
+                // Use layout-aware positioning
+                staticConfig = getElementPositionForLayout(elementId, label.textLayout, label.textGap);
                 appState.labelSettings.elements[elementId] = staticConfig;
             }
             
@@ -2553,9 +2600,21 @@ function createLabelCanvas(label) {
                 ctx.fillStyle = '#000000';
                 ctx.font = `${staticConfig.fontSize || 12}px Arial`;
                 ctx.textAlign = staticConfig.align || 'center';
-                ctx.fillText(staticText.text, 
-                    staticConfig.x * dpi + (staticConfig.width * dpi) / 2,
-                    staticConfig.y * dpi + (staticConfig.height * dpi) / 2);
+                
+                // Calculate text position based on layout
+                let textX, textY;
+                if (staticConfig.width === 'auto') {
+                    const labelWidth = appState.labelSettings.size === 'custom' 
+                        ? appState.labelSettings.customWidth 
+                        : LABEL_SIZES[appState.labelSettings.size].width;
+                    textX = staticConfig.x * dpi + (labelWidth * dpi) / 2;
+                    textY = staticConfig.y * dpi + 12; // Offset for baseline
+                } else {
+                    textX = staticConfig.x * dpi + (staticConfig.width * dpi) / 2;
+                    textY = staticConfig.y * dpi + (staticConfig.height * dpi) / 2;
+                }
+                
+                ctx.fillText(staticText.text, textX, textY);
             }
         });
     }
@@ -2734,15 +2793,22 @@ function downloadPDF() {
                     const elementId = `text-${index}`;
                     let textConfig = appState.labelSettings.elements[elementId];
                     if (!textConfig) {
-                        textConfig = getDefaultElementConfig(elementId);
+                        // Use layout-aware positioning
+                        textConfig = getElementPositionForLayout(elementId, label.textLayout, label.textGap);
                         appState.labelSettings.elements[elementId] = textConfig;
                     }
                     
                     if (textConfig) {
                         doc.setFontSize(textConfig.fontSize || 8);
-                        doc.text(textElement.text, x + (textConfig.x * 25.4), y + (textConfig.y * 25.4) + 5, {
-                            maxWidth: textConfig.width * 25.4,
-                            align: textConfig.align || 'left'
+                        
+                        // Calculate text position and width for PDF
+                        let textX = x + (textConfig.x * 25.4);
+                        let textY = y + (textConfig.y * 25.4) + 5;
+                        let maxWidth = textConfig.width === 'auto' ? labelWidth - 0.2 : textConfig.width;
+                        
+                        doc.text(textElement.text, textX, textY, {
+                            maxWidth: maxWidth * 25.4,
+                            align: textConfig.align || 'center'
                         });
                     }
                 });
@@ -2754,15 +2820,22 @@ function downloadPDF() {
                     const elementId = `static-${index}`;
                     let staticConfig = appState.labelSettings.elements[elementId];
                     if (!staticConfig) {
-                        staticConfig = getDefaultElementConfig(elementId);
+                        // Use layout-aware positioning
+                        staticConfig = getElementPositionForLayout(elementId, label.textLayout, label.textGap);
                         appState.labelSettings.elements[elementId] = staticConfig;
                     }
                     
                     if (staticConfig) {
                         doc.setFontSize(staticConfig.fontSize || 6);
-                        doc.text(staticText.text, x + (staticConfig.x * 25.4), y + (staticConfig.y * 25.4) + 3, {
-                            maxWidth: staticConfig.width * 25.4,
-                            align: staticConfig.align || 'left'
+                        
+                        // Calculate text position and width for PDF
+                        let textX = x + (staticConfig.x * 25.4);
+                        let textY = y + (staticConfig.y * 25.4) + 3;
+                        let maxWidth = staticConfig.width === 'auto' ? labelWidth - 0.2 : staticConfig.width;
+                        
+                        doc.text(staticText.text, textX, textY, {
+                            maxWidth: maxWidth * 25.4,
+                            align: staticConfig.align || 'center'
                         });
                     }
                 });
