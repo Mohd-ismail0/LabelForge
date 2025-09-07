@@ -2633,14 +2633,28 @@ function createLabelCanvas(label) {
     // Convert design coordinates (96 DPI) to canvas coordinates (300 DPI)
     const scaleFactor = dpi / DISPLAY_DPI; // 300 / 96 = 3.125
     
+    let hasRenderedContent = false;
+    
     // Render barcode element from cached design
-    renderBarcodeFromDesign(ctx, label, designCache, scaleFactor);
+    if (renderBarcodeFromDesign(ctx, label, designCache, scaleFactor)) {
+        hasRenderedContent = true;
+    }
     
     // Render text elements from cached design
-    renderTextElementsFromDesign(ctx, label, designCache, scaleFactor);
+    if (renderTextElementsFromDesign(ctx, label, designCache, scaleFactor)) {
+        hasRenderedContent = true;
+    }
     
     // Render static text elements from cached design
-    renderStaticElementsFromDesign(ctx, label, designCache, scaleFactor);
+    if (renderStaticElementsFromDesign(ctx, label, designCache, scaleFactor)) {
+        hasRenderedContent = true;
+    }
+    
+    // Fallback: If nothing was rendered, add basic content
+    if (!hasRenderedContent) {
+        console.log('No content rendered, adding fallback content');
+        renderFallbackContent(ctx, label, width, height);
+    }
     
     console.log('Canvas created successfully:', canvas);
     return canvas;
@@ -2648,23 +2662,54 @@ function createLabelCanvas(label) {
 
 // Helper function to convert design coordinates to canvas coordinates
 function convertDesignToCanvas(designX, designY, designWidth, designHeight, scaleFactor) {
-    return {
-        x: (parseFloat(designX) || 0) * scaleFactor,
-        y: (parseFloat(designY) || 0) * scaleFactor,
-        width: (parseFloat(designWidth) || 0) * scaleFactor,
-        height: (parseFloat(designHeight) || 0) * scaleFactor
+    // Parse CSS values (remove units and convert to pixels)
+    const parseCSSValue = (value) => {
+        if (!value || value === 'auto') return 0;
+        const num = parseFloat(value);
+        if (isNaN(num)) return 0;
+        
+        // If value has 'px' unit, it's already in pixels
+        if (value.includes('px')) return num;
+        // If value has 'in' unit, convert to pixels (96 DPI)
+        if (value.includes('in')) return num * 96;
+        // If value has '%' unit, this is more complex - for now return 0
+        if (value.includes('%')) return 0;
+        // Otherwise assume it's already in pixels
+        return num;
     };
+    
+    const x = parseCSSValue(designX) * scaleFactor;
+    const y = parseCSSValue(designY) * scaleFactor;
+    const width = parseCSSValue(designWidth) * scaleFactor;
+    const height = parseCSSValue(designHeight) * scaleFactor;
+    
+    console.log('Coordinate conversion:', {
+        input: { designX, designY, designWidth, designHeight, scaleFactor },
+        output: { x, y, width, height }
+    });
+    
+    return { x, y, width, height };
 }
 
 // Render barcode element using cached design configuration
 function renderBarcodeFromDesign(ctx, label, designCache, scaleFactor) {
+    console.log('Rendering barcode from design:', { label, designCache, scaleFactor });
+    
     let position;
     let fontSize = '16px';
     
     // Try to get barcode element from DOM first
     const barcodeElement = document.getElementById('element-barcode');
+    console.log('Barcode element found:', !!barcodeElement);
+    
     if (barcodeElement) {
         const computedStyle = window.getComputedStyle(barcodeElement);
+        console.log('Barcode computed style:', {
+            left: computedStyle.left,
+            top: computedStyle.top,
+            width: computedStyle.width,
+            height: computedStyle.height
+        });
         position = convertDesignToCanvas(
             computedStyle.left,
             computedStyle.top,
@@ -2676,6 +2721,7 @@ function renderBarcodeFromDesign(ctx, label, designCache, scaleFactor) {
     } else if (designCache.barcodeElement) {
         // Fallback to cached design
         const cached = designCache.barcodeElement;
+        console.log('Using cached barcode element:', cached);
         position = convertDesignToCanvas(
             cached.left,
             cached.top,
@@ -2689,6 +2735,7 @@ function renderBarcodeFromDesign(ctx, label, designCache, scaleFactor) {
         const labelWidth = appState.labelSettings.size === 'custom' 
             ? appState.labelSettings.customWidth 
             : LABEL_SIZES[appState.labelSettings.size].width;
+        console.log('Using default barcode position, labelWidth:', labelWidth);
         position = convertDesignToCanvas(
             '0.1in',
             '0.1in',
@@ -2697,6 +2744,8 @@ function renderBarcodeFromDesign(ctx, label, designCache, scaleFactor) {
             scaleFactor
         );
     }
+    
+    console.log('Barcode position calculated:', position);
     
     try {
         const barcodeCanvas = document.createElement('canvas');
@@ -2708,6 +2757,8 @@ function renderBarcodeFromDesign(ctx, label, designCache, scaleFactor) {
             displayValue: displayValue
         });
         
+        console.log('Barcode generated, drawing at position:', position);
+        
         // Draw barcode at cached position
         ctx.drawImage(barcodeCanvas, position.x, position.y, position.width, position.height);
         
@@ -2718,24 +2769,43 @@ function renderBarcodeFromDesign(ctx, label, designCache, scaleFactor) {
             ctx.textAlign = 'center';
             ctx.fillText(label.barcode, position.x + (position.width / 2), position.y + position.height + 15);
         }
+        
+        return true; // Successfully rendered barcode
     } catch (error) {
+        console.error('Barcode generation error:', error);
         ctx.fillStyle = '#000000';
         ctx.font = fontSize;
         ctx.textAlign = 'center';
         ctx.fillText('Invalid barcode', 
             position.x + (position.width / 2),
             position.y + (position.height / 2));
+        
+        return true; // Still rendered something (error message)
     }
+    
+    return false; // No barcode to render
 }
 
 // Render text elements using cached design configuration
 function renderTextElementsFromDesign(ctx, label, designCache, scaleFactor) {
-    if (!label.textElements || label.textElements.length === 0) return;
+    console.log('Rendering text elements from design:', { 
+        textElementsCount: label.textElements?.length, 
+        designCache, 
+        scaleFactor 
+    });
+    
+    if (!label.textElements || label.textElements.length === 0) {
+        console.log('No text elements to render');
+        return false;
+    }
     
     // Try to get text elements from DOM first
     const textElements = document.querySelectorAll('[id^="element-text-"]');
+    console.log('Found text elements in DOM:', textElements.length);
     
     label.textElements.forEach((textElement, index) => {
+        console.log(`Rendering text element ${index}:`, textElement);
+        
         let position;
         let fontSize = '10px';
         let textAlign = 'center';
@@ -2743,6 +2813,13 @@ function renderTextElementsFromDesign(ctx, label, designCache, scaleFactor) {
         if (textElements[index]) {
             // Use live DOM element
             const computedStyle = window.getComputedStyle(textElements[index]);
+            console.log(`Text element ${index} computed style:`, {
+                left: computedStyle.left,
+                top: computedStyle.top,
+                width: computedStyle.width,
+                height: computedStyle.height,
+                fontSize: computedStyle.fontSize
+            });
             position = convertDesignToCanvas(
                 computedStyle.left,
                 computedStyle.top,
@@ -2755,6 +2832,7 @@ function renderTextElementsFromDesign(ctx, label, designCache, scaleFactor) {
         } else if (designCache.textElements && designCache.textElements[index]) {
             // Fallback to cached design
             const cached = designCache.textElements[index];
+            console.log(`Using cached text element ${index}:`, cached);
             position = convertDesignToCanvas(
                 cached.left,
                 cached.top,
@@ -2769,6 +2847,7 @@ function renderTextElementsFromDesign(ctx, label, designCache, scaleFactor) {
             const labelWidth = appState.labelSettings.size === 'custom' 
                 ? appState.labelSettings.customWidth 
                 : LABEL_SIZES[appState.labelSettings.size].width;
+            console.log(`Using default position for text element ${index}, labelWidth:`, labelWidth);
             position = convertDesignToCanvas(
                 '0.1in',
                 `${0.6 + (index * 0.15)}in`,
@@ -2777,6 +2856,8 @@ function renderTextElementsFromDesign(ctx, label, designCache, scaleFactor) {
                 scaleFactor
             );
         }
+        
+        console.log(`Text element ${index} position calculated:`, position);
         
         // Apply element-specific styling
         ctx.fillStyle = '#000000';
@@ -2787,14 +2868,18 @@ function renderTextElementsFromDesign(ctx, label, designCache, scaleFactor) {
         const textX = position.x + (position.width / 2);
         const textY = position.y + (position.height / 2) + (parseFloat(fontSize) / 3);
         
+        console.log(`Drawing text "${textElement.text}" at (${textX}, ${textY})`);
+        
         // Draw text
         ctx.fillText(textElement.text, textX, textY);
     });
+    
+    return label.textElements.length > 0; // Return true if we rendered any text elements
 }
 
 // Render static text elements using cached design configuration
 function renderStaticElementsFromDesign(ctx, label, designCache, scaleFactor) {
-    if (!label.staticTexts || label.staticTexts.length === 0) return;
+    if (!label.staticTexts || label.staticTexts.length === 0) return false;
     
     // Try to get static elements from DOM first
     const staticElements = document.querySelectorAll('[id^="element-static-"]');
@@ -2854,8 +2939,72 @@ function renderStaticElementsFromDesign(ctx, label, designCache, scaleFactor) {
         // Draw text
         ctx.fillText(staticText.text, textX, textY);
     });
+    
+    return label.staticTexts.length > 0; // Return true if we rendered any static text elements
 }
 
+// Fallback content rendering when no design elements are found
+function renderFallbackContent(ctx, label, width, height) {
+    console.log('Rendering fallback content for label:', label);
+    
+    // Add barcode at default position
+    if (label.barcode) {
+        try {
+            const barcodeCanvas = document.createElement('canvas');
+            const displayValue = label.barcodeType === 'EAN13';
+            JsBarcode(barcodeCanvas, label.barcode, {
+                format: label.barcodeType,
+                width: 2,
+                height: 50,
+                displayValue: displayValue
+            });
+            
+            // Position barcode at top center
+            const barcodeX = (width - 200) / 2;
+            const barcodeY = 20;
+            ctx.drawImage(barcodeCanvas, barcodeX, barcodeY, 200, 50);
+            
+            // Add barcode number if not displayed
+            if (!displayValue) {
+                ctx.fillStyle = '#000000';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(label.barcode, width / 2, barcodeY + 70);
+            }
+        } catch (error) {
+            console.error('Fallback barcode generation error:', error);
+            ctx.fillStyle = '#000000';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Invalid barcode', width / 2, height / 2);
+        }
+    }
+    
+    // Add text elements at default positions
+    if (label.textElements && label.textElements.length > 0) {
+        ctx.fillStyle = '#000000';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        
+        label.textElements.forEach((textElement, index) => {
+            const textY = 100 + (index * 20);
+            ctx.fillText(textElement.text, width / 2, textY);
+        });
+    }
+    
+    // Add static texts
+    if (label.staticTexts && label.staticTexts.length > 0) {
+        ctx.fillStyle = '#000000';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        
+        const startY = 100 + (label.textElements?.length || 0) * 20;
+        label.staticTexts.forEach((staticText, index) => {
+            const textY = startY + (index * 15);
+            ctx.fillText(staticText.text, width / 2, textY);
+        });
+    }
+}
 
 function createFallbackBlob(canvas, width, height) {
     console.log('createFallbackBlob: Creating fallback blob...');
