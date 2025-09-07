@@ -802,11 +802,14 @@ function renderCanvas() {
     const canvas = document.getElementById('label-canvas');
     if (!canvas) return;
     
-    // Set canvas size based on label dimensions
+    // Set canvas size based on label dimensions (96 DPI for screen display)
     const labelWidth = getLabelWidth();
     const labelHeight = getLabelHeight();
     canvas.style.width = `${labelWidth * DISPLAY_DPI}px`;
     canvas.style.height = `${labelHeight * DISPLAY_DPI}px`;
+    canvas.style.background = '#ffffff';
+    canvas.style.border = 'none';
+    canvas.style.boxShadow = 'none';
     
     // Clear canvas
     canvas.innerHTML = '';
@@ -2447,37 +2450,120 @@ function updateGenerationProgress(processed, total) {
 }
 
 // Export Functions
+let isExporting = false; // Prevent multiple simultaneous exports
+
 async function getLabelBlob(label) {
-    const renderer = document.getElementById('offscreen-renderer');
-    renderer.innerHTML = ''; // Clear previous
+    try {
+        console.log('getLabelBlob: Starting blob generation...');
+        
+        const renderer = document.getElementById('offscreen-renderer');
+        if (!renderer) {
+            throw new Error('Offscreen renderer not found');
+        }
+        
+        console.log('getLabelBlob: Clearing renderer...');
+        renderer.innerHTML = ''; // Clear previous
 
-    const canvas = document.createElement('div');
-    canvas.className = 'label-canvas';
-    renderer.appendChild(canvas);
-    
-    // Set canvas size for high-quality export
-    const dpi = 300;
-    const labelWidth = getLabelWidth() * dpi / 96; // Scale from screen size to export size
-    const labelHeight = getLabelHeight() * dpi / 96;
-    canvas.style.width = `${labelWidth}px`;
-    canvas.style.height = `${labelHeight}px`;
+        const canvas = document.createElement('div');
+        canvas.className = 'label-canvas';
+        canvas.style.background = '#ffffff';
+        canvas.style.border = 'none';
+        canvas.style.boxShadow = 'none';
+        canvas.style.position = 'relative';
+        renderer.appendChild(canvas);
+        
+        // Set canvas size for high-quality export (300 DPI)
+        const dpi = 300;
+        const labelWidthInches = getLabelWidth();
+        const labelHeightInches = getLabelHeight();
+        const labelWidthPx = labelWidthInches * dpi;
+        const labelHeightPx = labelHeightInches * dpi;
+        
+        console.log(`getLabelBlob: Canvas size: ${labelWidthPx}x${labelHeightPx}px`);
+        
+        canvas.style.width = `${labelWidthPx}px`;
+        canvas.style.height = `${labelHeightPx}px`;
 
-    // Render root element with the specific label data
-    const rootElement = label.elements.find(el => el.id === 'root');
-    if (rootElement) {
-        // We need to pass the label data down to the render functions
-        const rootDiv = renderElement(rootElement, label);
-        canvas.appendChild(rootDiv);
+        // Render root element with the specific label data
+        const rootElement = label.elements.find(el => el.id === 'root');
+        if (rootElement) {
+            console.log('getLabelBlob: Rendering root element...');
+            const rootDiv = renderElement(rootElement, label);
+            canvas.appendChild(rootDiv);
+        } else {
+            console.warn('getLabelBlob: No root element found in label');
+        }
+
+        // Check if html2canvas is available
+        if (typeof html2canvas === 'undefined') {
+            console.warn('html2canvas not available, using fallback method');
+            return createFallbackBlob(canvas, labelWidthPx, labelHeightPx);
+        }
+
+        console.log('getLabelBlob: Using html2canvas...');
+        // Use html2canvas to get a canvas of the rendered label
+        const outputCanvas = await html2canvas(canvas, {
+            width: labelWidthPx,
+            height: labelHeightPx,
+            scale: 1,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            onclone: (clonedDoc) => {
+                // Ensure styles are applied to the cloned document
+                const clonedCanvas = clonedDoc.querySelector('.label-canvas');
+                if (clonedCanvas) {
+                    clonedCanvas.style.background = '#ffffff';
+                    clonedCanvas.style.border = 'none';
+                    clonedCanvas.style.boxShadow = 'none';
+                }
+            }
+        });
+        
+        console.log('getLabelBlob: Converting to blob...');
+        return new Promise(resolve => outputCanvas.toBlob(resolve, 'image/png', 1.0));
+    } catch (error) {
+        console.error('Error in getLabelBlob:', error);
+        throw error;
     }
+}
 
-    // Use html2canvas to get a canvas of the rendered label
-    const outputCanvas = await html2canvas(canvas, {
-        width: labelWidth,
-        height: labelHeight,
-        scale: 1 
-    });
+function createFallbackBlob(canvas, width, height) {
+    console.log('createFallbackBlob: Creating fallback blob...');
+    // Create a simple canvas-based fallback
+    const canvasElement = document.createElement('canvas');
+    canvasElement.width = width;
+    canvasElement.height = height;
+    const ctx = canvasElement.getContext('2d');
     
-    return new Promise(resolve => outputCanvas.toBlob(resolve, 'image/png'));
+    // Fill with white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Add a simple text indicating this is a fallback
+    ctx.fillStyle = '#000000';
+    ctx.font = '24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Label Preview', width / 2, height / 2);
+    ctx.fillText('(Fallback Mode)', width / 2, height / 2 + 30);
+    
+    return new Promise(resolve => canvasElement.toBlob(resolve, 'image/png', 1.0));
+}
+
+// Test function to help debug export issues
+function testExport() {
+    console.log('=== EXPORT TEST ===');
+    console.log('jsPDF available:', typeof window.jspdf !== 'undefined');
+    console.log('JSZip available:', typeof JSZip !== 'undefined');
+    console.log('html2canvas available:', typeof html2canvas !== 'undefined');
+    console.log('Generated labels count:', appState.generatedLabels.length);
+    console.log('Offscreen renderer exists:', !!document.getElementById('offscreen-renderer'));
+    
+    if (appState.generatedLabels.length > 0) {
+        console.log('First label structure:', appState.generatedLabels[0]);
+    }
+    console.log('=== END TEST ===');
 }
 
 function showPageSizeSelection() {
@@ -2505,11 +2591,32 @@ async function downloadPDF() {
         return;
     }
     
+    // Prevent multiple simultaneous exports
+    if (isExporting) {
+        console.log('PDF generation already in progress, ignoring request');
+        return;
+    }
+    
+    isExporting = true;
+    console.log('Starting PDF generation...');
     showProgress('Creating PDF...');
     
+    // Disable export buttons to prevent multiple clicks
+    const pdfBtn = document.getElementById('generate-pdf-btn');
+    const zipBtn = document.getElementById('generate-zip-btn');
+    if (pdfBtn) pdfBtn.disabled = true;
+    if (zipBtn) zipBtn.disabled = true;
+    
     try {
+        // Check if jsPDF is available
+        if (typeof window.jspdf === 'undefined') {
+            throw new Error('jsPDF library not loaded');
+        }
+        
+        console.log('jsPDF library found, creating document...');
         const { jsPDF } = window.jspdf;
-        const selectedPageSize = document.querySelector('input[name="page-size"]:checked').value;
+        const selectedPageSize = document.querySelector('input[name="page-size"]:checked')?.value || 'a4';
+        
         const doc = new jsPDF({
             orientation: 'p',
             unit: 'mm',
@@ -2518,7 +2625,9 @@ async function downloadPDF() {
         
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 10;
+        
+        // Minimal margins for maximum paper utilization
+        const margin = 2; // 2mm margins
         const usableWidth = pageWidth - (margin * 2);
         const usableHeight = pageHeight - (margin * 2);
         
@@ -2527,15 +2636,57 @@ async function downloadPDF() {
         const labelWidthMm = labelWidthInch * 25.4;
         const labelHeightMm = labelHeightInch * 25.4;
         
+        console.log(`Label dimensions: ${labelWidthMm}mm x ${labelHeightMm}mm`);
+        console.log(`Page dimensions: ${pageWidth}mm x ${pageHeight}mm`);
+        
+        // Calculate optimal layout with minimal waste
         const labelsPerRow = Math.floor(usableWidth / labelWidthMm);
         const labelsPerCol = Math.floor(usableHeight / labelHeightMm);
         const labelsPerPage = labelsPerRow * labelsPerCol;
         
+        if (labelsPerPage === 0) {
+            throw new Error('Label size is too large for the selected page size');
+        }
+        
+        console.log(`Layout: ${labelsPerRow} x ${labelsPerCol} = ${labelsPerPage} labels per page`);
+        
+        // Center the labels on the page if there's extra space
+        const totalLabelWidth = labelsPerRow * labelWidthMm;
+        const totalLabelHeight = labelsPerCol * labelHeightMm;
+        const startX = margin + (usableWidth - totalLabelWidth) / 2;
+        const startY = margin + (usableHeight - totalLabelHeight) / 2;
+        
+        console.log('Generating all label blobs in parallel...');
+        showProgress(`Generating ${appState.generatedLabels.length} label images...`);
+        
+        // Generate all label blobs in parallel
+        const labelBlobs = await Promise.all(
+            appState.generatedLabels.map(async (label, index) => {
+                try {
+                    console.log(`Generating blob for label ${index + 1}...`);
+                    const blob = await getLabelBlob(label);
+                    return { blob, index, success: true };
+                } catch (error) {
+                    console.error(`Error generating blob for label ${index + 1}:`, error);
+                    return { blob: null, index, success: false, error };
+                }
+            })
+        );
+        
+        console.log(`Generated ${labelBlobs.filter(lb => lb.success).length} out of ${labelBlobs.length} label blobs`);
+        showProgress('Adding labels to PDF...');
+        
+        // Add successful blobs to PDF
         let currentRow = 0;
         let currentCol = 0;
         
-        for (let i = 0; i < appState.generatedLabels.length; i++) {
-            const label = appState.generatedLabels[i];
+        for (let i = 0; i < labelBlobs.length; i++) {
+            const { blob, success } = labelBlobs[i];
+            
+            if (!success || !blob) {
+                console.log(`Skipping label ${i + 1} due to generation error`);
+                continue;
+            }
             
             if (i > 0 && i % labelsPerPage === 0) {
                 doc.addPage();
@@ -2543,14 +2694,13 @@ async function downloadPDF() {
                 currentCol = 0;
             }
             
-            const x = margin + (currentCol * labelWidthMm);
-            const y = margin + (currentRow * labelHeightMm);
+            const x = startX + (currentCol * labelWidthMm);
+            const y = startY + (currentRow * labelHeightMm);
             
-            const blob = await getLabelBlob(label);
             const imageUrl = URL.createObjectURL(blob);
-            
             doc.addImage(imageUrl, 'PNG', x, y, labelWidthMm, labelHeightMm);
             URL.revokeObjectURL(imageUrl);
+            console.log(`Added label ${i + 1} to PDF`);
             
             currentCol++;
             if (currentCol >= labelsPerRow) {
@@ -2559,13 +2709,23 @@ async function downloadPDF() {
             }
         }
         
+        console.log('Saving PDF...');
         doc.save('barcode-labels.pdf');
         hideProgress();
+        console.log('PDF generation completed successfully');
         
     } catch (error) {
         console.error('PDF generation error:', error);
-        showError('PDF Error', 'There was an error generating the PDF file');
+        showError('PDF Error', `There was an error generating the PDF file: ${error.message}`);
         hideProgress();
+    } finally {
+        isExporting = false; // Always reset the flag
+        
+        // Re-enable export buttons
+        const pdfBtn = document.getElementById('generate-pdf-btn');
+        const zipBtn = document.getElementById('generate-zip-btn');
+        if (pdfBtn) pdfBtn.disabled = false;
+        if (zipBtn) zipBtn.disabled = false;
     }
 }
 
@@ -2575,17 +2735,64 @@ async function downloadZIP() {
         return;
     }
     
+    // Prevent multiple simultaneous exports
+    if (isExporting) {
+        console.log('ZIP generation already in progress, ignoring request');
+        return;
+    }
+    
+    isExporting = true;
+    console.log('Starting ZIP generation...');
     showProgress('Creating ZIP file...');
     
+    // Disable export buttons to prevent multiple clicks
+    const pdfBtn = document.getElementById('generate-pdf-btn');
+    const zipBtn = document.getElementById('generate-zip-btn');
+    if (pdfBtn) pdfBtn.disabled = true;
+    if (zipBtn) zipBtn.disabled = true;
+    
     try {
-        const zip = new JSZip();
-        
-        for (let i = 0; i < appState.generatedLabels.length; i++) {
-            const label = appState.generatedLabels[i];
-            const blob = await getLabelBlob(label);
-            zip.file(`label-${i + 1}.png`, blob);
+        // Check if JSZip is available
+        if (typeof JSZip === 'undefined') {
+            throw new Error('JSZip library not loaded');
         }
         
+        console.log('JSZip library found, creating archive...');
+        const zip = new JSZip();
+        
+        console.log('Generating all label blobs in parallel...');
+        showProgress(`Generating ${appState.generatedLabels.length} label images...`);
+        
+        // Generate all label blobs in parallel
+        const labelBlobs = await Promise.all(
+            appState.generatedLabels.map(async (label, index) => {
+                try {
+                    console.log(`Generating blob for label ${index + 1}...`);
+                    const blob = await getLabelBlob(label);
+                    return { blob, index, success: true };
+                } catch (error) {
+                    console.error(`Error generating blob for label ${index + 1}:`, error);
+                    return { blob: null, index, success: false, error };
+                }
+            })
+        );
+        
+        console.log(`Generated ${labelBlobs.filter(lb => lb.success).length} out of ${labelBlobs.length} label blobs`);
+        showProgress('Adding labels to ZIP...');
+        
+        // Add successful blobs to ZIP
+        for (let i = 0; i < labelBlobs.length; i++) {
+            const { blob, success } = labelBlobs[i];
+            
+            if (success && blob) {
+                zip.file(`label-${i + 1}.png`, blob);
+                console.log(`Added label ${i + 1} to ZIP`);
+            } else {
+                console.log(`Skipping label ${i + 1} due to generation error`);
+            }
+        }
+        
+        console.log('Generating ZIP file...');
         const content = await zip.generateAsync({ type: 'blob' });
         const url = URL.createObjectURL(content);
         const a = document.createElement('a');
@@ -2594,11 +2801,20 @@ async function downloadZIP() {
         a.click();
         URL.revokeObjectURL(url);
         hideProgress();
+        console.log('ZIP generation completed successfully');
         
     } catch (error) {
         console.error('ZIP generation error:', error);
-        showError('ZIP Error', 'There was an error generating the ZIP file');
+        showError('ZIP Error', `There was an error generating the ZIP file: ${error.message}`);
         hideProgress();
+    } finally {
+        isExporting = false; // Always reset the flag
+        
+        // Re-enable export buttons
+        const pdfBtn = document.getElementById('generate-pdf-btn');
+        const zipBtn = document.getElementById('generate-zip-btn');
+        if (pdfBtn) pdfBtn.disabled = false;
+        if (zipBtn) zipBtn.disabled = false;
     }
 }
 
