@@ -1324,8 +1324,8 @@ function updateDesignPreview() {
     
     // Create barcode preview with static image
     const barcodeDiv = document.createElement('div');
-    barcodeDiv.className = 'preview-barcode';
-    barcodeDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; right: 10px; height: 60px; display: flex; flex-direction: column; align-items: center;';
+    barcodeDiv.className = 'preview-barcode draggable-element';
+    barcodeDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; right: 10px; height: 60px; display: flex; flex-direction: column; align-items: center; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);';
     
     // Use static barcode image based on type
     const barcodeImg = document.createElement('img');
@@ -1345,20 +1345,63 @@ function updateDesignPreview() {
         barcodeNumber.textContent = getSampleBarcodeData(appState.labelSettings.barcodeType);
     }
     
+    // Add drag functionality
+    barcodeDiv.draggable = true;
+    barcodeDiv.addEventListener('mousedown', handleElementMouseDown);
+    barcodeDiv.addEventListener('mousemove', handleElementMouseMove);
+    barcodeDiv.addEventListener('mouseup', handleElementMouseUp);
+    barcodeDiv.dataset.elementId = 'barcode';
+    
+    // Create barcode element configuration for PDF generation
+    if (!appState.labelSettings.elements.barcode) {
+        appState.labelSettings.elements.barcode = {
+            x: 0.1,
+            y: 0.1,
+            width: 2.0,
+            height: 0.5,
+            fontSize: 8,
+            align: 'center'
+        };
+    }
+    
     barcodeDiv.appendChild(barcodeImg);
     barcodeDiv.appendChild(barcodeNumber);
     previewLabel.appendChild(barcodeDiv);
     
-    // Create separate text elements for each mapped column
+    // Create separate draggable text elements for each mapped column
     let currentTop = 80;
     if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
         appState.mappedColumns.text.forEach((column, index) => {
             const textDiv = document.createElement('div');
-            textDiv.className = 'preview-text';
-            textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto;`;
+            textDiv.className = 'preview-text draggable-element';
+            textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
             
             const sampleValue = appState.excelData[0][column.index];
             textDiv.textContent = sampleValue ? sampleValue.toString() : column.name;
+            
+            // Add drag functionality
+            textDiv.draggable = true;
+            textDiv.addEventListener('mousedown', handleElementMouseDown);
+            textDiv.addEventListener('mousemove', handleElementMouseMove);
+            textDiv.addEventListener('mouseup', handleElementMouseUp);
+            
+            // Store column info for PDF generation
+            textDiv.dataset.columnIndex = column.index;
+            textDiv.dataset.columnName = column.name;
+            textDiv.dataset.elementId = `text-${index}`;
+            
+            // Create element configuration for PDF generation
+            const elementId = `text-${index}`;
+            if (!appState.labelSettings.elements[elementId]) {
+                appState.labelSettings.elements[elementId] = {
+                    x: 0.1, // 10px in inches
+                    y: currentTop / 300, // Convert pixels to inches (300 DPI)
+                    width: 2.0, // 2 inches
+                    height: 0.2, // 0.2 inches
+                    fontSize: 8,
+                    align: 'center'
+                };
+            }
             
             previewLabel.appendChild(textDiv);
             currentTop += 25; // Space between text elements
@@ -1366,9 +1409,27 @@ function updateDesignPreview() {
     } else {
         // Default text if no columns mapped
         const textDiv = document.createElement('div');
-        textDiv.className = 'preview-text';
-        textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto;`;
+        textDiv.className = 'preview-text draggable-element';
+        textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
         textDiv.textContent = 'Sample Product Information';
+        textDiv.draggable = true;
+        textDiv.addEventListener('mousedown', handleElementMouseDown);
+        textDiv.addEventListener('mousemove', handleElementMouseMove);
+        textDiv.addEventListener('mouseup', handleElementMouseUp);
+        textDiv.dataset.elementId = 'text-0';
+        
+        // Create default element configuration
+        if (!appState.labelSettings.elements['text-0']) {
+            appState.labelSettings.elements['text-0'] = {
+                x: 0.1,
+                y: currentTop / 300,
+                width: 2.0,
+                height: 0.2,
+                fontSize: 8,
+                align: 'center'
+            };
+        }
+        
         previewLabel.appendChild(textDiv);
         currentTop += 25;
     }
@@ -1377,9 +1438,28 @@ function updateDesignPreview() {
     if (appState.labelSettings.staticTexts && appState.labelSettings.staticTexts.length > 0) {
         appState.labelSettings.staticTexts.forEach((staticText, index) => {
             const staticDiv = document.createElement('div');
-            staticDiv.className = 'preview-static';
-            staticDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 8px; text-align: center; font-style: italic; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto;`;
+            staticDiv.className = 'preview-static draggable-element';
+            staticDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 8px; text-align: center; font-style: italic; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
             staticDiv.textContent = staticText.text;
+            staticDiv.draggable = true;
+            staticDiv.addEventListener('mousedown', handleElementMouseDown);
+            staticDiv.addEventListener('mousemove', handleElementMouseMove);
+            staticDiv.addEventListener('mouseup', handleElementMouseUp);
+            staticDiv.dataset.elementId = `static-${index}`;
+            
+            // Create element configuration for PDF generation
+            const elementId = `static-${index}`;
+            if (!appState.labelSettings.elements[elementId]) {
+                appState.labelSettings.elements[elementId] = {
+                    x: 0.1,
+                    y: currentTop / 300,
+                    width: 2.0,
+                    height: 0.15,
+                    fontSize: 6,
+                    align: 'center'
+                };
+            }
+            
             previewLabel.appendChild(staticDiv);
             currentTop += 20; // Space between static text elements
         });
