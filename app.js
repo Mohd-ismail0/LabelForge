@@ -153,9 +153,13 @@ function setStep(stepNumber) {
             initializeLabelDesigner();
             break;
         case 4:
+            // Capture current design state before moving to quantity management
+            cacheDesignConfiguration();
             setupQuantityManagement();
             break;
         case 5:
+            // Ensure design cache is up to date before generation
+            cacheDesignConfiguration();
             updateFinalSummary();
             break;
     }
@@ -689,6 +693,9 @@ function addElement(type, parentId = 'root', properties = {}) {
     renderCanvas();
     renderElementTree();
     
+    // Update design cache
+    setTimeout(() => cacheDesignConfiguration(), 100);
+    
     return element;
 }
 
@@ -720,6 +727,9 @@ function deleteElement(id) {
     renderCanvas();
     renderElementTree();
     renderProperties();
+    
+    // Update design cache
+    setTimeout(() => cacheDesignConfiguration(), 100);
 }
 
 function getDefaultElementName(type) {
@@ -1537,6 +1547,9 @@ function handleMouseMove(e) {
         }
         
         updateElementProperties();
+        
+        // Update design cache to preserve changes
+        setTimeout(() => cacheDesignConfiguration(), 50);
     } else if (isResizing) {
         // Handle resizing
         const x = e.clientX - labelRect.left;
@@ -1579,6 +1592,9 @@ function handleMouseMove(e) {
             
             updateElementPosition(selectedElement, config);
             updateElementProperties();
+            
+            // Update design cache to preserve changes
+            setTimeout(() => cacheDesignConfiguration(), 50);
         }
     }
 }
@@ -1705,8 +1721,31 @@ function cacheDesignConfiguration() {
         elements: {},
         textContainer: null,
         textElements: [],
-        staticElements: []
+        staticElements: [],
+        barcodeElement: null
     };
+    
+    // Cache barcode element configuration
+    const barcodeElement = document.getElementById('element-barcode');
+    if (barcodeElement) {
+        const computedStyle = window.getComputedStyle(barcodeElement);
+        designCache.barcodeElement = {
+            id: barcodeElement.id,
+            className: barcodeElement.className,
+            display: computedStyle.display,
+            fontSize: computedStyle.fontSize,
+            textAlign: computedStyle.textAlign,
+            padding: computedStyle.padding,
+            margin: computedStyle.margin,
+            width: computedStyle.width,
+            height: computedStyle.height,
+            position: computedStyle.position,
+            left: computedStyle.left,
+            top: computedStyle.top,
+            minWidth: computedStyle.minWidth,
+            minHeight: computedStyle.minHeight
+        };
+    }
     
     // Cache text container configuration
     const textContainer = document.getElementById('element-textContainer');
@@ -1748,7 +1787,8 @@ function cacheDesignConfiguration() {
             left: computedStyle.left,
             top: computedStyle.top,
             flex: computedStyle.flex,
-            minWidth: computedStyle.minWidth
+            minWidth: computedStyle.minWidth,
+            minHeight: computedStyle.minHeight
         });
     });
     
@@ -1769,7 +1809,9 @@ function cacheDesignConfiguration() {
             height: computedStyle.height,
             position: computedStyle.position,
             left: computedStyle.left,
-            top: computedStyle.top
+            top: computedStyle.top,
+            minWidth: computedStyle.minWidth,
+            minHeight: computedStyle.minHeight
         });
     });
     
@@ -1797,6 +1839,9 @@ function updateElementFromProperties() {
         config.align = document.getElementById('element-align').value;
         
         updateElementPosition(selectedElement, config);
+        
+        // Update design cache to preserve changes
+        setTimeout(() => cacheDesignConfiguration(), 50);
     }
 }
 
@@ -2585,130 +2630,230 @@ function createLabelCanvas(label) {
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, width - 2, height - 2);
     
-    // Add barcode with number display
-    let barcodeConfig = appState.labelSettings.elements.barcode;
-    if (!barcodeConfig) {
-        barcodeConfig = getDefaultElementConfig('barcode');
-        appState.labelSettings.elements.barcode = barcodeConfig;
-    }
+    // Convert design coordinates (96 DPI) to canvas coordinates (300 DPI)
+    const scaleFactor = dpi / DISPLAY_DPI; // 300 / 96 = 3.125
     
-    if (barcodeConfig) {
-        try {
-            const barcodeCanvas = document.createElement('canvas');
-            const displayValue = label.barcodeType === 'EAN13';
-            JsBarcode(barcodeCanvas, label.barcode, {
-                format: label.barcodeType,
-                width: 3,
-                height: 60,
-                displayValue: displayValue
-            });
-            
-            const barcodeX = barcodeConfig.x * dpi;
-            const barcodeY = barcodeConfig.y * dpi;
-            const barcodeWidth = barcodeConfig.width * dpi;
-            const barcodeHeight = barcodeConfig.height * dpi;
-            
-            // Scale barcode to fit the element size
-            ctx.drawImage(barcodeCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight);
-            
-            // Add barcode number if not displayed in barcode
-            if (!displayValue) {
-                ctx.fillStyle = '#000000';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 15);
-            }
-        } catch (error) {
-            ctx.fillStyle = '#000000';
-            ctx.font = `${barcodeConfig.fontSize || 16}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.fillText('Invalid barcode', 
-                barcodeConfig.x * dpi + (barcodeConfig.width * dpi) / 2,
-                barcodeConfig.y * dpi + (barcodeConfig.height * dpi) / 2);
-        }
-    }
+    // Render barcode element from cached design
+    renderBarcodeFromDesign(ctx, label, designCache, scaleFactor);
     
-    // Add product text elements using cached design configuration
-    if (label.textElements && label.textElements.length > 0) {
-        const labelWidth = appState.labelSettings.size === 'custom' 
-            ? appState.labelSettings.customWidth 
-            : LABEL_SIZES[appState.labelSettings.size].width;
-        
-        // Use cached text layout configuration
-        const textLayout = designCache.textLayout || 'horizontal';
-        const textGap = designCache.textGap || 4;
-        const textGapInches = textGap / 96; // Convert pixels to inches
-        
-        console.log('Using cached text layout:', textLayout, 'gap:', textGap);
-        
-        if (textLayout === 'horizontal') {
-            // Horizontal layout: distribute text elements across the width
-            const textContainerY = 0.6; // Fixed Y position for text container
-            const textContainerWidth = labelWidth - 0.2; // 0.1 margin on each side
-            const totalGap = (label.textElements.length - 1) * textGapInches;
-            const availableWidth = textContainerWidth - totalGap;
-            const elementWidth = availableWidth / label.textElements.length;
-            
-            label.textElements.forEach((textElement, index) => {
-                const x = 0.1 + (index * (elementWidth + textGapInches));
-                const y = textContainerY;
-                
-                ctx.fillStyle = '#000000';
-                ctx.font = '10px Arial';
-                ctx.textAlign = 'center';
-                
-                const textX = x * dpi + (elementWidth * dpi) / 2;
-                const textY = y * dpi + 15; // Offset for baseline
-                
-                ctx.fillText(textElement.text, textX, textY);
-            });
-        } else {
-            // Vertical layout: stack text elements
-            const textContainerY = 0.6;
-            label.textElements.forEach((textElement, index) => {
-                const x = 0.1;
-                const y = textContainerY + (index * 0.15);
-                
-                ctx.fillStyle = '#000000';
-                ctx.font = '10px Arial';
-                ctx.textAlign = 'center';
-                
-                const textX = x * dpi + ((labelWidth - 0.2) * dpi) / 2;
-                const textY = y * dpi + 15; // Offset for baseline
-                
-                ctx.fillText(textElement.text, textX, textY);
-            });
-        }
-    }
+    // Render text elements from cached design
+    renderTextElementsFromDesign(ctx, label, designCache, scaleFactor);
     
-    // Add static texts using cached design configuration
-    if (label.staticTexts && label.staticTexts.length > 0) {
-        console.log('Static texts:', label.staticTexts.length);
-        const labelWidth = appState.labelSettings.size === 'custom' 
-            ? appState.labelSettings.customWidth 
-            : LABEL_SIZES[appState.labelSettings.size].width;
-        
-        // Position static text below text elements
-        const textLayout = designCache.textLayout || 'horizontal';
-        const baseY = textLayout === 'horizontal' ? 0.8 : 0.6 + (label.textElements.length * 0.15);
-        
-        label.staticTexts.forEach((staticText, index) => {
-            const x = 0.1;
-            const y = baseY + (index * 0.1);
-            
-            ctx.fillStyle = '#000000';
-            ctx.font = '8px Arial';
-            ctx.textAlign = 'center';
-            
-            const textX = x * dpi + ((labelWidth - 0.2) * dpi) / 2;
-            const textY = y * dpi + 12; // Offset for baseline
-            
-            ctx.fillText(staticText.text, textX, textY);
-        });
-    }
+    // Render static text elements from cached design
+    renderStaticElementsFromDesign(ctx, label, designCache, scaleFactor);
     
     console.log('Canvas created successfully:', canvas);
     return canvas;
+}
+
+// Helper function to convert design coordinates to canvas coordinates
+function convertDesignToCanvas(designX, designY, designWidth, designHeight, scaleFactor) {
+    return {
+        x: (parseFloat(designX) || 0) * scaleFactor,
+        y: (parseFloat(designY) || 0) * scaleFactor,
+        width: (parseFloat(designWidth) || 0) * scaleFactor,
+        height: (parseFloat(designHeight) || 0) * scaleFactor
+    };
+}
+
+// Render barcode element using cached design configuration
+function renderBarcodeFromDesign(ctx, label, designCache, scaleFactor) {
+    let position;
+    let fontSize = '16px';
+    
+    // Try to get barcode element from DOM first
+    const barcodeElement = document.getElementById('element-barcode');
+    if (barcodeElement) {
+        const computedStyle = window.getComputedStyle(barcodeElement);
+        position = convertDesignToCanvas(
+            computedStyle.left,
+            computedStyle.top,
+            computedStyle.width,
+            computedStyle.height,
+            scaleFactor
+        );
+        fontSize = computedStyle.fontSize;
+    } else if (designCache.barcodeElement) {
+        // Fallback to cached design
+        const cached = designCache.barcodeElement;
+        position = convertDesignToCanvas(
+            cached.left,
+            cached.top,
+            cached.width,
+            cached.height,
+            scaleFactor
+        );
+        fontSize = cached.fontSize;
+    } else {
+        // Final fallback to default position
+        const labelWidth = appState.labelSettings.size === 'custom' 
+            ? appState.labelSettings.customWidth 
+            : LABEL_SIZES[appState.labelSettings.size].width;
+        position = convertDesignToCanvas(
+            '0.1in',
+            '0.1in',
+            `${labelWidth - 0.2}in`,
+            '0.4in',
+            scaleFactor
+        );
+    }
+    
+    try {
+        const barcodeCanvas = document.createElement('canvas');
+        const displayValue = label.barcodeType === 'EAN13';
+        JsBarcode(barcodeCanvas, label.barcode, {
+            format: label.barcodeType,
+            width: 2,
+            height: 50,
+            displayValue: displayValue
+        });
+        
+        // Draw barcode at cached position
+        ctx.drawImage(barcodeCanvas, position.x, position.y, position.width, position.height);
+        
+        // Add barcode number if not displayed in barcode
+        if (!displayValue) {
+            ctx.fillStyle = '#000000';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(label.barcode, position.x + (position.width / 2), position.y + position.height + 15);
+        }
+    } catch (error) {
+        ctx.fillStyle = '#000000';
+        ctx.font = fontSize;
+        ctx.textAlign = 'center';
+        ctx.fillText('Invalid barcode', 
+            position.x + (position.width / 2),
+            position.y + (position.height / 2));
+    }
+}
+
+// Render text elements using cached design configuration
+function renderTextElementsFromDesign(ctx, label, designCache, scaleFactor) {
+    if (!label.textElements || label.textElements.length === 0) return;
+    
+    // Try to get text elements from DOM first
+    const textElements = document.querySelectorAll('[id^="element-text-"]');
+    
+    label.textElements.forEach((textElement, index) => {
+        let position;
+        let fontSize = '10px';
+        let textAlign = 'center';
+        
+        if (textElements[index]) {
+            // Use live DOM element
+            const computedStyle = window.getComputedStyle(textElements[index]);
+            position = convertDesignToCanvas(
+                computedStyle.left,
+                computedStyle.top,
+                computedStyle.width,
+                computedStyle.height,
+                scaleFactor
+            );
+            fontSize = computedStyle.fontSize;
+            textAlign = computedStyle.textAlign || 'center';
+        } else if (designCache.textElements && designCache.textElements[index]) {
+            // Fallback to cached design
+            const cached = designCache.textElements[index];
+            position = convertDesignToCanvas(
+                cached.left,
+                cached.top,
+                cached.width,
+                cached.height,
+                scaleFactor
+            );
+            fontSize = cached.fontSize;
+            textAlign = cached.textAlign || 'center';
+        } else {
+            // Final fallback to default position
+            const labelWidth = appState.labelSettings.size === 'custom' 
+                ? appState.labelSettings.customWidth 
+                : LABEL_SIZES[appState.labelSettings.size].width;
+            position = convertDesignToCanvas(
+                '0.1in',
+                `${0.6 + (index * 0.15)}in`,
+                `${labelWidth - 0.2}in`,
+                '0.1in',
+                scaleFactor
+            );
+        }
+        
+        // Apply element-specific styling
+        ctx.fillStyle = '#000000';
+        ctx.font = `${fontSize} Arial`;
+        ctx.textAlign = textAlign;
+        
+        // Calculate text position (center of element)
+        const textX = position.x + (position.width / 2);
+        const textY = position.y + (position.height / 2) + (parseFloat(fontSize) / 3);
+        
+        // Draw text
+        ctx.fillText(textElement.text, textX, textY);
+    });
+}
+
+// Render static text elements using cached design configuration
+function renderStaticElementsFromDesign(ctx, label, designCache, scaleFactor) {
+    if (!label.staticTexts || label.staticTexts.length === 0) return;
+    
+    // Try to get static elements from DOM first
+    const staticElements = document.querySelectorAll('[id^="element-static-"]');
+    
+    label.staticTexts.forEach((staticText, index) => {
+        let position;
+        let fontSize = '8px';
+        let textAlign = 'center';
+        
+        if (staticElements[index]) {
+            // Use live DOM element
+            const computedStyle = window.getComputedStyle(staticElements[index]);
+            position = convertDesignToCanvas(
+                computedStyle.left,
+                computedStyle.top,
+                computedStyle.width,
+                computedStyle.height,
+                scaleFactor
+            );
+            fontSize = computedStyle.fontSize;
+            textAlign = computedStyle.textAlign || 'center';
+        } else if (designCache.staticElements && designCache.staticElements[index]) {
+            // Fallback to cached design
+            const cached = designCache.staticElements[index];
+            position = convertDesignToCanvas(
+                cached.left,
+                cached.top,
+                cached.width,
+                cached.height,
+                scaleFactor
+            );
+            fontSize = cached.fontSize;
+            textAlign = cached.textAlign || 'center';
+        } else {
+            // Final fallback to default position
+            const labelWidth = appState.labelSettings.size === 'custom' 
+                ? appState.labelSettings.customWidth 
+                : LABEL_SIZES[appState.labelSettings.size].width;
+            position = convertDesignToCanvas(
+                '0.1in',
+                `${0.8 + (index * 0.1)}in`,
+                `${labelWidth - 0.2}in`,
+                '0.1in',
+                scaleFactor
+            );
+        }
+        
+        // Apply element-specific styling
+        ctx.fillStyle = '#000000';
+        ctx.font = `${fontSize} Arial`;
+        ctx.textAlign = textAlign;
+        
+        // Calculate text position (center of element)
+        const textX = position.x + (position.width / 2);
+        const textY = position.y + (position.height / 2) + (parseFloat(fontSize) / 3);
+        
+        // Draw text
+        ctx.fillText(staticText.text, textX, textY);
+    });
 }
 
 
