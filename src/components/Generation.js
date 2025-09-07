@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import JsBarcode from 'jsbarcode';
+import { renderLabel, LABEL_SIZES } from '../utils/labelRenderer';
 import jsPDF from 'jspdf';
 import JSZip from 'jszip';
-import html2canvas from 'html2canvas';
 
 const Generation = () => {
   const { state, actions } = useApp();
@@ -13,13 +12,7 @@ const Generation = () => {
   const [showPageSizeSelection, setShowPageSizeSelection] = useState(false);
   const [pageSize, setPageSize] = useState('a4');
 
-  const LABEL_SIZES = {
-    '2x1': { width: 2, height: 1, dpi: 300 },
-    '3x1': { width: 3, height: 1, dpi: 300 },
-    '2.5x1': { width: 2.5, height: 1, dpi: 300 },
-    '4x2': { width: 4, height: 2, dpi: 300 },
-    'custom': { width: labelSettings.customWidth, height: labelSettings.customHeight, dpi: 300 }
-  };
+  // Use shared LABEL_SIZES from utils
 
   const PAGE_SIZES = {
     a4: { width: 210, height: 297, unit: 'mm' },
@@ -45,10 +38,11 @@ const Generation = () => {
       totalLabels = Object.values(quantitySettings.manualQuantities).reduce((sum, qty) => sum + qty, 0);
     }
 
-    const currentSize = LABEL_SIZES[labelSettings.size];
-    const sizeText = labelSettings.size === 'custom' 
-      ? `${currentSize.width}" x ${currentSize.height}"`
-      : `${currentSize.width}" x ${currentSize.height}"`;
+    const currentSize = LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
+    const size = labelSettings.size === 'custom' 
+      ? { width: labelSettings.customWidth, height: labelSettings.customHeight }
+      : currentSize;
+    const sizeText = `${size.width}" x ${size.height}"`;
 
     return {
       products,
@@ -132,51 +126,12 @@ const Generation = () => {
     try {
       actions.setLoading(true);
       const zip = new JSZip();
-      const currentSize = LABEL_SIZES[labelSettings.size];
 
       for (let i = 0; i < state.generatedLabels.length; i++) {
         const label = state.generatedLabels[i];
         
-        // Create canvas for barcode
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Set canvas size based on label size
-        const dpi = currentSize.dpi;
-        const width = currentSize.width * dpi;
-        const height = currentSize.height * dpi;
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        // Fill background
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, width, height);
-        
-        // Generate barcode
-        const barcodeCanvas = document.createElement('canvas');
-        JsBarcode(barcodeCanvas, label.barcode, {
-          format: labelSettings.barcodeType,
-          width: 2,
-          height: height * 0.6,
-          displayValue: true,
-          fontSize: 12,
-          margin: 10
-        });
-        
-        // Draw barcode
-        const barcodeX = (width - barcodeCanvas.width) / 2;
-        const barcodeY = height * 0.1;
-        ctx.drawImage(barcodeCanvas, barcodeX, barcodeY);
-        
-        // Draw text if available
-        if (label.text) {
-          ctx.fillStyle = 'black';
-          ctx.font = '16px Arial';
-          ctx.textAlign = 'center';
-          const textY = height * 0.8;
-          ctx.fillText(label.text, width / 2, textY);
-        }
+        // Use shared rendering function for consistency with design
+        const canvas = renderLabel(label, labelSettings, labelSettings.elements);
         
         // Convert to blob and add to zip
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -213,12 +168,15 @@ const Generation = () => {
         format: pageSize
       });
 
-      const currentSize = LABEL_SIZES[labelSettings.size];
+      const currentSize = LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
+      const size = labelSettings.size === 'custom' 
+        ? { width: labelSettings.customWidth, height: labelSettings.customHeight }
+        : currentSize;
       const pageSizeInfo = PAGE_SIZES[pageSize];
       
       // Calculate labels per page
-      const labelWidthMM = currentSize.width * 25.4; // Convert inches to mm
-      const labelHeightMM = currentSize.height * 25.4;
+      const labelWidthMM = size.width * 25.4; // Convert inches to mm
+      const labelHeightMM = size.height * 25.4;
       const margin = 10; // 10mm margin
       
       const labelsPerRow = Math.floor((pageSizeInfo.width - 2 * margin) / labelWidthMM);
@@ -243,45 +201,8 @@ const Generation = () => {
         const x = margin + currentCol * labelWidthMM;
         const y = margin + currentRow * labelHeightMM;
 
-        // Create canvas for this label
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        const dpi = 300;
-        const width = currentSize.width * dpi;
-        const height = currentSize.height * dpi;
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        // Fill background
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, width, height);
-        
-        // Generate barcode
-        const barcodeCanvas = document.createElement('canvas');
-        JsBarcode(barcodeCanvas, label.barcode, {
-          format: labelSettings.barcodeType,
-          width: 2,
-          height: height * 0.6,
-          displayValue: true,
-          fontSize: 12,
-          margin: 10
-        });
-        
-        // Draw barcode
-        const barcodeX = (width - barcodeCanvas.width) / 2;
-        const barcodeY = height * 0.1;
-        ctx.drawImage(barcodeCanvas, barcodeX, barcodeY);
-        
-        // Draw text if available
-        if (label.text) {
-          ctx.fillStyle = 'black';
-          ctx.font = '16px Arial';
-          ctx.textAlign = 'center';
-          const textY = height * 0.8;
-          ctx.fillText(label.text, width / 2, textY);
-        }
+        // Use shared rendering function for consistency with design
+        const canvas = renderLabel(label, labelSettings, labelSettings.elements);
         
         // Convert canvas to image and add to PDF
         const imgData = canvas.toDataURL('image/png');

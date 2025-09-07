@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { renderBarcode, renderText, LABEL_SIZES } from '../utils/labelRenderer';
 
 const LabelDesign = () => {
   const { state, actions } = useApp();
   const { labelSettings } = state;
   const [selectedElement, setSelectedElement] = useState(null);
 
-  const LABEL_SIZES = {
-    '2x1': { width: 2, height: 1, dpi: 300 },
-    '3x1': { width: 3, height: 1, dpi: 300 },
-    '2.5x1': { width: 2.5, height: 1, dpi: 300 },
-    '4x2': { width: 4, height: 2, dpi: 300 },
-    'custom': { width: labelSettings.customWidth, height: labelSettings.customHeight, dpi: 300 }
-  };
+  // Use shared LABEL_SIZES from utils
 
   const handleLabelSizeChange = (e) => {
     const size = e.target.value;
@@ -72,7 +67,20 @@ const LabelDesign = () => {
   };
 
   const getCurrentSize = () => {
-    return LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
+    const size = LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
+    if (labelSettings.size === 'custom') {
+      return { ...size, width: labelSettings.customWidth, height: labelSettings.customHeight };
+    }
+    return size;
+  };
+
+  const renderElement = (element) => {
+    if (element.type === 'barcode') {
+      return <BarcodeElement element={element} />;
+    } else if (element.type === 'text') {
+      return <TextElement element={element} />;
+    }
+    return null;
   };
 
   const handlePrevious = () => {
@@ -228,21 +236,18 @@ const LabelDesign = () => {
                       top: `${element.position.y}px`,
                       width: `${element.size.width}px`,
                       height: `${element.size.height}px`,
-                      fontSize: `${element.style.fontSize}px`,
-                      fontWeight: element.style.fontWeight,
-                      color: element.style.color,
-                      textAlign: element.style.textAlign,
                       border: selectedElement === element.id ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
                       background: selectedElement === element.id ? 'rgba(37, 99, 235, 0.1)' : 'rgba(37, 99, 235, 0.05)',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: '4px'
+                      padding: '4px',
+                      overflow: 'hidden'
                     }}
                     onClick={() => selectElement(element.id)}
                   >
-                    {element.type === 'text' ? element.content : 'Barcode'}
+                    {renderElement(element)}
                   </div>
                 ))}
               </div>
@@ -408,6 +413,122 @@ const ElementProperties = ({ element, onUpdate }) => {
         />
       </div>
     </div>
+  );
+};
+
+// Barcode Element Component
+const BarcodeElement = ({ element }) => {
+  const { state } = useApp();
+  const { excelData, mappedColumns, labelSettings } = state;
+  const [barcodeCanvas, setBarcodeCanvas] = useState(null);
+
+  useEffect(() => {
+    if (!excelData || !mappedColumns.barcode) return;
+
+    try {
+      const barcodeColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.barcode);
+      const sampleBarcode = excelData.rows[0]?.[barcodeColumnIndex];
+
+      if (sampleBarcode) {
+        // Use shared rendering function for consistency
+        const canvas = renderBarcode(
+          sampleBarcode,
+          labelSettings.barcodeType,
+          element.size.width,
+          element.size.height,
+          true
+        );
+        
+        setBarcodeCanvas(canvas);
+      }
+    } catch (error) {
+      console.error('Error generating barcode preview:', error);
+    }
+  }, [element, excelData, mappedColumns, labelSettings.barcodeType]);
+
+  if (!barcodeCanvas) {
+    return <div style={{ color: '#666', fontSize: '12px' }}>Barcode</div>;
+  }
+
+  return (
+    <img
+      src={barcodeCanvas.toDataURL()}
+      alt="Barcode"
+      style={{
+        maxWidth: '100%',
+        maxHeight: '100%',
+        objectFit: 'contain'
+      }}
+    />
+  );
+};
+
+// Text Element Component
+const TextElement = ({ element }) => {
+  const { state } = useApp();
+  const { excelData, mappedColumns } = state;
+  const [textCanvas, setTextCanvas] = useState(null);
+
+  useEffect(() => {
+    // Get sample text from mapped columns if available
+    let textContent = element.content;
+    
+    if (excelData && mappedColumns.text.length > 0) {
+      const textValues = mappedColumns.text.map(col => {
+        const colIndex = excelData.columnHeaders.indexOf(col);
+        return excelData.rows[0]?.[colIndex] || '';
+      }).filter(val => val);
+      
+      if (textValues.length > 0) {
+        textContent = textValues.join(' - ');
+      }
+    }
+
+    // Use shared rendering function for consistency
+    const canvas = renderText(
+      textContent,
+      element.style,
+      element.size.width,
+      element.size.height
+    );
+    
+    setTextCanvas(canvas);
+  }, [element, excelData, mappedColumns]);
+
+  if (!textCanvas) {
+    return (
+      <div
+        style={{
+          fontSize: `${element.style.fontSize}px`,
+          fontWeight: element.style.fontWeight,
+          color: element.style.color,
+          textAlign: element.style.textAlign,
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: element.style.textAlign === 'center' ? 'center' : 
+                        element.style.textAlign === 'right' ? 'flex-end' : 'flex-start',
+          padding: '2px',
+          wordWrap: 'break-word',
+          overflow: 'hidden'
+        }}
+      >
+        {element.content}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={textCanvas.toDataURL()}
+      alt="Text"
+      style={{
+        maxWidth: '100%',
+        maxHeight: '100%',
+        objectFit: 'contain'
+      }}
+    />
   );
 };
 
