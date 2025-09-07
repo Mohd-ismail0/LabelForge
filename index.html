@@ -169,159 +169,211 @@
             </div>
         </div>
 
-        <!-- Step 3: Label Design -->
-        <div class="step-content" id="step-3">
-            <div class="card">
-                <div class="card-header">
-                    <h2>Step 3: Design Your Labels</h2>
-                    <p class="card-description">Configure label size, barcode type, and drag elements to position them on your label</p>
-                </div>
-                <div class="card-body">
-                    <div class="design-grid">
-                        <div class="design-controls">
-                            <div class="control-group">
-                                <label for="label-size">Label Size</label>
-                                <select class="form-control" id="label-size">
-                                    <option value="2x1">2" x 1" (Standard)</option>
-                                    <option value="3x1">3" x 1" (Large)</option>
-                                    <option value="2.5x1">2.5" x 1" (Medium)</option>
-                                    <option value="4x2">4" x 2" (Extra Large)</option>
-                                    <option value="custom">Custom Size</option>
-                                </select>
-                            </div>
+         <!-- Step 3: Label Design -->
+         <div class="step-content" id="step-3">
+             <div class="card">
+                 <div class="card-header">
+                     <h2>Step 3: Design Your Labels</h2>
+                     <p class="card-description">Design labels with flexible row/column layouts and unlimited grouping control</p>
+                 </div>
+                 <div class="card-body">
+                     <div class="figma-interface">
+                         <!-- Left Panel: Element Tree and Add Controls -->
+                         <div class="left-panel">
+                             <!-- Label Settings -->
+                             <div class="panel-section">
+                                 <h4>Label Settings</h4>
+                                 <div class="control-group">
+                                     <label for="label-size">Size</label>
+                                     <select class="form-control" id="label-size">
+                                         <option value="2x1">2" x 1" (Standard)</option>
+                                         <option value="3x1">3" x 1" (Large)</option>
+                                         <option value="2.5x1">2.5" x 1" (Medium)</option>
+                                         <option value="4x2">4" x 2" (Extra Large)</option>
+                                         <option value="custom">Custom Size</option>
+                                     </select>
+                                 </div>
+                                 <div class="control-group hidden" id="custom-size-group">
+                                     <label for="custom-width">Width (inches)</label>
+                                     <input type="number" class="form-control" id="custom-width" value="2" step="0.1" min="0.5" max="10">
+                                     <label for="custom-height">Height (inches)</label>
+                                     <input type="number" class="form-control" id="custom-height" value="1" step="0.1" min="0.5" max="10">
+                                 </div>
+                                 <div class="control-group">
+                                     <label for="barcode-type">Barcode Type</label>
+                                     <select class="form-control" id="barcode-type">
+                                         <option value="EAN13">EAN-13 (Retail)</option>
+                                         <option value="CODE128">Code 128 (Universal)</option>
+                                         <option value="CODE39">Code 39 (Industrial)</option>
+                                         <option value="UPC">UPC-A (US Retail)</option>
+                                         <option value="ITF">ITF-14 (Shipping)</option>
+                                     </select>
+                                 </div>
+                             </div>
 
-                            <div class="control-group hidden" id="custom-size-group">
-                                <label for="custom-width">Width (inches)</label>
-                                <input type="number" class="form-control" id="custom-width" value="2" step="0.1" min="0.5" max="10">
-                                <label for="custom-height">Height (inches)</label>
-                                <input type="number" class="form-control" id="custom-height" value="1" step="0.1" min="0.5" max="10">
-                            </div>
+                             <!-- Add Elements -->
+                             <div class="panel-section">
+                                 <h4>Add Elements</h4>
+                                 <div class="add-buttons">
+                                     <button class="btn btn-outline btn-sm" onclick="addFlexContainer()">
+                                         <span class="btn-icon">📦</span>
+                                         Container
+                                     </button>
+                                     <button class="btn btn-outline btn-sm" onclick="addTextElement()">
+                                         <span class="btn-icon">T</span>
+                                         Text
+                                     </button>
+                                     <button class="btn btn-outline btn-sm" onclick="addBarcodeElement()">
+                                         <span class="btn-icon">|||</span>
+                                         Barcode
+                                     </button>
+                                 </div>
+                             </div>
 
-                            <div class="control-group">
-                                <label for="barcode-type">Barcode Type</label>
-                                <select class="form-control" id="barcode-type">
-                                    <option value="EAN13">EAN-13 (Retail)</option>
-                                    <option value="CODE128">Code 128 (Universal)</option>
-                                    <option value="CODE39">Code 39 (Industrial)</option>
-                                    <option value="UPC">UPC-A (US Retail)</option>
-                                    <option value="ITF">ITF-14 (Shipping)</option>
-                                </select>
-                            </div>
+                             <!-- Element Tree -->
+                             <div class="panel-section">
+                                 <h4>Elements</h4>
+                                 <div class="element-tree" id="element-tree">
+                                     <!-- Element hierarchy will be rendered here -->
+                                 </div>
+                             </div>
+                         </div>
 
-                            <div class="control-group">
-                                <label for="font-size">Text Size</label>
-                                <select class="form-control" id="font-size">
-                                    <option value="small">Small (8pt)</option>
-                                    <option value="medium" selected>Medium (10pt)</option>
-                                    <option value="large">Large (12pt)</option>
-                                </select>
-                            </div>
+                         <!-- Center: Canvas -->
+                         <div class="canvas-area">
+                             <div class="canvas-header">
+                                 <h4>Label Canvas</h4>
+                                 <div class="canvas-controls">
+                                     <button class="btn btn-outline btn-sm" onclick="groupSelected()" id="group-btn" disabled>
+                                         <span class="btn-icon">🧩</span>
+                                         Group
+                                     </button>
+                                     <button class="btn btn-outline btn-sm" onclick="ungroupSelected()" id="ungroup-btn" disabled>
+                                         <span class="btn-icon">🔓</span>
+                                         Ungroup
+                                     </button>
+                                     <button class="btn btn-outline btn-sm" onclick="deleteSelected()" id="delete-btn" disabled>
+                                         <span class="btn-icon">🗑</span>
+                                         Delete
+                                     </button>
+                                 </div>
+                             </div>
+                             <div class="canvas-container">
+                                 <div class="label-canvas" id="label-canvas">
+                                     <!-- Flex-based elements will be rendered here -->
+                                 </div>
+                             </div>
+                         </div>
 
-                            <div class="control-group">
-                                <label for="label-spacing">Label Spacing</label>
-                                <select class="form-control" id="label-spacing">
-                                    <option value="tight">Tight (0.1")</option>
-                                    <option value="normal" selected>Normal (0.2")</option>
-                                    <option value="loose">Loose (0.3")</option>
-                                </select>
-                            </div>
+                         <!-- Right Panel: Properties -->
+                         <div class="right-panel">
+                             <div class="panel-section">
+                                 <h4>Properties</h4>
+                                 <div id="element-properties">
+                                     <div class="no-selection">
+                                         <p>Select an element to edit its properties</p>
+                                     </div>
+                                     
+                                     <!-- Flex Container Properties -->
+                                     <div class="property-group hidden" id="container-props">
+                                         <h5>Layout</h5>
+                                         <div class="prop-row">
+                                             <label for="flex-direction">Direction:</label>
+                                             <select class="form-control" id="flex-direction">
+                                                 <option value="column">Column (vertical)</option>
+                                                 <option value="row">Row (horizontal)</option>
+                                             </select>
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="justify-content">Justify:</label>
+                                             <select class="form-control" id="justify-content">
+                                                 <option value="flex-start">Start</option>
+                                                 <option value="center">Center</option>
+                                                 <option value="flex-end">End</option>
+                                                 <option value="space-between">Space Between</option>
+                                                 <option value="space-around">Space Around</option>
+                                                 <option value="space-evenly">Space Evenly</option>
+                                             </select>
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="align-items">Align:</label>
+                                             <select class="form-control" id="align-items">
+                                                 <option value="stretch">Stretch</option>
+                                                 <option value="flex-start">Start</option>
+                                                 <option value="center">Center</option>
+                                                 <option value="flex-end">End</option>
+                                             </select>
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="gap">Gap (px):</label>
+                                             <input type="number" class="form-control" id="gap" min="0" value="0">
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="padding">Padding (px):</label>
+                                             <input type="number" class="form-control" id="padding" min="0" value="0">
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="margin">Margin (px):</label>
+                                             <input type="number" class="form-control" id="margin" min="0" value="0">
+                                         </div>
+                                     </div>
 
-                            <!-- Static Text Management -->
-                            <div class="control-group">
-                                <label>Static Text Fields</label>
-                                <div class="static-text-manager">
-                                    <div class="static-text-list" id="static-text-list">
-                                        <!-- Static text items will be added here -->
-                                    </div>
-                                    <button type="button" class="btn btn-outline btn-sm" onclick="addStaticTextField()">
-                                        <span class="btn-icon">+</span>
-                                        Add Static Text
-                                    </button>
-                                </div>
-                            </div>
+                                     <!-- Text Properties -->
+                                     <div class="property-group hidden" id="text-props">
+                                         <h5>Text</h5>
+                                         <div class="prop-row">
+                                             <label for="text-content">Content:</label>
+                                             <input type="text" class="form-control" id="text-content" placeholder="Enter text">
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="font-size">Font Size (px):</label>
+                                             <input type="number" class="form-control" id="font-size" min="8" max="48" value="12">
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="text-align">Text Align:</label>
+                                             <select class="form-control" id="text-align">
+                                                 <option value="left">Left</option>
+                                                 <option value="center">Center</option>
+                                                 <option value="right">Right</option>
+                                             </select>
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="font-weight">Weight:</label>
+                                             <select class="form-control" id="font-weight">
+                                                 <option value="normal">Normal</option>
+                                                 <option value="bold">Bold</option>
+                                             </select>
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="color">Color:</label>
+                                             <input type="color" class="form-control" id="color" value="#000000">
+                                         </div>
+                                     </div>
 
-                            <!-- Text Layout Controls -->
-                            <div class="control-group">
-                                <label>Text Layout</label>
-                                <div class="layout-controls">
-                                    <div class="prop-row">
-                                        <label for="text-layout">Layout Direction:</label>
-                                        <select class="form-control" id="text-layout">
-                                            <option value="vertical">Vertical (Stacked)</option>
-                                            <option value="horizontal">Horizontal (Side by Side)</option>
-                                        </select>
-                                    </div>
-                                    <div class="prop-row">
-                                        <label for="text-gap">Gap Between Elements:</label>
-                                        <input type="number" class="form-control" id="text-gap" value="2" step="1" min="0" max="20">
-                                    </div>
-                                </div>
-                            </div>
+                                     <!-- Barcode Properties -->
+                                     <div class="property-group hidden" id="barcode-props">
+                                         <h5>Barcode</h5>
+                                         <div class="prop-row">
+                                             <label for="barcode-height">Height (px):</label>
+                                             <input type="number" class="form-control" id="barcode-height" min="20" max="200" value="50">
+                                         </div>
+                                         <div class="prop-row">
+                                             <label for="show-text">Show Text:</label>
+                                             <input type="checkbox" class="form-control" id="show-text" checked>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
 
-                            <!-- Element Properties -->
-                            <div class="control-group" id="element-properties" style="display: none;">
-                                <label>Element Properties</label>
-                                <div class="element-props">
-                                    <div class="prop-row">
-                                        <label for="element-x">X Position:</label>
-                                        <input type="number" class="form-control" id="element-x" step="0.1" min="0">
-                                    </div>
-                                    <div class="prop-row">
-                                        <label for="element-y">Y Position:</label>
-                                        <input type="number" class="form-control" id="element-y" step="0.1" min="0">
-                                    </div>
-                                    <div class="prop-row">
-                                        <label for="element-width">Width:</label>
-                                        <input type="number" class="form-control" id="element-width" step="0.1" min="0.1">
-                                    </div>
-                                    <div class="prop-row">
-                                        <label for="element-height">Height:</label>
-                                        <input type="number" class="form-control" id="element-height" step="0.1" min="0.1">
-                                    </div>
-                                    <div class="prop-row">
-                                        <label for="element-font-size">Font Size:</label>
-                                        <input type="number" class="form-control" id="element-font-size" step="1" min="6" max="24">
-                                    </div>
-                                    <div class="prop-row">
-                                        <label for="element-align">Text Align:</label>
-                                        <select class="form-control" id="element-align">
-                                            <option value="left">Left</option>
-                                            <option value="center" selected>Center</option>
-                                            <option value="right">Right</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="design-preview">
-                            <h4>Drag & Drop Label Designer</h4>
-                            <div class="preview-container">
-                                <div class="preview-label" id="design-preview-label">
-                                    <!-- Draggable elements will be added here -->
-                                </div>
-                                <div class="preview-grid" id="preview-grid"></div>
-                            </div>
-                            <div class="preview-controls">
-                                <button class="btn btn-outline btn-sm" onclick="toggleGrid()" id="grid-toggle">
-                                    <span class="btn-icon">⊞</span>
-                                    Toggle Grid
-                                </button>
-                                <button class="btn btn-outline btn-sm" onclick="resetElementPositions()">
-                                    <span class="btn-icon">↺</span>
-                                    Reset Positions
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="step-actions">
-                        <button class="btn btn-outline" onclick="previousStep()">Previous</button>
-                        <button class="btn btn-primary" onclick="nextStep()">Continue to Quantities</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+                     <div class="step-actions">
+                         <button class="btn btn-outline" onclick="previousStep()">Previous</button>
+                         <button class="btn btn-primary" onclick="nextStep()">Continue to Quantities</button>
+                     </div>
+                 </div>
+             </div>
+         </div>
 
         <!-- Step 4: Quantity Management -->
         <div class="step-content" id="step-4">

@@ -14,16 +14,9 @@ let appState = {
         customWidth: 2,
         customHeight: 1,
         barcodeType: 'EAN13',
-        staticTexts: [],
-        fontSize: 'medium',
-        spacing: 'normal',
-        textLayout: 'vertical',
-        textGap: 2,
-        elements: {
-            barcode: { x: 0.1, y: 0.1, width: 1.8, height: 0.4, fontSize: 10, align: 'center' },
-            textContainer: { x: 0.1, y: 0.6, width: 1.8, height: 0.3, fontSize: 10, align: 'center' }
-        },
-        textElements: []
+        elements: [], // Hierarchical element tree
+        selectedElementId: null,
+        nextElementId: 1
     },
     generatedLabels: [],
     quantitySettings: {
@@ -583,45 +576,665 @@ function setupLabelDesign() {
     // Note: initializeLabelDesigner() is called when step 3 is reached
 }
 
-// Global variables for drag and drop
-let selectedElement = null;
-let isDragging = false;
-let dragOffset = { x: 0, y: 0 };
-let isResizing = false;
-let resizeHandle = null;
-let gridVisible = false;
+// Figma-like Element System
+let selectedElements = new Set();
+
+// Element structure:
+// {
+//   id: unique identifier,
+//   type: 'container' | 'text' | 'barcode',
+//   name: display name,
+//   children: array of child element IDs,
+//   parent: parent element ID or null,
+//   properties: type-specific properties,
+//   style: CSS flex properties
+// }
 
 function initializeLabelDesigner() {
-    console.log('Initializing label designer...');
-    const previewLabel = document.getElementById('design-preview-label');
-    const previewGrid = document.getElementById('preview-grid');
+    console.log('Initializing Figma-like label designer...');
     
-    if (!previewLabel) {
-        console.error('design-preview-label element not found');
+    // Initialize with default root container
+    initializeDefaultElements();
+    
+    // Setup event listeners
+    setupFigmaEventListeners();
+    
+    // Render initial state
+    renderCanvas();
+    renderElementTree();
+    renderProperties();
+    
+    console.log('Figma-like label designer initialized');
+}
+
+function initializeDefaultElements() {
+    // Create root container (the label itself)
+    const rootElement = {
+        id: 'root',
+        type: 'container',
+        name: 'Label',
+        children: [],
+        parent: null,
+        properties: {},
+        style: {
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            alignItems: 'stretch',
+            gap: 4,
+            padding: 8,
+            margin: 0
+        }
+    };
+    
+    appState.labelSettings.elements = [rootElement];
+    appState.labelSettings.nextElementId = 1;
+}
+
+// Core Element Management Functions
+function getElementById(id) {
+    return appState.labelSettings.elements.find(el => el.id === id);
+}
+
+function addElement(type, parentId = 'root', properties = {}) {
+    const id = `element_${appState.labelSettings.nextElementId++}`;
+    const parent = getElementById(parentId);
+    
+    const element = {
+        id,
+        type,
+        name: getDefaultElementName(type),
+        children: [],
+        parent: parentId,
+        properties: getDefaultProperties(type, properties),
+        style: getDefaultStyle(type)
+    };
+    
+    // Add to elements array
+    appState.labelSettings.elements.push(element);
+    
+    // Add to parent's children
+    if (parent) {
+        parent.children.push(id);
+    }
+    
+    // Re-render
+    renderCanvas();
+    renderElementTree();
+    
+    return element;
+}
+
+function deleteElement(id) {
+    if (id === 'root') return; // Cannot delete root
+    
+    const element = getElementById(id);
+    if (!element) return;
+    
+    // Remove from parent's children
+    const parent = getElementById(element.parent);
+    if (parent) {
+        parent.children = parent.children.filter(childId => childId !== id);
+    }
+    
+    // Recursively delete children
+    element.children.forEach(childId => deleteElement(childId));
+    
+    // Remove from elements array
+    appState.labelSettings.elements = appState.labelSettings.elements.filter(el => el.id !== id);
+    
+    // Clear selection if this element was selected
+    selectedElements.delete(id);
+    if (appState.labelSettings.selectedElementId === id) {
+        appState.labelSettings.selectedElementId = null;
+    }
+    
+    // Re-render
+    renderCanvas();
+    renderElementTree();
+    renderProperties();
+}
+
+function getDefaultElementName(type) {
+    switch (type) {
+        case 'container': return 'Container';
+        case 'text': return 'Text';
+        case 'barcode': return 'Barcode';
+        default: return 'Element';
+    }
+}
+
+function getDefaultProperties(type, overrides = {}) {
+    const defaults = {
+        container: {},
+        text: {
+            content: 'Sample Text',
+            fontSize: 12,
+            color: '#000000',
+            fontWeight: 'normal',
+            textAlign: 'left'
+        },
+        barcode: {
+            height: 50,
+            showText: true
+        }
+    };
+    
+    return { ...defaults[type], ...overrides };
+}
+
+function getDefaultStyle(type) {
+    const defaults = {
+        container: {
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            alignItems: 'stretch',
+            gap: 4,
+            padding: 4,
+            margin: 0
+        },
+        text: {
+            flexDirection: 'row',
+            justifyContent: 'flex-start',
+            alignItems: 'center',
+            gap: 0,
+            padding: 4,
+            margin: 0
+        },
+        barcode: {
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 2,
+            padding: 4,
+            margin: 0
+        }
+    };
+    
+    return defaults[type] || defaults.container;
+}
+
+// Event Handlers for Adding Elements
+function addFlexContainer() {
+    const selectedId = appState.labelSettings.selectedElementId || 'root';
+    addElement('container', selectedId);
+}
+
+function addTextElement() {
+    const selectedId = appState.labelSettings.selectedElementId || 'root';
+    addElement('text', selectedId);
+}
+
+function addBarcodeElement() {
+    const selectedId = appState.labelSettings.selectedElementId || 'root';
+    addElement('barcode', selectedId);
+}
+
+// Rendering Functions
+function renderCanvas() {
+    const canvas = document.getElementById('label-canvas');
+    if (!canvas) return;
+    
+    // Set canvas size based on label dimensions
+    const labelWidth = getLabelWidth();
+    const labelHeight = getLabelHeight();
+    canvas.style.width = `${labelWidth * DISPLAY_DPI}px`;
+    canvas.style.height = `${labelHeight * DISPLAY_DPI}px`;
+    
+    // Clear canvas
+    canvas.innerHTML = '';
+    
+    // Render root element
+    const rootElement = getElementById('root');
+    if (rootElement) {
+        const rootDiv = renderElement(rootElement);
+        canvas.appendChild(rootDiv);
+    }
+}
+
+function renderElement(element) {
+    const div = document.createElement('div');
+    div.className = `flex-element flex-${element.type}`;
+    div.dataset.elementId = element.id;
+    
+    // Apply flex styles
+    applyFlexStyles(div, element.style);
+    
+    // Add selection handling
+    div.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(element.id, e.shiftKey);
+    });
+    
+    // Render content based on type
+    switch (element.type) {
+        case 'container':
+            renderContainer(div, element);
+            break;
+        case 'text':
+            renderText(div, element);
+            break;
+        case 'barcode':
+            renderBarcode(div, element);
+            break;
+    }
+    
+    // Render children
+    element.children.forEach(childId => {
+        const childElement = getElementById(childId);
+        if (childElement) {
+            const childDiv = renderElement(childElement);
+            div.appendChild(childDiv);
+        }
+    });
+    
+    return div;
+}
+
+function applyFlexStyles(div, style) {
+    div.style.display = 'flex';
+    div.style.flexDirection = style.flexDirection || 'column';
+    div.style.justifyContent = style.justifyContent || 'flex-start';
+    div.style.alignItems = style.alignItems || 'stretch';
+    div.style.gap = `${style.gap || 0}px`;
+    div.style.padding = `${style.padding || 0}px`;
+    div.style.margin = `${style.margin || 0}px`;
+}
+
+function renderContainer(div, element) {
+    // Container is just a flex box, children will be added separately
+    if (element.children.length === 0) {
+        div.classList.add('flex-container');
+    } else {
+        div.classList.add('flex-container', 'has-children');
+    }
+}
+
+function renderText(div, element) {
+    const textSpan = document.createElement('span');
+    textSpan.textContent = element.properties.content || 'Text';
+    textSpan.style.fontSize = `${element.properties.fontSize || 12}px`;
+    textSpan.style.color = element.properties.color || '#000000';
+    textSpan.style.fontWeight = element.properties.fontWeight || 'normal';
+    textSpan.style.textAlign = element.properties.textAlign || 'left';
+    div.appendChild(textSpan);
+}
+
+function renderBarcode(div, element) {
+    // Create barcode SVG
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.className = 'barcode-svg';
+    
+    // Get sample barcode data
+    let barcodeData = '1234567890123';
+    if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
+        barcodeData = appState.excelData[0][appState.mappedColumns.barcode.index] || barcodeData;
+    }
+    
+    try {
+        JsBarcode(svg, barcodeData, {
+            format: appState.labelSettings.barcodeType,
+            width: 2,
+            height: element.properties.height || 50,
+            displayValue: element.properties.showText || false
+        });
+    } catch (error) {
+        svg.innerHTML = '<text>Invalid barcode</text>';
+    }
+    
+    div.appendChild(svg);
+    
+    // Add barcode text if enabled
+    if (element.properties.showText) {
+        const textDiv = document.createElement('div');
+        textDiv.className = 'barcode-text';
+        textDiv.textContent = barcodeData;
+        div.appendChild(textDiv);
+    }
+}
+
+function renderElementTree() {
+    const tree = document.getElementById('element-tree');
+    if (!tree) return;
+    
+    tree.innerHTML = '';
+    
+    const rootElement = getElementById('root');
+    if (rootElement) {
+        renderTreeItem(tree, rootElement, 0);
+    }
+}
+
+function renderTreeItem(container, element, depth) {
+    const item = document.createElement('div');
+    item.className = `tree-item ${depth > 0 ? 'child' : ''}`;
+    item.dataset.elementId = element.id;
+    
+    if (appState.labelSettings.selectedElementId === element.id) {
+        item.classList.add('selected');
+    }
+    
+    // Toggle button for containers with children
+    if (element.type === 'container' && element.children.length > 0) {
+        const toggle = document.createElement('button');
+        toggle.className = 'tree-toggle';
+        toggle.textContent = '▼';
+        item.appendChild(toggle);
+    } else {
+        const spacer = document.createElement('div');
+        spacer.style.width = '16px';
+        item.appendChild(spacer);
+    }
+    
+    // Element icon
+    const icon = document.createElement('span');
+    icon.className = 'tree-icon';
+    icon.textContent = getElementIcon(element.type);
+    item.appendChild(icon);
+    
+    // Element name
+    const name = document.createElement('span');
+    name.textContent = element.name;
+    item.appendChild(name);
+    
+    // Click handler
+    item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(element.id, e.shiftKey);
+    });
+    
+    container.appendChild(item);
+    
+    // Render children
+    element.children.forEach(childId => {
+        const childElement = getElementById(childId);
+        if (childElement) {
+            renderTreeItem(container, childElement, depth + 1);
+        }
+    });
+}
+
+function getElementIcon(type) {
+    switch (type) {
+        case 'container': return '📦';
+        case 'text': return 'T';
+        case 'barcode': return '|||';
+        default: return '?';
+    }
+}
+
+// Selection and Properties Functions
+function selectElement(id, additive = false) {
+    if (!additive) {
+        selectedElements.clear();
+    }
+    
+    selectedElements.add(id);
+    appState.labelSettings.selectedElementId = id;
+    
+    // Update UI
+    updateSelectionUI();
+    renderElementTree();
+    renderProperties();
+    updateGroupButtons();
+}
+
+function updateSelectionUI() {
+    // Update canvas selection
+    document.querySelectorAll('.flex-element').forEach(el => {
+        el.classList.remove('selected');
+        if (selectedElements.has(el.dataset.elementId)) {
+            el.classList.add('selected');
+        }
+    });
+}
+
+function updateGroupButtons() {
+    const groupBtn = document.getElementById('group-btn');
+    const ungroupBtn = document.getElementById('ungroup-btn');
+    const deleteBtn = document.getElementById('delete-btn');
+    
+    const hasSelection = selectedElements.size > 0;
+    const canGroup = selectedElements.size > 1;
+    
+    if (groupBtn) groupBtn.disabled = !canGroup;
+    if (ungroupBtn) ungroupBtn.disabled = !hasSelection;
+    if (deleteBtn) deleteBtn.disabled = !hasSelection;
+}
+
+function renderProperties() {
+    const propertiesDiv = document.getElementById('element-properties');
+    if (!propertiesDiv) return;
+    
+    // Hide all property groups
+    document.querySelectorAll('.property-group').forEach(group => {
+        group.classList.add('hidden');
+    });
+    
+    const selectedId = appState.labelSettings.selectedElementId;
+    if (!selectedId) {
+        document.querySelector('.no-selection').style.display = 'block';
         return;
     }
     
-    console.log('Preview label found:', previewLabel);
+    document.querySelector('.no-selection').style.display = 'none';
     
-    // Add design mode class
-    previewLabel.classList.add('design-mode');
+    const element = getElementById(selectedId);
+    if (!element) return;
     
-    // Setup event listeners for drag and drop
-    setupDragAndDrop();
+    // Show relevant property group
+    switch (element.type) {
+        case 'container':
+            showContainerProperties(element);
+            break;
+        case 'text':
+            showTextProperties(element);
+            break;
+        case 'barcode':
+            showBarcodeProperties(element);
+            break;
+    }
+}
+
+function showContainerProperties(element) {
+    const group = document.getElementById('container-props');
+    group.classList.remove('hidden');
     
-    // Initialize static text management
-    initializeStaticTextManager();
+    // Populate values
+    document.getElementById('flex-direction').value = element.style.flexDirection || 'column';
+    document.getElementById('justify-content').value = element.style.justifyContent || 'flex-start';
+    document.getElementById('align-items').value = element.style.alignItems || 'stretch';
+    document.getElementById('gap').value = element.style.gap || 0;
+    document.getElementById('padding').value = element.style.padding || 0;
+    document.getElementById('margin').value = element.style.margin || 0;
+}
+
+function showTextProperties(element) {
+    const group = document.getElementById('text-props');
+    group.classList.remove('hidden');
     
-    // Setup element property controls
-    setupElementPropertyControls();
+    // Populate values
+    document.getElementById('text-content').value = element.properties.content || '';
+    document.getElementById('font-size').value = element.properties.fontSize || 12;
+    document.getElementById('text-align').value = element.properties.textAlign || 'left';
+    document.getElementById('font-weight').value = element.properties.fontWeight || 'normal';
+    document.getElementById('color').value = element.properties.color || '#000000';
+}
+
+function showBarcodeProperties(element) {
+    const group = document.getElementById('barcode-props');
+    group.classList.remove('hidden');
     
-    // Convert any existing static text to auto-sizing
-    convertExistingStaticTextToAutoSize();
+    // Populate values
+    document.getElementById('barcode-height').value = element.properties.height || 50;
+    document.getElementById('show-text').checked = element.properties.showText || false;
+}
+
+// Event Listeners Setup
+function setupFigmaEventListeners() {
+    // Label size changes
+    const labelSize = document.getElementById('label-size');
+    if (labelSize) {
+        labelSize.addEventListener('change', handleLabelSizeChange);
+    }
     
-    // Create initial elements
-    updateDesignPreview();
+    const customWidth = document.getElementById('custom-width');
+    const customHeight = document.getElementById('custom-height');
+    if (customWidth) customWidth.addEventListener('input', handleCustomSizeChange);
+    if (customHeight) customHeight.addEventListener('input', handleCustomSizeChange);
     
-    console.log('Label designer initialized');
+    const barcodeType = document.getElementById('barcode-type');
+    if (barcodeType) {
+        barcodeType.addEventListener('change', (e) => {
+            appState.labelSettings.barcodeType = e.target.value;
+            renderCanvas();
+        });
+    }
+    
+    // Property controls
+    setupPropertyEventListeners();
+}
+
+function setupPropertyEventListeners() {
+    // Container properties
+    ['flex-direction', 'justify-content', 'align-items'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('change', updateSelectedElementStyle);
+        }
+    });
+    
+    ['gap', 'padding', 'margin'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', updateSelectedElementStyle);
+        }
+    });
+    
+    // Text properties
+    ['text-content', 'font-size', 'text-align', 'font-weight', 'color'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', updateSelectedElementProperties);
+        }
+    });
+    
+    // Barcode properties
+    ['barcode-height', 'show-text'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', updateSelectedElementProperties);
+        }
+    });
+}
+
+function updateSelectedElementStyle() {
+    const selectedId = appState.labelSettings.selectedElementId;
+    if (!selectedId) return;
+    
+    const element = getElementById(selectedId);
+    if (!element) return;
+    
+    // Update style properties
+    element.style.flexDirection = document.getElementById('flex-direction').value;
+    element.style.justifyContent = document.getElementById('justify-content').value;
+    element.style.alignItems = document.getElementById('align-items').value;
+    element.style.gap = parseInt(document.getElementById('gap').value) || 0;
+    element.style.padding = parseInt(document.getElementById('padding').value) || 0;
+    element.style.margin = parseInt(document.getElementById('margin').value) || 0;
+    
+    renderCanvas();
+}
+
+function updateSelectedElementProperties() {
+    const selectedId = appState.labelSettings.selectedElementId;
+    if (!selectedId) return;
+    
+    const element = getElementById(selectedId);
+    if (!element) return;
+    
+    // Update properties based on element type
+    switch (element.type) {
+        case 'text':
+            element.properties.content = document.getElementById('text-content').value;
+            element.properties.fontSize = parseInt(document.getElementById('font-size').value) || 12;
+            element.properties.textAlign = document.getElementById('text-align').value;
+            element.properties.fontWeight = document.getElementById('font-weight').value;
+            element.properties.color = document.getElementById('color').value;
+            break;
+        case 'barcode':
+            element.properties.height = parseInt(document.getElementById('barcode-height').value) || 50;
+            element.properties.showText = document.getElementById('show-text').checked;
+            break;
+    }
+    
+    renderCanvas();
+}
+
+// Grouping Functions
+function groupSelected() {
+    if (selectedElements.size < 2) return;
+    
+    const selectedIds = Array.from(selectedElements);
+    const firstElement = getElementById(selectedIds[0]);
+    if (!firstElement) return;
+    
+    // Create new container
+    const container = addElement('container', firstElement.parent);
+    container.name = 'Group';
+    
+    // Move selected elements into the container
+    selectedIds.forEach(id => {
+        const element = getElementById(id);
+        if (element) {
+            // Remove from current parent
+            const parent = getElementById(element.parent);
+            if (parent) {
+                parent.children = parent.children.filter(childId => childId !== id);
+            }
+            
+            // Add to container
+            element.parent = container.id;
+            container.children.push(id);
+        }
+    });
+    
+    // Select the new container
+    selectedElements.clear();
+    selectElement(container.id);
+    
+    renderCanvas();
+    renderElementTree();
+}
+
+function ungroupSelected() {
+    const selectedId = appState.labelSettings.selectedElementId;
+    if (!selectedId) return;
+    
+    const element = getElementById(selectedId);
+    if (!element || element.type !== 'container') return;
+    
+    const parent = getElementById(element.parent);
+    if (!parent) return;
+    
+    // Move children up to parent
+    element.children.forEach(childId => {
+        const child = getElementById(childId);
+        if (child) {
+            child.parent = parent.id;
+            parent.children.push(childId);
+        }
+    });
+    
+    // Remove the container
+    deleteElement(selectedId);
+}
+
+function deleteSelected() {
+    selectedElements.forEach(id => {
+        deleteElement(id);
+    });
+    selectedElements.clear();
+    appState.labelSettings.selectedElementId = null;
 }
 
 // Helper function to convert existing static text to auto-sizing
