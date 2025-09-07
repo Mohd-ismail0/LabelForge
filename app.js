@@ -2538,7 +2538,8 @@ function createLabelCanvas(label) {
         console.log('Actual text layout from appState:', actualTextLayout);
         console.log('Label text layout:', label.textLayout, 'Text gap:', label.textGap, 'Text elements:', label.textElements.length);
         
-        if (actualTextLayout === 'horizontal') {
+        // Force horizontal layout for now to match the design
+        if (true) { // actualTextLayout === 'horizontal' || 
             // Horizontal layout: distribute text elements across the width
             const totalGap = (label.textElements.length - 1) * textGap;
             const availableWidth = textContainerWidth - totalGap;
@@ -2584,7 +2585,7 @@ function createLabelCanvas(label) {
         
         // Position static text below text elements using actual layout
         const actualTextLayout = appState.labelSettings.textLayout;
-        const baseY = actualTextLayout === 'horizontal' ? 0.8 : 0.6 + (label.textElements.length * 0.15);
+        const baseY = 0.8; // Force horizontal layout positioning
         
         label.staticTexts.forEach((staticText, index) => {
             const x = 0.1;
