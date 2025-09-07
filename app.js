@@ -151,6 +151,7 @@ function setStep(stepNumber) {
             setupColumnMapping();
             break;
         case 3:
+            initializeLabelDesigner();
             updateDesignPreview();
             break;
         case 4:
@@ -573,8 +574,7 @@ function updateContinueButton() {
 // Label Design
 function setupLabelDesign() {
     // Initialize with default values
-    initializeLabelDesigner();
-    updateDesignPreview();
+    // Note: initializeLabelDesigner() is called when step 3 is reached
 }
 
 // Global variables for drag and drop
@@ -672,6 +672,9 @@ function createBarcodeElement() {
     });
     
     previewLabel.appendChild(barcodeElement);
+    
+    // Generate initial barcode preview
+    updateDesignPreview();
 }
 
 function createTextContainer() {
