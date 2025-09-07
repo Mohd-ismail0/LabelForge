@@ -1316,43 +1316,35 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
-    console.log('updateDesignPreview called');
-    console.log('Mapped columns:', appState.mappedColumns);
-    console.log('Excel data length:', appState.excelData ? appState.excelData.length : 0);
+    // Use the same simple approach as Step 2 - direct DOM manipulation
+    const previewLabel = document.getElementById('design-preview-label');
+    const previewBarcode = document.getElementById('design-preview-barcode');
+    const previewText = document.getElementById('design-preview-text');
     
-    // Ensure elements exist before updating
-    if (!document.getElementById('element-barcode')) {
-        console.log('Barcode element not found, creating elements...');
-        createLabelElements();
-        return; // Elements will be created and this function will be called again
+    // Create static elements if they don't exist (like Step 2)
+    if (!previewBarcode) {
+        const barcodeDiv = document.createElement('div');
+        barcodeDiv.className = 'preview-barcode';
+        barcodeDiv.innerHTML = '<svg id="design-preview-barcode"></svg><div class="barcode-number" id="design-preview-barcode-number"></div>';
+        previewLabel.appendChild(barcodeDiv);
     }
     
-    console.log('Barcode element found, updating...');
-    // Update barcode content with example barcodes
-    const barcodeElement = document.getElementById('element-barcode');
-    if (barcodeElement) {
-        const svg = barcodeElement.querySelector('svg');
-        const barcodeNumber = barcodeElement.querySelector('.barcode-number');
-        
-        if (svg) {
-            // Get barcode data - prioritize Excel data like Step 2 does
-            let barcodeData = null;
-            
-            if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
-                const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
-                if (sampleBarcode) {
-                    barcodeData = sampleBarcode.toString().trim();
-                }
-            }
-            
-            // If no Excel data, use example data
-            if (!barcodeData) {
-                barcodeData = getExampleBarcodeData(appState.labelSettings.barcodeType);
-            }
-            
+    if (!previewText) {
+        const textDiv = document.createElement('div');
+        textDiv.className = 'preview-text';
+        textDiv.id = 'design-preview-text';
+        previewLabel.appendChild(textDiv);
+    }
+    
+    // Update barcode (same as Step 2)
+    const barcodeSvg = document.getElementById('design-preview-barcode');
+    const barcodeNumber = document.getElementById('design-preview-barcode-number');
+    
+    if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
+        const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
+        if (sampleBarcode) {
             try {
-                // Use the same simple approach as Step 2
-                JsBarcode(svg, barcodeData, {
+                JsBarcode(barcodeSvg, sampleBarcode, {
                     format: appState.labelSettings.barcodeType,
                     width: 2,
                     height: 50,
@@ -1360,47 +1352,34 @@ function updateDesignPreview() {
                     fontSize: 12,
                     textMargin: 2
                 });
-                
-                // Update barcode number display
                 if (barcodeNumber) {
-                    barcodeNumber.textContent = barcodeData;
+                    barcodeNumber.textContent = sampleBarcode;
                 }
             } catch (error) {
-                console.error('Barcode generation error:', error, {
-                    barcodeData,
-                    barcodeType: appState.labelSettings.barcodeType,
-                    barcodeOptions: getBarcodeOptions(appState.labelSettings.barcodeType),
-                    jsbarcodeAvailable: typeof JsBarcode !== 'undefined'
-                });
-                
-                // Create a fallback display
-                svg.innerHTML = `
-                    <rect x="10" y="10" width="180" height="30" fill="none" stroke="#ccc" stroke-width="1"/>
-                    <text x="100" y="30" text-anchor="middle" font-size="12" fill="#666">Barcode Preview</text>
-                    <text x="100" y="45" text-anchor="middle" font-size="10" fill="#999">${barcodeData}</text>
-                `;
-                
+                barcodeSvg.innerHTML = '<text>Invalid barcode</text>';
                 if (barcodeNumber) {
-                    barcodeNumber.textContent = barcodeData;
+                    barcodeNumber.textContent = 'Invalid';
                 }
             }
         }
+    } else {
+        barcodeSvg.innerHTML = '';
+        if (barcodeNumber) {
+            barcodeNumber.textContent = '';
+        }
     }
     
-    // Update text elements in container
-    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
-        console.log('Updating text elements:', appState.mappedColumns.text);
-        appState.mappedColumns.text.forEach((column, index) => {
-            const textElement = document.getElementById(`text-element-${index}`);
-            console.log(`Text element ${index}:`, textElement);
-            if (textElement && appState.excelData && appState.excelData.length > 0) {
-                const sampleValue = appState.excelData[0][column.index];
-                console.log(`Sample value for ${column.name}:`, sampleValue);
-                textElement.textContent = sampleValue ? sampleValue.toString() : column.name;
-            }
-        });
+    // Update text (same as Step 2)
+    const textElement = document.getElementById('design-preview-text');
+    if (appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
+        const textParts = appState.mappedColumns.text.map(col => {
+            const value = appState.excelData[0][col.index];
+            return value ? value.toString() : '';
+        }).filter(text => text.length > 0);
+        
+        textElement.textContent = textParts.join(' | ') || 'Sample Product Information';
     } else {
-        console.log('No text columns mapped or no Excel data');
+        textElement.textContent = 'Sample Product Information';
     }
     
     // Update static text elements
