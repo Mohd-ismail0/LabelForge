@@ -553,6 +553,7 @@ body {
 }
 
 .preview-container {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -561,6 +562,29 @@ body {
   border: 1px solid var(--color-gray-200);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
+}
+
+/* Step 2 Mapping Preview Specifics */
+#mapping-preview-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    min-height: 150px;
+}
+
+#mapping-preview-label .preview-barcode,
+#mapping-preview-label .preview-text {
+    position: static;
+    border: none;
+    background: none;
+    cursor: default;
+}
+
+#mapping-preview-label .preview-text {
+    text-align: center;
 }
 
 /* Preview Label */
@@ -577,11 +601,8 @@ body {
   cursor: crosshair;
 }
 
-/* Only apply scaling to design preview, not mapping preview */
 #design-preview-label {
-  /* Scale down for screen display while maintaining print accuracy */
-  transform: scale(0.8);
-  transform-origin: top left;
+    transform-origin: top left;
 }
 
 .preview-label.design-mode {
