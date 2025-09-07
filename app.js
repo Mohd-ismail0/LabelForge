@@ -1319,8 +1319,19 @@ function updateDesignPreview() {
     // Simple approach using static barcode images for preview
     const previewLabel = document.getElementById('design-preview-label');
     
+    if (!previewLabel) {
+        console.error('Preview label element not found');
+        return;
+    }
+    
     // Clear existing content to prevent duplication
     previewLabel.innerHTML = '';
+    
+    console.log('updateDesignPreview called', {
+        barcodeType: appState.labelSettings.barcodeType,
+        mappedColumns: appState.mappedColumns,
+        excelData: appState.excelData?.length || 0
+    });
     
     // Create barcode preview with static image
     const barcodeDiv = document.createElement('div');
@@ -1367,6 +1378,8 @@ function updateDesignPreview() {
     barcodeDiv.appendChild(barcodeImg);
     barcodeDiv.appendChild(barcodeNumber);
     previewLabel.appendChild(barcodeDiv);
+    
+    console.log('Barcode element added to preview');
     
     // Create separate draggable text elements for each mapped column
     let currentTop = 80;
@@ -1464,6 +1477,8 @@ function updateDesignPreview() {
             currentTop += 20; // Space between static text elements
         });
     }
+    
+    console.log('updateDesignPreview completed, elements in preview:', previewLabel.children.length);
 }
 
 function getBarcodeImageUrl(barcodeType) {
