@@ -591,8 +591,16 @@ let resizeHandle = null;
 let gridVisible = false;
 
 function initializeLabelDesigner() {
+    console.log('Initializing label designer...');
     const previewLabel = document.getElementById('design-preview-label');
     const previewGrid = document.getElementById('preview-grid');
+    
+    if (!previewLabel) {
+        console.error('design-preview-label element not found');
+        return;
+    }
+    
+    console.log('Preview label found:', previewLabel);
     
     // Add design mode class
     previewLabel.classList.add('design-mode');
@@ -608,6 +616,8 @@ function initializeLabelDesigner() {
     
     // Create initial elements
     createLabelElements();
+    
+    console.log('Label designer initialized');
 }
 
 function setupDragAndDrop() {
@@ -626,6 +636,12 @@ function setupDragAndDrop() {
 
 function createLabelElements() {
     const previewLabel = document.getElementById('design-preview-label');
+    if (!previewLabel) {
+        console.error('Preview label element not found');
+        return;
+    }
+    
+    console.log('Creating label elements...');
     previewLabel.innerHTML = '';
     
     // Create barcode element with proper preview
@@ -638,10 +654,22 @@ function createLabelElements() {
     appState.labelSettings.staticTexts.forEach((staticText, index) => {
         createStaticTextElement(index, staticText);
     });
+    
+    console.log('Label elements created:', {
+        barcodeElement: document.getElementById('element-barcode'),
+        textContainer: document.getElementById('element-textContainer'),
+        staticTexts: appState.labelSettings.staticTexts.length
+    });
 }
 
 function createBarcodeElement() {
     const previewLabel = document.getElementById('design-preview-label');
+    if (!previewLabel) {
+        console.error('Preview label not found in createBarcodeElement');
+        return;
+    }
+    
+    console.log('Creating barcode element...');
     const barcodeElement = document.createElement('div');
     barcodeElement.className = 'preview-barcode';
     barcodeElement.id = 'element-barcode';
@@ -680,6 +708,7 @@ function createBarcodeElement() {
     });
     
     previewLabel.appendChild(barcodeElement);
+    console.log('Barcode element appended to preview label');
     
     // Generate initial barcode preview
     updateDesignPreview();
