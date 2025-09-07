@@ -42,6 +42,8 @@ const LABEL_SIZES = {
     'custom': { width: 2, height: 1, dpi: 300 }
 };
 
+const DISPLAY_DPI = 96;
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
@@ -155,13 +157,7 @@ function setStep(stepNumber) {
             updateContinueButton();
             break;
         case 3:
-            // Initialize design mode class and setup drag and drop
-            const previewLabel = document.getElementById('design-preview-label');
-            if (previewLabel) {
-                previewLabel.classList.add('design-mode');
-                setupDragAndDrop();
-            }
-            updateDesignPreview();
+            initializeLabelDesigner();
             break;
         case 4:
             setupQuantityManagement();
@@ -620,7 +616,7 @@ function initializeLabelDesigner() {
     setupElementPropertyControls();
     
     // Create initial elements
-    createLabelElements();
+    updateDesignPreview();
     
     console.log('Label designer initialized');
 }
@@ -637,209 +633,6 @@ function setupDragAndDrop() {
             deselectAllElements();
         }
     });
-}
-
-function createLabelElements() {
-    const previewLabel = document.getElementById('design-preview-label');
-    if (!previewLabel) {
-        console.error('Preview label element not found');
-        return;
-    }
-    
-    console.log('Creating label elements...');
-    previewLabel.innerHTML = '';
-    
-    // Create barcode element with proper preview
-    createBarcodeElement();
-    
-    // Create text container with individual text elements
-    createTextContainer();
-    
-    // Create static text elements
-    appState.labelSettings.staticTexts.forEach((staticText, index) => {
-        createStaticTextElement(index, staticText);
-    });
-    
-    console.log('Label elements created:', {
-        barcodeElement: document.getElementById('element-barcode'),
-        textContainer: document.getElementById('element-textContainer'),
-        staticTexts: appState.labelSettings.staticTexts.length
-    });
-}
-
-function createBarcodeElement() {
-    const previewLabel = document.getElementById('design-preview-label');
-    if (!previewLabel) {
-        console.error('Preview label not found in createBarcodeElement');
-        return;
-    }
-    
-    console.log('Creating barcode element...');
-    const barcodeElement = document.createElement('div');
-    barcodeElement.className = 'preview-barcode';
-    barcodeElement.id = 'element-barcode';
-    barcodeElement.dataset.elementId = 'barcode';
-    
-    // Create barcode container
-    const barcodeContainer = document.createElement('div');
-    barcodeContainer.className = 'barcode-container';
-    
-    // Create SVG for barcode using proper namespace
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.id = 'design-preview-barcode';
-    svg.className = 'barcode-svg';
-    svg.setAttribute('width', '100%');
-    svg.setAttribute('height', '100%');
-    svg.setAttribute('viewBox', '0 0 200 100');
-    
-    // Create barcode number display
-    const barcodeNumber = document.createElement('div');
-    barcodeNumber.className = 'barcode-number';
-    barcodeNumber.id = 'barcode-number-display';
-    
-    barcodeContainer.appendChild(svg);
-    barcodeContainer.appendChild(barcodeNumber);
-    barcodeElement.appendChild(barcodeContainer);
-    
-    // Set position and size
-    const elementConfig = appState.labelSettings.elements.barcode || getDefaultElementConfig('barcode');
-    updateElementPosition(barcodeElement, elementConfig);
-    
-    // Add event listeners
-    barcodeElement.addEventListener('mousedown', handleElementMouseDown);
-    barcodeElement.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectElement(barcodeElement);
-    });
-    
-    previewLabel.appendChild(barcodeElement);
-    console.log('Barcode element appended to preview label');
-    
-    // Generate initial barcode preview
-    updateDesignPreview();
-}
-
-function createTextContainer() {
-    const previewLabel = document.getElementById('design-preview-label');
-    const textContainer = document.createElement('div');
-    textContainer.className = 'preview-text text-container';
-    textContainer.id = 'element-textContainer';
-    textContainer.dataset.elementId = 'textContainer';
-    
-    console.log('Creating text container with mapped columns:', appState.mappedColumns.text);
-    
-    // Set layout direction
-    textContainer.classList.add(appState.labelSettings.textLayout);
-    textContainer.style.gap = `${appState.labelSettings.textGap}px`;
-    
-    // Create individual text elements for each mapped column
-    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
-        appState.mappedColumns.text.forEach((column, index) => {
-            const textElement = document.createElement('div');
-            textElement.className = 'text-element';
-            textElement.id = `text-element-${index}`;
-            textElement.dataset.elementId = `text-${index}`;
-            textElement.dataset.columnIndex = column.index;
-            textElement.dataset.columnName = column.name;
-            
-            // Set sample text
-            if (appState.excelData && appState.excelData.length > 0) {
-                const sampleValue = appState.excelData[0][column.index];
-                textElement.textContent = sampleValue ? sampleValue.toString() : column.name;
-            } else {
-                textElement.textContent = column.name;
-            }
-            
-            // Add event listeners
-            textElement.addEventListener('mousedown', handleElementMouseDown);
-            textElement.addEventListener('click', (e) => {
-                e.stopPropagation();
-                selectElement(textElement);
-            });
-            
-            textContainer.appendChild(textElement);
-        });
-    } else {
-        // Default text element
-        const textElement = document.createElement('div');
-        textElement.className = 'text-element';
-        textElement.id = 'text-element-default';
-        textElement.dataset.elementId = 'text-default';
-        textElement.textContent = 'Sample Product Information';
-        
-        textElement.addEventListener('mousedown', handleElementMouseDown);
-        textElement.addEventListener('click', (e) => {
-            e.stopPropagation();
-            selectElement(textElement);
-        });
-        
-        textContainer.appendChild(textElement);
-    }
-    
-    // Set position and size
-    const elementConfig = appState.labelSettings.elements.textContainer || getDefaultElementConfig('textContainer');
-    updateElementPosition(textContainer, elementConfig);
-    
-    // Add event listeners for container
-    textContainer.addEventListener('mousedown', handleElementMouseDown);
-    textContainer.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectElement(textContainer);
-    });
-    
-    previewLabel.appendChild(textContainer);
-}
-
-function createStaticTextElement(index, staticText) {
-    const previewLabel = document.getElementById('design-preview-label');
-    const staticElement = document.createElement('div');
-    staticElement.className = 'preview-static';
-    staticElement.id = `element-static-${index}`;
-    staticElement.dataset.elementId = `static-${index}`;
-    staticElement.textContent = staticText.text;
-    
-    // Set position and size
-    const elementConfig = appState.labelSettings.elements[`static-${index}`] || getDefaultElementConfig(`static-${index}`);
-    updateElementPosition(staticElement, elementConfig);
-    
-    // Add event listeners
-    staticElement.addEventListener('mousedown', handleElementMouseDown);
-    staticElement.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectElement(staticElement);
-    });
-    
-    previewLabel.appendChild(staticElement);
-}
-
-function createDraggableElement(id, content, className) {
-    const previewLabel = document.getElementById('design-preview-label');
-    const element = document.createElement('div');
-    element.className = className;
-    element.id = `element-${id}`;
-    element.dataset.elementId = id;
-    
-    // Set content
-    if (id === 'barcode') {
-        const svg = document.createElement('svg');
-        svg.id = 'design-preview-barcode';
-        element.appendChild(svg);
-    } else {
-        element.textContent = content;
-    }
-    
-    // Set position and size
-    const elementConfig = appState.labelSettings.elements[id] || getDefaultElementConfig(id);
-    updateElementPosition(element, elementConfig);
-    
-    // Add event listeners
-    element.addEventListener('mousedown', handleElementMouseDown);
-    element.addEventListener('click', (e) => {
-        e.stopPropagation();
-        selectElement(element);
-    });
-    
-    previewLabel.appendChild(element);
 }
 
 function getDefaultElementConfig(id) {
@@ -861,6 +654,10 @@ function getDefaultElementConfig(id) {
                 const staticIndex = parseInt(id.split('-')[1]) || 0;
                 return { x: 0.1, y: 0.5 + (staticIndex * 0.15), width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
             }
+            if (id.startsWith('text-')) {
+                const textIndex = parseInt(id.split('-')[1]) || 0;
+                return { x: 0.1, y: 0.6 + (textIndex * 0.15), width: labelWidth - 0.2, height: 0.1, fontSize: 10, align: 'center' };
+            }
             return { x: 0.1, y: 0.5, width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
     }
 }
@@ -878,11 +675,10 @@ function updateElementPosition(element, config) {
         : LABEL_SIZES[appState.labelSettings.size].height;
     
     // Convert inches to pixels (using same DPI as print for accuracy)
-    const dpi = 300;
-    const x = Math.max(0, Math.min(config.x * dpi, (labelWidth - config.width) * dpi));
-    const y = Math.max(0, Math.min(config.y * dpi, (labelHeight - config.height) * dpi));
-    const width = Math.max(20, Math.min(config.width * dpi, labelWidth * dpi));
-    const height = Math.max(15, Math.min(config.height * dpi, labelHeight * dpi));
+    const x = Math.max(0, Math.min(config.x * DISPLAY_DPI, (labelWidth - config.width) * DISPLAY_DPI));
+    const y = Math.max(0, Math.min(config.y * DISPLAY_DPI, (labelHeight - config.height) * DISPLAY_DPI));
+    const width = Math.max(20, Math.min(config.width * DISPLAY_DPI, labelWidth * DISPLAY_DPI));
+    const height = Math.max(15, Math.min(config.height * DISPLAY_DPI, labelHeight * DISPLAY_DPI));
     
     // Set basic positioning
     element.style.position = 'absolute';
@@ -894,13 +690,6 @@ function updateElementPosition(element, config) {
     element.style.textAlign = config.align;
     element.style.boxSizing = 'border-box';
     element.style.overflow = 'hidden';
-    
-    // Update label size
-    const previewLabel = document.getElementById('design-preview-label');
-    if (previewLabel) {
-        previewLabel.style.width = `${labelWidth * dpi}px`;
-        previewLabel.style.height = `${labelHeight * dpi}px`;
-    }
 }
 
 function handleElementMouseDown(e) {
@@ -945,12 +734,11 @@ function handleMouseMove(e) {
         const y = e.clientY - labelRect.top - dragOffset.y;
         
         // Convert pixels to inches (using same DPI as print for accuracy)
-        const dpi = 300;
-        const xInches = Math.max(0, Math.min(x / dpi, getLabelWidth() - getElementWidth(selectedElement)));
-        const yInches = Math.max(0, Math.min(y / dpi, getLabelHeight() - getElementHeight(selectedElement)));
+        const xInches = Math.max(0, Math.min(x / DISPLAY_DPI, getLabelWidth() - getElementWidth(selectedElement)));
+        const yInches = Math.max(0, Math.min(y / DISPLAY_DPI, getLabelHeight() - getElementHeight(selectedElement)));
         
-        selectedElement.style.left = `${xInches * dpi}px`;
-        selectedElement.style.top = `${yInches * dpi}px`;
+        selectedElement.style.left = `${xInches * DISPLAY_DPI}px`;
+        selectedElement.style.top = `${yInches * DISPLAY_DPI}px`;
         
         // Update element config
         const elementId = selectedElement.dataset.elementId;
@@ -965,37 +753,36 @@ function handleMouseMove(e) {
         const x = e.clientX - labelRect.left;
         const y = e.clientY - labelRect.top;
         
-        const dpi = 300;
         const elementId = selectedElement.dataset.elementId;
         const config = appState.labelSettings.elements[elementId];
         
         if (config) {
             switch (resizeHandle) {
                 case 'se':
-                    config.width = Math.max(0.1, (x / dpi) - config.x);
-                    config.height = Math.max(0.1, (y / dpi) - config.y);
+                    config.width = Math.max(0.1, (x / DISPLAY_DPI) - config.x);
+                    config.height = Math.max(0.1, (y / DISPLAY_DPI) - config.y);
                     break;
                 case 'sw':
-                    const newWidth = config.width + (config.x - (x / dpi));
-                    const newX = Math.min(config.x + config.width - 0.1, x / dpi);
+                    const newWidth = config.width + (config.x - (x / DISPLAY_DPI));
+                    const newX = Math.min(config.x + config.width - 0.1, x / DISPLAY_DPI);
                     config.width = Math.max(0.1, newWidth);
                     config.x = newX;
-                    config.height = Math.max(0.1, (y / dpi) - config.y);
+                    config.height = Math.max(0.1, (y / DISPLAY_DPI) - config.y);
                     break;
                 case 'ne':
-                    config.width = Math.max(0.1, (x / dpi) - config.x);
-                    const newHeight = config.height + (config.y - (y / dpi));
-                    const newY = Math.min(config.y + config.height - 0.1, y / dpi);
+                    config.width = Math.max(0.1, (x / DISPLAY_DPI) - config.x);
+                    const newHeight = config.height + (config.y - (y / DISPLAY_DPI));
+                    const newY = Math.min(config.y + config.height - 0.1, y / DISPLAY_DPI);
                     config.height = Math.max(0.1, newHeight);
                     config.y = newY;
                     break;
                 case 'nw':
-                    const newWidthNW = config.width + (config.x - (x / dpi));
-                    const newXNW = Math.min(config.x + config.width - 0.1, x / dpi);
+                    const newWidthNW = config.width + (config.x - (x / DISPLAY_DPI));
+                    const newXNW = Math.min(config.x + config.width - 0.1, x / DISPLAY_DPI);
                     config.width = Math.max(0.1, newWidthNW);
                     config.x = newXNW;
-                    const newHeightNW = config.height + (config.y - (y / dpi));
-                    const newYNW = Math.min(config.y + config.height - 0.1, y / dpi);
+                    const newHeightNW = config.height + (config.y - (y / DISPLAY_DPI));
+                    const newYNW = Math.min(config.y + config.height - 0.1, y / DISPLAY_DPI);
                     config.height = Math.max(0.1, newHeightNW);
                     config.y = newYNW;
                     break;
@@ -1201,7 +988,7 @@ function addStaticTextField() {
         };
         
         updateStaticTextList();
-        createLabelElements();
+        updateDesignPreview();
     }
 }
 
@@ -1229,7 +1016,7 @@ function removeStaticTextField(index) {
     appState.labelSettings.elements = newElements;
     
     updateStaticTextList();
-    createLabelElements();
+    updateDesignPreview();
 }
 
 function updateStaticTextList() {
@@ -1253,7 +1040,7 @@ function updateStaticTextList() {
 function updateStaticText(index, text) {
     if (appState.labelSettings.staticTexts[index]) {
         appState.labelSettings.staticTexts[index].text = text;
-        createLabelElements();
+        updateDesignPreview();
     }
 }
 
@@ -1279,15 +1066,18 @@ function resetElementPositions() {
         appState.labelSettings.elements.barcode = getDefaultElementConfig('barcode');
         
         // Reset text position
-        appState.labelSettings.elements.text = getDefaultElementConfig('text');
+        appState.mappedColumns.text.forEach((col, index) => {
+            const elementId = `text-${index}`;
+            appState.labelSettings.elements[elementId] = getDefaultElementConfig(elementId);
+        });
         
         // Reset static text positions
         appState.labelSettings.staticTexts.forEach((staticText, index) => {
             const elementId = `static-${index}`;
-            appState.labelSettings.elements[elementId] = getDefaultElementConfig(`static-${index}`);
+            appState.labelSettings.elements[elementId] = getDefaultElementConfig(elementId);
         });
         
-        createLabelElements();
+        updateDesignPreview();
         deselectAllElements();
     }
 }
@@ -1321,158 +1111,166 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
-    // Simple approach using static barcode images for preview
     const previewLabel = document.getElementById('design-preview-label');
-    
     if (!previewLabel) {
         console.error('Preview label element not found');
         return;
     }
-    
-    // Clear existing content to prevent duplication
-    previewLabel.innerHTML = '';
-    
-    // Create barcode preview with static image
-    const barcodeDiv = document.createElement('div');
-    barcodeDiv.className = 'preview-barcode draggable-element';
-    barcodeDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; right: 10px; height: 60px; display: flex; flex-direction: column; align-items: center; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);';
-    
-    // Use static barcode image based on type
-    const barcodeImg = document.createElement('img');
-    barcodeImg.style.cssText = 'max-width: 100%; height: 40px; object-fit: contain;';
-    barcodeImg.src = getBarcodeImageUrl(appState.labelSettings.barcodeType);
-    barcodeImg.alt = `${appState.labelSettings.barcodeType} Barcode Preview`;
-    
-    const barcodeNumber = document.createElement('div');
-    barcodeNumber.className = 'barcode-number';
-    barcodeNumber.style.cssText = 'font-size: 10px; margin-top: 2px; text-align: center;';
-    
-    // Show sample data or Excel data
-    if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
-        const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
-        barcodeNumber.textContent = sampleBarcode ? sampleBarcode.toString() : 'Sample Barcode';
-    } else {
-        barcodeNumber.textContent = getSampleBarcodeData(appState.labelSettings.barcodeType);
-    }
-    
-    // Add drag functionality
-    barcodeDiv.draggable = true;
-    barcodeDiv.addEventListener('mousedown', handleElementMouseDown);
-    barcodeDiv.addEventListener('mousemove', handleElementMouseMove);
-    barcodeDiv.addEventListener('mouseup', handleElementMouseUp);
-    barcodeDiv.dataset.elementId = 'barcode';
-    
-    // Create barcode element configuration for PDF generation
-    if (!appState.labelSettings.elements.barcode) {
-        appState.labelSettings.elements.barcode = {
-            x: 0.1,
-            y: 0.1,
-            width: 2.0,
-            height: 0.5,
-            fontSize: 8,
-            align: 'center'
-        };
-    }
-    
-    barcodeDiv.appendChild(barcodeImg);
-    barcodeDiv.appendChild(barcodeNumber);
-    previewLabel.appendChild(barcodeDiv);
-    
-    // Create separate draggable text elements for each mapped column
-    let currentTop = 80;
-    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
-        appState.mappedColumns.text.forEach((column, index) => {
-            const textDiv = document.createElement('div');
-            textDiv.className = 'preview-text draggable-element';
-            textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
-            
-            const sampleValue = appState.excelData[0][column.index];
-            textDiv.textContent = sampleValue ? sampleValue.toString() : column.name;
-            
-            // Add drag functionality
-            textDiv.draggable = true;
-            textDiv.addEventListener('mousedown', handleElementMouseDown);
-            textDiv.addEventListener('mousemove', handleElementMouseMove);
-            textDiv.addEventListener('mouseup', handleElementMouseUp);
-            
-            // Store column info for PDF generation
-            textDiv.dataset.columnIndex = column.index;
-            textDiv.dataset.columnName = column.name;
-            textDiv.dataset.elementId = `text-${index}`;
-            
-            // Create element configuration for PDF generation
-            const elementId = `text-${index}`;
-            if (!appState.labelSettings.elements[elementId]) {
-                appState.labelSettings.elements[elementId] = {
-                    x: 0.1, // 10px in inches
-                    y: currentTop / 300, // Convert pixels to inches (300 DPI)
-                    width: 2.0, // 2 inches
-                    height: 0.2, // 0.2 inches
-                    fontSize: 8,
-                    align: 'center'
-                };
-            }
-            
-            previewLabel.appendChild(textDiv);
-            currentTop += 25; // Space between text elements
-        });
-    } else {
-        // Default text if no columns mapped
-        const textDiv = document.createElement('div');
-        textDiv.className = 'preview-text draggable-element';
-        textDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 10px; text-align: center; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
-        textDiv.textContent = 'Sample Product Information';
-        textDiv.draggable = true;
-        textDiv.addEventListener('mousedown', handleElementMouseDown);
-        textDiv.addEventListener('mousemove', handleElementMouseMove);
-        textDiv.addEventListener('mouseup', handleElementMouseUp);
-        textDiv.dataset.elementId = 'text-0';
+
+    // Update label size
+    const labelWidth = getLabelWidth();
+    const labelHeight = getLabelHeight();
+    previewLabel.style.width = `${labelWidth * DISPLAY_DPI}px`; // Convert inches to pixels for display
+    previewLabel.style.height = `${labelHeight * DISPLAY_DPI}px`;
+
+    // Barcode element
+    let barcodeElement = document.getElementById('element-barcode');
+    if (!barcodeElement) {
+        barcodeElement = document.createElement('div');
+        barcodeElement.className = 'preview-barcode';
+        barcodeElement.id = 'element-barcode';
+        barcodeElement.dataset.elementId = 'barcode';
         
-        // Create default element configuration
-        if (!appState.labelSettings.elements['text-0']) {
-            appState.labelSettings.elements['text-0'] = {
-                x: 0.1,
-                y: currentTop / 300,
-                width: 2.0,
-                height: 0.2,
-                fontSize: 8,
-                align: 'center'
-            };
+        const barcodeContainer = document.createElement('div');
+        barcodeContainer.className = 'barcode-container';
+        
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.id = 'design-preview-barcode';
+        svg.className = 'barcode-svg';
+        
+        const barcodeNumber = document.createElement('div');
+        barcodeNumber.className = 'barcode-number';
+        
+        barcodeContainer.appendChild(svg);
+        barcodeContainer.appendChild(barcodeNumber);
+        barcodeElement.appendChild(barcodeContainer);
+        
+        barcodeElement.addEventListener('mousedown', handleElementMouseDown);
+        barcodeElement.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectElement(barcodeElement);
+        });
+        
+        previewLabel.appendChild(barcodeElement);
+    }
+
+    // Update barcode content
+    let barcodeConfig = appState.labelSettings.elements.barcode;
+    if (!barcodeConfig) {
+        barcodeConfig = getDefaultElementConfig('barcode');
+        appState.labelSettings.elements.barcode = barcodeConfig;
+    }
+    updateElementPosition(barcodeElement, barcodeConfig);
+    
+    const sampleBarcode = (appState.mappedColumns.barcode && appState.excelData.length > 0)
+        ? appState.excelData[0][appState.mappedColumns.barcode.index]
+        : getSampleBarcodeData(appState.labelSettings.barcodeType);
+    
+    const barcodeSvg = barcodeElement.querySelector('.barcode-svg');
+    const barcodeNumberDisplay = barcodeElement.querySelector('.barcode-number');
+    
+    if (sampleBarcode) {
+        try {
+            JsBarcode(barcodeSvg, sampleBarcode, {
+                format: appState.labelSettings.barcodeType,
+                width: 2,
+                height: 50,
+                displayValue: false
+            });
+            barcodeNumberDisplay.textContent = sampleBarcode;
+        } catch (error) {
+            barcodeSvg.innerHTML = '<text>Invalid Barcode</text>';
+            barcodeNumberDisplay.textContent = 'Invalid Data';
+        }
+    }
+
+    // Text container - DEPRECATED, replaced by individual text elements
+    let textContainer = document.getElementById('element-textContainer');
+    if (textContainer) {
+        textContainer.remove();
+    }
+    
+    // Create/update individual text elements for each mapped column
+    appState.mappedColumns.text.forEach((column, index) => {
+        const elementId = `text-${index}`;
+        let textElement = document.getElementById(`element-${elementId}`);
+
+        if (!textElement) {
+            textElement = document.createElement('div');
+            textElement.className = 'preview-text';
+            textElement.id = `element-${elementId}`;
+            textElement.dataset.elementId = elementId;
+            
+            textElement.addEventListener('mousedown', handleElementMouseDown);
+            textElement.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectElement(textElement);
+            });
+            
+            previewLabel.appendChild(textElement);
+        }
+
+        // Set content
+        textElement.textContent = (appState.excelData && appState.excelData.length > 0)
+            ? (appState.excelData[0][column.index] || column.name)
+            : column.name;
+
+        // Get or create config
+        let textConfig = appState.labelSettings.elements[elementId];
+        if (!textConfig) {
+            textConfig = getDefaultElementConfig(elementId);
+            appState.labelSettings.elements[elementId] = textConfig;
+        }
+        updateElementPosition(textElement, textConfig);
+    });
+
+    // Remove text elements that are no longer mapped
+    const textElements = previewLabel.querySelectorAll('.preview-text');
+    textElements.forEach(el => {
+        const elementId = el.dataset.elementId;
+        if (elementId.startsWith('text-')) {
+            const index = parseInt(elementId.split('-')[1]);
+            if (index >= appState.mappedColumns.text.length) {
+                el.remove();
+                delete appState.labelSettings.elements[elementId];
+            }
+        }
+    });
+
+    // Static text elements
+    appState.labelSettings.staticTexts.forEach((staticText, index) => {
+        const elementId = `static-${index}`;
+        let staticElement = document.getElementById(`element-${elementId}`);
+        if (!staticElement) {
+            staticElement = document.createElement('div');
+            staticElement.className = 'preview-static';
+            staticElement.id = `element-${elementId}`;
+            staticElement.dataset.elementId = elementId;
+            
+            staticElement.addEventListener('mousedown', handleElementMouseDown);
+            staticElement.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectElement(staticElement);
+            });
+            
+            previewLabel.appendChild(staticElement);
         }
         
-        previewLabel.appendChild(textDiv);
-        currentTop += 25;
-    }
-    
-    // Add static text elements (only if they exist and not already added)
-    if (appState.labelSettings.staticTexts && appState.labelSettings.staticTexts.length > 0) {
-        appState.labelSettings.staticTexts.forEach((staticText, index) => {
-            const staticDiv = document.createElement('div');
-            staticDiv.className = 'preview-static draggable-element';
-            staticDiv.style.cssText = `position: absolute; top: ${currentTop}px; left: 10px; right: 10px; font-size: 8px; text-align: center; font-style: italic; width: fit-content; max-width: calc(100% - 20px); margin: 0 auto; cursor: move; border: 1px dashed #ccc; padding: 2px; background: rgba(0,0,0,0.05);`;
-            staticDiv.textContent = staticText.text;
-            staticDiv.draggable = true;
-            staticDiv.addEventListener('mousedown', handleElementMouseDown);
-            staticDiv.addEventListener('mousemove', handleElementMouseMove);
-            staticDiv.addEventListener('mouseup', handleElementMouseUp);
-            staticDiv.dataset.elementId = `static-${index}`;
-            
-            // Create element configuration for PDF generation
-            const elementId = `static-${index}`;
-            if (!appState.labelSettings.elements[elementId]) {
-                appState.labelSettings.elements[elementId] = {
-                    x: 0.1,
-                    y: currentTop / 300,
-                    width: 2.0,
-                    height: 0.15,
-                    fontSize: 6,
-                    align: 'center'
-                };
-            }
-            
-            previewLabel.appendChild(staticDiv);
-            currentTop += 20; // Space between static text elements
-        });
+        staticElement.textContent = staticText.text;
+        let staticConfig = appState.labelSettings.elements[elementId];
+        if (!staticConfig) {
+            staticConfig = getDefaultElementConfig(elementId);
+            appState.labelSettings.elements[elementId] = staticConfig;
+        }
+        updateElementPosition(staticElement, staticConfig);
+    });
+
+    // Remove deleted static text elements
+    const staticElements = previewLabel.querySelectorAll('.preview-static');
+    if (staticElements.length > appState.labelSettings.staticTexts.length) {
+        for (let i = appState.labelSettings.staticTexts.length; i < staticElements.length; i++) {
+            staticElements[i].remove();
+        }
     }
 }
 
