@@ -1313,11 +1313,6 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
-    console.log('Updating design preview...', {
-        mappedColumns: appState.mappedColumns,
-        excelDataLength: appState.excelData ? appState.excelData.length : 0,
-        barcodeType: appState.labelSettings.barcodeType
-    });
     
     // Update barcode content with example barcodes
     const barcodeElement = document.getElementById('element-barcode');
@@ -1326,48 +1321,31 @@ function updateDesignPreview() {
         const barcodeNumber = barcodeElement.querySelector('.barcode-number');
         
         if (svg) {
-            // Clear the SVG first
-            svg.innerHTML = '';
+            // Get barcode data - prioritize Excel data like Step 2 does
+            let barcodeData = null;
             
-            // Get example barcode data based on selected type
-            let barcodeData = getExampleBarcodeData(appState.labelSettings.barcodeType);
-            
-            // If we have mapped data, use the first row's barcode data
             if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
                 const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
-                console.log('Sample barcode from Excel:', sampleBarcode);
                 if (sampleBarcode) {
-                    const sampleData = sampleBarcode.toString().trim();
-                    // For preview, be more lenient - use the data even if it doesn't perfectly match the barcode type
-                    if (sampleData.length > 0) {
-                        barcodeData = sampleData;
-                        console.log('Using Excel barcode data for preview:', barcodeData);
-                    } else {
-                        console.log('Excel barcode data empty, using example:', barcodeData);
-                    }
+                    barcodeData = sampleBarcode.toString().trim();
                 }
-            } else {
-                console.log('No mapped barcode column or Excel data, using example:', barcodeData);
             }
             
-            // Validate the barcode data before generation
-            if (!validateBarcodeData(barcodeData, appState.labelSettings.barcodeType)) {
-                console.warn('Invalid barcode data for type:', appState.labelSettings.barcodeType, 'data:', barcodeData);
+            // If no Excel data, use example data
+            if (!barcodeData) {
                 barcodeData = getExampleBarcodeData(appState.labelSettings.barcodeType);
             }
             
             try {
-                // Generate barcode with appropriate settings
-                const barcodeOptions = getBarcodeOptions(appState.labelSettings.barcodeType);
-                
-                // Check if JsBarcode is available
-                if (typeof JsBarcode === 'undefined') {
-                    throw new Error('JsBarcode library not loaded');
-                }
-                
-                console.log('Generating barcode with:', { barcodeData, barcodeOptions });
-                JsBarcode(svg, barcodeData, barcodeOptions);
-                console.log('Barcode generated successfully');
+                // Use the same simple approach as Step 2
+                JsBarcode(svg, barcodeData, {
+                    format: appState.labelSettings.barcodeType,
+                    width: 2,
+                    height: 50,
+                    displayValue: true,
+                    fontSize: 12,
+                    textMargin: 2
+                });
                 
                 // Update barcode number display
                 if (barcodeNumber) {
@@ -1397,18 +1375,13 @@ function updateDesignPreview() {
     
     // Update text elements in container
     if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
-        console.log('Updating text elements:', appState.mappedColumns.text);
         appState.mappedColumns.text.forEach((column, index) => {
             const textElement = document.getElementById(`text-element-${index}`);
-            console.log(`Text element ${index}:`, textElement);
             if (textElement && appState.excelData && appState.excelData.length > 0) {
                 const sampleValue = appState.excelData[0][column.index];
-                console.log(`Sample value for ${column.name}:`, sampleValue);
                 textElement.textContent = sampleValue ? sampleValue.toString() : column.name;
             }
         });
-    } else {
-        console.log('No text columns mapped');
     }
     
     // Update static text elements
