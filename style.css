@@ -575,6 +575,9 @@ body {
   min-height: 100px;
   overflow: hidden;
   cursor: crosshair;
+  /* Scale down for screen display while maintaining print accuracy */
+  transform: scale(0.33);
+  transform-origin: top left;
 }
 
 .preview-label.design-mode {

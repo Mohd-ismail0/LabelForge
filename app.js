@@ -870,8 +870,8 @@ function updateElementPosition(element, config) {
         ? appState.labelSettings.customHeight 
         : LABEL_SIZES[appState.labelSettings.size].height;
     
-    // Convert inches to pixels (assuming 100 DPI for preview)
-    const dpi = 100;
+    // Convert inches to pixels (using same DPI as print for accuracy)
+    const dpi = 300;
     const x = Math.max(0, Math.min(config.x * dpi, (labelWidth - config.width) * dpi));
     const y = Math.max(0, Math.min(config.y * dpi, (labelHeight - config.height) * dpi));
     const width = Math.max(20, Math.min(config.width * dpi, labelWidth * dpi));
@@ -937,8 +937,8 @@ function handleMouseMove(e) {
         const x = e.clientX - labelRect.left - dragOffset.x;
         const y = e.clientY - labelRect.top - dragOffset.y;
         
-        // Convert pixels to inches
-        const dpi = 100;
+        // Convert pixels to inches (using same DPI as print for accuracy)
+        const dpi = 300;
         const xInches = Math.max(0, Math.min(x / dpi, getLabelWidth() - getElementWidth(selectedElement)));
         const yInches = Math.max(0, Math.min(y / dpi, getLabelHeight() - getElementHeight(selectedElement)));
         
@@ -958,7 +958,7 @@ function handleMouseMove(e) {
         const x = e.clientX - labelRect.left;
         const y = e.clientY - labelRect.top;
         
-        const dpi = 100;
+        const dpi = 300;
         const elementId = selectedElement.dataset.elementId;
         const config = appState.labelSettings.elements[elementId];
         
