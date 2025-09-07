@@ -1316,87 +1316,101 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
-    // Use the same simple approach as Step 2 - direct DOM manipulation
+    // Simple approach using static barcode images for preview
     const previewLabel = document.getElementById('design-preview-label');
-    const previewBarcode = document.getElementById('design-preview-barcode');
-    const previewText = document.getElementById('design-preview-text');
     
-    // Create static elements if they don't exist (like Step 2)
-    if (!previewBarcode) {
-        const barcodeDiv = document.createElement('div');
-        barcodeDiv.className = 'preview-barcode';
-        barcodeDiv.innerHTML = '<svg id="design-preview-barcode"></svg><div class="barcode-number" id="design-preview-barcode-number"></div>';
-        previewLabel.appendChild(barcodeDiv);
-    }
+    // Clear existing content
+    previewLabel.innerHTML = '';
     
-    if (!previewText) {
-        const textDiv = document.createElement('div');
-        textDiv.className = 'preview-text';
-        textDiv.id = 'design-preview-text';
-        previewLabel.appendChild(textDiv);
-    }
+    // Create barcode preview with static image
+    const barcodeDiv = document.createElement('div');
+    barcodeDiv.className = 'preview-barcode';
+    barcodeDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; right: 10px; height: 60px; display: flex; flex-direction: column; align-items: center;';
     
-    // Update barcode (same as Step 2)
-    const barcodeSvg = document.getElementById('design-preview-barcode');
-    const barcodeNumber = document.getElementById('design-preview-barcode-number');
+    // Use static barcode image based on type
+    const barcodeImg = document.createElement('img');
+    barcodeImg.style.cssText = 'max-width: 100%; height: 40px; object-fit: contain;';
+    barcodeImg.src = getBarcodeImageUrl(appState.labelSettings.barcodeType);
+    barcodeImg.alt = `${appState.labelSettings.barcodeType} Barcode Preview`;
     
+    const barcodeNumber = document.createElement('div');
+    barcodeNumber.className = 'barcode-number';
+    barcodeNumber.style.cssText = 'font-size: 10px; margin-top: 2px; text-align: center;';
+    
+    // Show sample data or Excel data
     if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
         const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
-        if (sampleBarcode) {
-            try {
-                JsBarcode(barcodeSvg, sampleBarcode, {
-                    format: appState.labelSettings.barcodeType,
-                    width: 2,
-                    height: 50,
-                    displayValue: true,
-                    fontSize: 12,
-                    textMargin: 2
-                });
-                if (barcodeNumber) {
-                    barcodeNumber.textContent = sampleBarcode;
-                }
-            } catch (error) {
-                barcodeSvg.innerHTML = '<text>Invalid barcode</text>';
-                if (barcodeNumber) {
-                    barcodeNumber.textContent = 'Invalid';
-                }
-            }
-        }
+        barcodeNumber.textContent = sampleBarcode ? sampleBarcode.toString() : 'Sample Barcode';
     } else {
-        barcodeSvg.innerHTML = '';
-        if (barcodeNumber) {
-            barcodeNumber.textContent = '';
-        }
+        barcodeNumber.textContent = getSampleBarcodeData(appState.labelSettings.barcodeType);
     }
     
-    // Update text (same as Step 2)
-    const textElement = document.getElementById('design-preview-text');
+    barcodeDiv.appendChild(barcodeImg);
+    barcodeDiv.appendChild(barcodeNumber);
+    previewLabel.appendChild(barcodeDiv);
+    
+    // Create text preview
+    const textDiv = document.createElement('div');
+    textDiv.className = 'preview-text';
+    textDiv.style.cssText = 'position: absolute; top: 80px; left: 10px; right: 10px; font-size: 10px; text-align: center;';
+    
     if (appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
         const textParts = appState.mappedColumns.text.map(col => {
             const value = appState.excelData[0][col.index];
             return value ? value.toString() : '';
         }).filter(text => text.length > 0);
         
-        textElement.textContent = textParts.join(' | ') || 'Sample Product Information';
+        textDiv.textContent = textParts.join(' | ') || 'Sample Product Information';
     } else {
-        textElement.textContent = 'Sample Product Information';
+        textDiv.textContent = 'Sample Product Information';
     }
     
-    // Update static text elements
+    previewLabel.appendChild(textDiv);
+    
+    // Add static text elements
     appState.labelSettings.staticTexts.forEach((staticText, index) => {
-        const element = document.getElementById(`element-static-${index}`);
-        if (element) {
-            element.textContent = staticText.text;
-        }
+        const staticDiv = document.createElement('div');
+        staticDiv.className = 'preview-static';
+        staticDiv.style.cssText = `position: absolute; top: ${100 + (index * 20)}px; left: 10px; right: 10px; font-size: 8px; text-align: center; font-style: italic;`;
+        staticDiv.textContent = staticText.text;
+        previewLabel.appendChild(staticDiv);
     });
-    
-    // Update label size
-    const size = appState.labelSettings.size;
-    const labelWidth = size === 'custom' ? appState.labelSettings.customWidth : LABEL_SIZES[size].width;
-    const labelHeight = size === 'custom' ? appState.labelSettings.customHeight : LABEL_SIZES[size].height;
-    
-    // Update all element positions when size changes
-    createLabelElements();
+}
+
+function getBarcodeImageUrl(barcodeType) {
+    // Return static barcode image URLs for preview
+    const baseUrl = 'https://via.placeholder.com/200x40/000000/FFFFFF?text=';
+    switch (barcodeType) {
+        case 'EAN13':
+            return `${baseUrl}EAN-13+BARCODE`;
+        case 'CODE128':
+            return `${baseUrl}CODE+128+BARCODE`;
+        case 'CODE39':
+            return `${baseUrl}CODE+39+BARCODE`;
+        case 'UPC':
+            return `${baseUrl}UPC-A+BARCODE`;
+        case 'ITF':
+            return `${baseUrl}ITF-14+BARCODE`;
+        default:
+            return `${baseUrl}SAMPLE+BARCODE`;
+    }
+}
+
+function getSampleBarcodeData(barcodeType) {
+    switch (barcodeType) {
+        case 'EAN13':
+            return '1234567890123';
+        case 'CODE128':
+            return 'SAMPLE123';
+        case 'CODE39':
+            return 'SAMPLE';
+        case 'UPC':
+            return '123456789012';
+        case 'ITF':
+            return '12345678901234';
+        default:
+            return '1234567890123';
+    }
 }
 
 function getExampleBarcodeData(barcodeType) {
