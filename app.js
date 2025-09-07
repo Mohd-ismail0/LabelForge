@@ -96,7 +96,10 @@ function setupEventListeners() {
     }
     
     if (barcodeType) {
-        barcodeType.addEventListener('change', updateDesignPreview);
+        barcodeType.addEventListener('change', (e) => {
+            appState.labelSettings.barcodeType = e.target.value;
+            updateDesignPreview();
+        });
     }
     
     if (staticText) {
@@ -1438,6 +1441,13 @@ function setupManualQuantities() {
     tbody.innerHTML = '';
     
     appState.excelData.forEach((row, index) => {
+        // Skip rows with blank or 0 quantity if quantity column is mapped
+        if (appState.mappedColumns.quantity) {
+            const qty = parseInt(row[appState.mappedColumns.quantity.index]);
+            if (!qty || qty <= 0) {
+                return; // Skip this row
+            }
+        }
         const tr = document.createElement('tr');
         
         // Product info
@@ -1476,7 +1486,11 @@ function updateQuantitySummary() {
         case 'column':
             if (appState.mappedColumns.quantity) {
                 totalLabels = appState.excelData.reduce((sum, row) => {
-                    const qty = parseInt(row[appState.mappedColumns.quantity.index]) || 1;
+                    const qty = parseInt(row[appState.mappedColumns.quantity.index]);
+                    // Skip rows with blank, 0, or invalid quantity
+                    if (!qty || qty <= 0) {
+                        return sum;
+                    }
                     return sum + qty;
                 }, 0);
             } else {
@@ -1519,7 +1533,11 @@ function updateFinalSummary() {
         case 'column':
             if (appState.mappedColumns.quantity) {
                 totalLabels = appState.excelData.reduce((sum, row) => {
-                    const qty = parseInt(row[appState.mappedColumns.quantity.index]) || 1;
+                    const qty = parseInt(row[appState.mappedColumns.quantity.index]);
+                    // Skip rows with blank, 0, or invalid quantity
+                    if (!qty || qty <= 0) {
+                        return sum;
+                    }
                     return sum + qty;
                 }, 0);
             } else {
@@ -1578,7 +1596,12 @@ function generateLabels() {
         switch (appState.quantitySettings.type) {
             case 'column':
                 if (appState.mappedColumns.quantity) {
-                    quantity = parseInt(row[appState.mappedColumns.quantity.index]) || 1;
+                    const qty = parseInt(row[appState.mappedColumns.quantity.index]);
+                    // Skip rows with blank, 0, or invalid quantity
+                    if (!qty || qty <= 0) {
+                        return; // Skip this row entirely
+                    }
+                    quantity = qty;
                 }
                 break;
             case 'manual':
