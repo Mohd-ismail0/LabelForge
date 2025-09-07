@@ -2470,6 +2470,12 @@ function createLabelTemplate() {
     
     console.log('Creating label template...');
     
+    // Check if we have generated labels
+    if (!appState.generatedLabels || appState.generatedLabels.length === 0) {
+        console.error('No generated labels available for template creation');
+        return null;
+    }
+    
     // Create template container
     const templateId = 'label-template-container';
     let template = document.getElementById(templateId);
@@ -2508,14 +2514,23 @@ function createLabelTemplate() {
     template.appendChild(canvas);
     
     // Get the first label's structure to create the template
-    if (appState.generatedLabels.length > 0) {
-        const firstLabel = appState.generatedLabels[0];
-        const rootElement = firstLabel.elements.find(el => el.id === 'root');
-        if (rootElement) {
-            const rootDiv = renderElement(rootElement, firstLabel);
-            canvas.appendChild(rootDiv);
-        }
+    const firstLabel = appState.generatedLabels[0];
+    console.log('First label structure:', firstLabel);
+    
+    if (!firstLabel.elements) {
+        console.error('First label has no elements property');
+        return null;
     }
+    
+    const rootElement = firstLabel.elements.find(el => el.id === 'root');
+    if (!rootElement) {
+        console.error('No root element found in first label');
+        return null;
+    }
+    
+    console.log('Root element found:', rootElement);
+    const rootDiv = renderElement(rootElement, firstLabel);
+    canvas.appendChild(rootDiv);
     
     labelTemplate = {
         container: template,
@@ -2529,11 +2544,15 @@ function createLabelTemplate() {
 }
 
 // Fast label generation using template
-async function getLabelBlob(label) {
+async function getLabelBlob(label, labelIndex = 0) {
     try {
-        console.log(`getLabelBlob: Generating label ${label.index + 1}...`);
+        console.log(`getLabelBlob: Generating label ${labelIndex + 1}...`);
         
         const template = createLabelTemplate();
+        if (!template) {
+            console.warn('Template creation failed, falling back to individual rendering');
+            return await getLabelBlobFallback(label, labelIndex);
+        }
         
         // Update dynamic content in the template
         updateTemplateContent(template.canvas, label);
@@ -2554,6 +2573,72 @@ async function getLabelBlob(label) {
         
     } catch (error) {
         console.error('Error in getLabelBlob:', error);
+        console.warn('Falling back to individual rendering');
+        return await getLabelBlobFallback(label, labelIndex);
+    }
+}
+
+// Fallback method using individual DOM creation
+async function getLabelBlobFallback(label, labelIndex = 0) {
+    try {
+        console.log(`getLabelBlobFallback: Generating label ${labelIndex + 1}...`);
+        
+        // Create a unique container for this label
+        const uniqueId = `label-renderer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const renderer = document.createElement('div');
+        renderer.id = uniqueId;
+        renderer.style.position = 'absolute';
+        renderer.style.left = '-9999px';
+        renderer.style.top = '-9999px';
+        renderer.style.visibility = 'hidden';
+        document.body.appendChild(renderer);
+
+        const canvas = document.createElement('div');
+        canvas.className = 'label-canvas';
+        canvas.style.background = '#ffffff';
+        canvas.style.border = 'none';
+        canvas.style.boxShadow = 'none';
+        canvas.style.position = 'relative';
+        renderer.appendChild(canvas);
+        
+        // Set canvas size for high-quality export (300 DPI)
+        const dpi = 300;
+        const labelWidthInches = getLabelWidth();
+        const labelHeightInches = getLabelHeight();
+        const labelWidthPx = labelWidthInches * dpi;
+        const labelHeightPx = labelHeightInches * dpi;
+        
+        canvas.style.width = `${labelWidthPx}px`;
+        canvas.style.height = `${labelHeightPx}px`;
+
+        // Render root element with the specific label data
+        const rootElement = label.elements.find(el => el.id === 'root');
+        if (rootElement) {
+            const rootDiv = renderElement(rootElement, label);
+            canvas.appendChild(rootDiv);
+        } else {
+            console.warn('getLabelBlobFallback: No root element found in label');
+        }
+
+        // Use html2canvas to get a canvas of the rendered label
+        const outputCanvas = await html2canvas(canvas, {
+            width: labelWidthPx,
+            height: labelHeightPx,
+            scale: 1,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            allowTaint: true,
+            logging: false
+        });
+        
+        const blob = await new Promise(resolve => outputCanvas.toBlob(resolve, 'image/png', 1.0));
+        
+        // Clean up the temporary DOM element
+        document.body.removeChild(renderer);
+        
+        return blob;
+    } catch (error) {
+        console.error('Error in getLabelBlobFallback:', error);
         throw error;
     }
 }
@@ -2748,7 +2833,7 @@ async function downloadPDF() {
                     const globalIndex = i + batchIndex;
                     try {
                         console.log(`Generating blob for label ${globalIndex + 1}...`);
-                        const blob = await getLabelBlob(label);
+                        const blob = await getLabelBlob(label, globalIndex);
                         return { blob, index: globalIndex, success: true };
                     } catch (error) {
                         console.error(`Error generating blob for label ${globalIndex + 1}:`, error);
@@ -2863,7 +2948,7 @@ async function downloadZIP() {
                     const globalIndex = i + batchIndex;
                     try {
                         console.log(`Generating blob for label ${globalIndex + 1}...`);
-                        const blob = await getLabelBlob(label);
+                        const blob = await getLabelBlob(label, globalIndex);
                         return { blob, index: globalIndex, success: true };
                     } catch (error) {
                         console.error(`Error generating blob for label ${globalIndex + 1}:`, error);
