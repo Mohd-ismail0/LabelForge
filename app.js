@@ -1313,6 +1313,12 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
+    console.log('Updating design preview...', {
+        mappedColumns: appState.mappedColumns,
+        excelDataLength: appState.excelData ? appState.excelData.length : 0,
+        barcodeType: appState.labelSettings.barcodeType
+    });
+    
     // Update barcode content with example barcodes
     const barcodeElement = document.getElementById('element-barcode');
     if (barcodeElement) {
@@ -1329,12 +1335,19 @@ function updateDesignPreview() {
             // If we have mapped data, use the first row's barcode data
             if (appState.mappedColumns.barcode && appState.excelData.length > 0) {
                 const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
+                console.log('Sample barcode from Excel:', sampleBarcode);
                 if (sampleBarcode) {
                     const sampleData = sampleBarcode.toString().trim();
-                    if (validateBarcodeData(sampleData, appState.labelSettings.barcodeType)) {
+                    // For preview, be more lenient - use the data even if it doesn't perfectly match the barcode type
+                    if (sampleData.length > 0) {
                         barcodeData = sampleData;
+                        console.log('Using Excel barcode data for preview:', barcodeData);
+                    } else {
+                        console.log('Excel barcode data empty, using example:', barcodeData);
                     }
                 }
+            } else {
+                console.log('No mapped barcode column or Excel data, using example:', barcodeData);
             }
             
             // Validate the barcode data before generation
@@ -1352,7 +1365,9 @@ function updateDesignPreview() {
                     throw new Error('JsBarcode library not loaded');
                 }
                 
+                console.log('Generating barcode with:', { barcodeData, barcodeOptions });
                 JsBarcode(svg, barcodeData, barcodeOptions);
+                console.log('Barcode generated successfully');
                 
                 // Update barcode number display
                 if (barcodeNumber) {
@@ -1382,13 +1397,18 @@ function updateDesignPreview() {
     
     // Update text elements in container
     if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
+        console.log('Updating text elements:', appState.mappedColumns.text);
         appState.mappedColumns.text.forEach((column, index) => {
             const textElement = document.getElementById(`text-element-${index}`);
+            console.log(`Text element ${index}:`, textElement);
             if (textElement && appState.excelData && appState.excelData.length > 0) {
                 const sampleValue = appState.excelData[0][column.index];
+                console.log(`Sample value for ${column.name}:`, sampleValue);
                 textElement.textContent = sampleValue ? sampleValue.toString() : column.name;
             }
         });
+    } else {
+        console.log('No text columns mapped');
     }
     
     // Update static text elements
