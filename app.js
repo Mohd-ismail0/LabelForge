@@ -93,7 +93,7 @@ function setupEventListeners() {
     if (barcodeType) {
         barcodeType.addEventListener('change', (e) => {
             appState.labelSettings.barcodeType = e.target.value;
-            updateDesignPreview();
+            renderCanvas();
         });
     }
     
@@ -628,6 +628,34 @@ function initializeDefaultElements() {
     
     appState.labelSettings.elements = [rootElement];
     appState.labelSettings.nextElementId = 1;
+    
+    // Auto-add elements from Step 2 mapping
+    addMappedElements();
+}
+
+function addMappedElements() {
+    // Add barcode element if mapped
+    if (appState.mappedColumns.barcode) {
+        addElement('barcode', 'root', {
+            height: 50,
+            showText: true
+        });
+    }
+    
+    // Add text elements for each mapped text column
+    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
+        appState.mappedColumns.text.forEach((column, index) => {
+            addElement('text', 'root', {
+                content: column.name,
+                fontSize: 12,
+                color: '#000000',
+                fontWeight: 'normal',
+                textAlign: 'left',
+                columnIndex: column.index,
+                columnName: column.name
+            });
+        });
+    }
 }
 
 // Core Element Management Functions
@@ -753,21 +781,21 @@ function getDefaultStyle(type) {
     return defaults[type] || defaults.container;
 }
 
-// Event Handlers for Adding Elements
-function addFlexContainer() {
+// Event Handlers for Adding Elements (Global functions accessible from HTML onclick)
+window.addFlexContainer = function() {
     const selectedId = appState.labelSettings.selectedElementId || 'root';
     addElement('container', selectedId);
-}
+};
 
-function addTextElement() {
+window.addTextElement = function() {
     const selectedId = appState.labelSettings.selectedElementId || 'root';
     addElement('text', selectedId);
-}
+};
 
-function addBarcodeElement() {
+window.addBarcodeElement = function() {
     const selectedId = appState.labelSettings.selectedElementId || 'root';
     addElement('barcode', selectedId);
-}
+};
 
 // Rendering Functions
 function renderCanvas() {
@@ -782,6 +810,18 @@ function renderCanvas() {
     
     // Clear canvas
     canvas.innerHTML = '';
+    
+    // Add click handler to canvas for deselection
+    canvas.addEventListener('click', (e) => {
+        if (e.target === canvas) {
+            selectedElements.clear();
+            appState.labelSettings.selectedElementId = null;
+            updateSelectionUI();
+            renderElementTree();
+            renderProperties();
+            updateGroupButtons();
+        }
+    });
     
     // Render root element
     const rootElement = getElementById('root');
@@ -851,7 +891,15 @@ function renderContainer(div, element) {
 
 function renderText(div, element) {
     const textSpan = document.createElement('span');
-    textSpan.textContent = element.properties.content || 'Text';
+    
+    // Use actual Excel data if available and element is mapped to a column
+    let textContent = element.properties.content || 'Text';
+    if (element.properties.columnIndex !== undefined && appState.excelData && appState.excelData.length > 0) {
+        const value = appState.excelData[0][element.properties.columnIndex];
+        textContent = value ? value.toString() : element.properties.columnName || textContent;
+    }
+    
+    textSpan.textContent = textContent;
     textSpan.style.fontSize = `${element.properties.fontSize || 12}px`;
     textSpan.style.color = element.properties.color || '#000000';
     textSpan.style.fontWeight = element.properties.fontWeight || 'normal';
@@ -882,14 +930,6 @@ function renderBarcode(div, element) {
     }
     
     div.appendChild(svg);
-    
-    // Add barcode text if enabled
-    if (element.properties.showText) {
-        const textDiv = document.createElement('div');
-        textDiv.className = 'barcode-text';
-        textDiv.textContent = barcodeData;
-        div.appendChild(textDiv);
-    }
 }
 
 function renderElementTree() {
@@ -995,10 +1035,12 @@ function updateGroupButtons() {
     
     const hasSelection = selectedElements.size > 0;
     const canGroup = selectedElements.size > 1;
+    const selectedElement = appState.labelSettings.selectedElementId ? getElementById(appState.labelSettings.selectedElementId) : null;
+    const canUngroup = selectedElement && selectedElement.type === 'container' && selectedElement.children.length > 0;
     
     if (groupBtn) groupBtn.disabled = !canGroup;
-    if (ungroupBtn) ungroupBtn.disabled = !hasSelection;
-    if (deleteBtn) deleteBtn.disabled = !hasSelection;
+    if (ungroupBtn) ungroupBtn.disabled = !canUngroup;
+    if (deleteBtn) deleteBtn.disabled = !hasSelection || appState.labelSettings.selectedElementId === 'root';
 }
 
 function renderProperties() {
@@ -1170,12 +1212,25 @@ function updateSelectedElementProperties() {
     renderCanvas();
 }
 
-// Grouping Functions
-function groupSelected() {
+// Grouping Functions (Global functions accessible from HTML onclick)
+window.groupSelected = function() {
     if (selectedElements.size < 2) return;
     
     const selectedIds = Array.from(selectedElements);
-    const firstElement = getElementById(selectedIds[0]);
+    const elementsToGroup = selectedIds.map(id => getElementById(id)).filter(Boolean);
+
+    if (elementsToGroup.length !== selectedIds.length) {
+        console.error("Some selected elements could not be found.");
+        return;
+    }
+
+    const parentId = elementsToGroup[0].parent;
+    if (!elementsToGroup.every(el => el.parent === parentId)) {
+        showError('Grouping Error', 'You can only group elements that are on the same level (siblings).');
+        return;
+    }
+    
+    const firstElement = elementsToGroup[0];
     if (!firstElement) return;
     
     // Create new container
@@ -1183,19 +1238,16 @@ function groupSelected() {
     container.name = 'Group';
     
     // Move selected elements into the container
-    selectedIds.forEach(id => {
-        const element = getElementById(id);
-        if (element) {
-            // Remove from current parent
-            const parent = getElementById(element.parent);
-            if (parent) {
-                parent.children = parent.children.filter(childId => childId !== id);
-            }
-            
-            // Add to container
-            element.parent = container.id;
-            container.children.push(id);
+    elementsToGroup.forEach(element => {
+        // Remove from current parent
+        const parent = getElementById(element.parent);
+        if (parent) {
+            parent.children = parent.children.filter(childId => childId !== element.id);
         }
+        
+        // Add to container
+        element.parent = container.id;
+        container.children.push(element.id);
     });
     
     // Select the new container
@@ -1204,9 +1256,9 @@ function groupSelected() {
     
     renderCanvas();
     renderElementTree();
-}
+};
 
-function ungroupSelected() {
+window.ungroupSelected = function() {
     const selectedId = appState.labelSettings.selectedElementId;
     if (!selectedId) return;
     
@@ -1227,15 +1279,16 @@ function ungroupSelected() {
     
     // Remove the container
     deleteElement(selectedId);
-}
+};
 
-function deleteSelected() {
+window.deleteSelected = function() {
     selectedElements.forEach(id => {
         deleteElement(id);
     });
     selectedElements.clear();
     appState.labelSettings.selectedElementId = null;
-}
+    renderProperties();
+};
 
 // Helper function to convert existing static text to auto-sizing
 function convertExistingStaticTextToAutoSize() {
@@ -1766,7 +1819,7 @@ function handleLabelSizeChange(e) {
         }
     }
     
-    updateDesignPreview();
+    renderCanvas();
 }
 
 function handleCustomSizeChange() {
@@ -1776,7 +1829,7 @@ function handleCustomSizeChange() {
     appState.labelSettings.customWidth = width;
     appState.labelSettings.customHeight = height;
     
-    updateDesignPreview();
+    renderCanvas();
 }
 
 function updateDesignPreview() {
@@ -2285,7 +2338,8 @@ function generateLabels() {
             // Create individual text elements
             const textElements = appState.mappedColumns.text.map(col => ({
                 text: row[col.index] ? row[col.index].toString() : '',
-                columnName: col.name
+                columnName: col.name,
+                columnIndex: col.index
             }));
             
             const label = {
@@ -2357,25 +2411,11 @@ function downloadPDF() {
         
         // Get selected page size
         const selectedPageSize = document.querySelector('input[name="page-size"]:checked').value;
-        let pageSize, orientation;
-        
-        switch (selectedPageSize) {
-            case 'letter':
-                pageSize = 'letter';
-                orientation = 'p';
-                break;
-            case 'legal':
-                pageSize = 'legal';
-                orientation = 'p';
-                break;
-            case 'a4':
-            default:
-                pageSize = 'a4';
-                orientation = 'p';
-                break;
-        }
-        
-        const doc = new jsPDF(orientation, 'mm', pageSize);
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: selectedPageSize
+        });
         
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
@@ -2384,26 +2424,22 @@ function downloadPDF() {
         const usableHeight = pageHeight - (margin * 2);
         
         // Calculate label dimensions in mm (convert inches to mm)
-        const labelWidth = appState.labelSettings.size === 'custom' 
-            ? appState.labelSettings.customWidth * 25.4 
-            : LABEL_SIZES[appState.labelSettings.size].width * 25.4;
-        const labelHeight = appState.labelSettings.size === 'custom' 
-            ? appState.labelSettings.customHeight * 25.4 
-            : LABEL_SIZES[appState.labelSettings.size].height * 25.4;
+        const labelWidthInch = getLabelWidth();
+        const labelHeightInch = getLabelHeight();
+        const labelWidth = labelWidthInch * 25.4;
+        const labelHeight = labelHeightInch * 25.4;
         
         // Calculate grid
         const labelsPerRow = Math.floor(usableWidth / labelWidth);
         const labelsPerCol = Math.floor(usableHeight / labelHeight);
         const labelsPerPage = labelsPerRow * labelsPerCol;
         
-        let currentPage = 0;
         let currentRow = 0;
         let currentCol = 0;
         
         appState.generatedLabels.forEach((label, index) => {
             if (index > 0 && index % labelsPerPage === 0) {
                 doc.addPage();
-                currentPage++;
                 currentRow = 0;
                 currentCol = 0;
             }
@@ -2411,76 +2447,13 @@ function downloadPDF() {
             const x = margin + (currentCol * labelWidth);
             const y = margin + (currentRow * labelHeight);
             
-            // Draw label border
+            // Draw label border (for debugging)
             doc.rect(x, y, labelWidth, labelHeight);
             
-            // Add elements based on positioning
-            const elements = label.elements || appState.labelSettings.elements;
-            
-            // Add barcode with number display
-            if (elements.barcode) {
-                try {
-                    const canvas = document.createElement('canvas');
-                    const displayValue = label.barcodeType === 'EAN13';
-                    JsBarcode(canvas, label.barcode, {
-                        format: label.barcodeType,
-                        width: 2,
-                        height: 30,
-                        displayValue: displayValue
-                    });
-                    
-                    const barcodeDataURL = canvas.toDataURL();
-                    const barcodeX = x + (elements.barcode.x * 25.4);
-                    const barcodeY = y + (elements.barcode.y * 25.4);
-                    const barcodeWidth = elements.barcode.width * 25.4;
-                    const barcodeHeight = elements.barcode.height * 25.4;
-                    
-                    doc.addImage(barcodeDataURL, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
-                    
-                    // Add barcode number if not displayed in barcode
-                    if (!displayValue) {
-                        doc.setFontSize(6);
-                        doc.text(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 3, { align: 'center' });
-                    }
-                } catch (error) {
-                    doc.setFontSize(8);
-                    doc.text('Invalid barcode', x + (elements.barcode.x * 25.4), y + (elements.barcode.y * 25.4) + 5);
-                }
-            }
-            
-            // Add product text elements
-            if (label.textElements && label.textElements.length > 0) {
-                label.textElements.forEach((textElement, index) => {
-                    const elementId = `text-${index}`;
-                    if (elements[elementId]) {
-                        doc.setFontSize(elements[elementId].fontSize || 8);
-                        doc.text(textElement.text, x + (elements[elementId].x * 25.4), y + (elements[elementId].y * 25.4) + 5, { 
-                            maxWidth: elements[elementId].width * 25.4,
-                            align: elements[elementId].align || 'left'
-                        });
-                    }
-                });
-            } else if (label.text && elements.textContainer) {
-                // Fallback to single text element
-                doc.setFontSize(elements.textContainer.fontSize || 8);
-                doc.text(label.text, x + (elements.textContainer.x * 25.4), y + (elements.textContainer.y * 25.4) + 5, { 
-                    maxWidth: elements.textContainer.width * 25.4,
-                    align: elements.textContainer.align || 'left'
-                });
-            }
-            
-            // Add static texts
-            if (label.staticTexts && label.staticTexts.length > 0) {
-                label.staticTexts.forEach((staticText, index) => {
-                    const elementId = `static-${index}`;
-                    if (elements[elementId]) {
-                        doc.setFontSize(elements[elementId].fontSize || 6);
-                        doc.text(staticText.text, x + (elements[elementId].x * 25.4), y + (elements[elementId].y * 25.4) + 3, {
-                            maxWidth: elements[elementId].width * 25.4,
-                            align: elements[elementId].align || 'left'
-                        });
-                    }
-                });
+            // Render elements recursively
+            const rootElement = label.elements.find(el => el.id === 'root');
+            if (rootElement) {
+                drawElementOnPdf(doc, rootElement, label, x, y, labelWidth, labelHeight);
             }
             
             // Update position
@@ -2498,6 +2471,69 @@ function downloadPDF() {
         console.error('PDF generation error:', error);
         showError('PDF Error', 'There was an error generating the PDF file');
         hideProgress();
+    }
+}
+
+function drawElementOnPdf(doc, element, label, parentX, parentY, parentWidth, parentHeight) {
+    // Basic conversion from px-based flex styles to mm-based PDF coordinates
+    const dpi = 96; // The DPI used for on-screen rendering
+    const scale = 25.4 / dpi; // mm per pixel
+
+    // Calculate element's position and size in mm
+    // This is a simplified model, assuming top-left positioning within the parent
+    const elementX = parentX + (element.style.padding || 0) * scale;
+    const elementY = parentY + (element.style.padding || 0) * scale;
+    
+    switch (element.type) {
+        case 'barcode':
+            try {
+                const canvas = document.createElement('canvas');
+                JsBarcode(canvas, label.barcode, {
+                    format: label.barcodeType,
+                    width: 2,
+                    height: element.properties.height || 50,
+                    displayValue: element.properties.showText || false
+                });
+                
+                const barcodeDataURL = canvas.toDataURL();
+                const barcodeWidth = (element.properties.width || 150) * scale;
+                const barcodeHeight = (element.properties.height || 50) * scale;
+                
+                doc.addImage(barcodeDataURL, 'PNG', elementX, elementY, barcodeWidth, barcodeHeight);
+            } catch (error) {
+                doc.setFontSize(8);
+                doc.text('Invalid barcode', elementX, elementY + 5);
+            }
+            break;
+            
+        case 'text':
+            let textContent = element.properties.content;
+            if (element.properties.columnIndex !== undefined) {
+                const mappedText = label.textElements.find(t => t.columnIndex === element.properties.columnIndex);
+                if (mappedText) {
+                    textContent = mappedText.text;
+                } else {
+                    textContent = element.properties.columnName; // Fallback to column name
+                }
+            }
+            
+            doc.setFontSize(element.properties.fontSize || 12);
+            doc.setTextColor(element.properties.color || '#000000');
+            doc.text(textContent, elementX, elementY + (element.properties.fontSize / 2), { 
+                align: element.properties.textAlign || 'left'
+            });
+            break;
+            
+        case 'container':
+            // Recursively draw children
+            element.children.forEach(childId => {
+                const childElement = label.elements.find(el => el.id === childId);
+                if (childElement) {
+                    // This positioning model needs to be improved to handle flex layouts
+                    drawElementOnPdf(doc, childElement, label, elementX, elementY, parentWidth, parentHeight);
+                }
+            });
+            break;
     }
 }
 
@@ -2520,12 +2556,8 @@ function downloadZIP() {
                 
                 // Set canvas size based on label size (300 DPI for high quality)
                 const dpi = 300;
-                const width = appState.labelSettings.size === 'custom' 
-                    ? appState.labelSettings.customWidth * dpi 
-                    : LABEL_SIZES[appState.labelSettings.size].width * dpi;
-                const height = appState.labelSettings.size === 'custom' 
-                    ? appState.labelSettings.customHeight * dpi 
-                    : LABEL_SIZES[appState.labelSettings.size].height * dpi;
+                const width = getLabelWidth() * dpi;
+                const height = getLabelHeight() * dpi;
                 
                 canvas.width = width;
                 canvas.height = height;
@@ -2539,82 +2571,10 @@ function downloadZIP() {
                 ctx.lineWidth = 2;
                 ctx.strokeRect(1, 1, width - 2, height - 2);
                 
-                // Add elements based on positioning
-                const elements = label.elements || appState.labelSettings.elements;
-                
-                // Add barcode with number display
-                if (elements.barcode) {
-                    try {
-                        const barcodeCanvas = document.createElement('canvas');
-                        const displayValue = label.barcodeType === 'EAN13';
-                        JsBarcode(barcodeCanvas, label.barcode, {
-                            format: label.barcodeType,
-                            width: 3,
-                            height: 60,
-                            displayValue: displayValue
-                        });
-                        
-                        const barcodeX = elements.barcode.x * dpi;
-                        const barcodeY = elements.barcode.y * dpi;
-                        const barcodeWidth = elements.barcode.width * dpi;
-                        const barcodeHeight = elements.barcode.height * dpi;
-                        
-                        // Scale barcode to fit the element size
-                        ctx.drawImage(barcodeCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight);
-                        
-                        // Add barcode number if not displayed in barcode
-                        if (!displayValue) {
-                            ctx.fillStyle = '#000000';
-                            ctx.font = '12px Arial';
-                            ctx.textAlign = 'center';
-                            ctx.fillText(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 15);
-                        }
-                    } catch (error) {
-                        ctx.fillStyle = '#000000';
-                        ctx.font = `${elements.barcode.fontSize || 16}px Arial`;
-                        ctx.textAlign = elements.barcode.align || 'center';
-                        ctx.fillText('Invalid barcode', 
-                            elements.barcode.x * dpi + (elements.barcode.width * dpi) / 2, 
-                            elements.barcode.y * dpi + (elements.barcode.height * dpi) / 2);
-                    }
-                }
-                
-                // Add product text elements
-                if (label.textElements && label.textElements.length > 0) {
-                    label.textElements.forEach((textElement, index) => {
-                        const elementId = `text-${index}`;
-                        if (elements[elementId]) {
-                            ctx.fillStyle = '#000000';
-                            ctx.font = `${elements[elementId].fontSize || 14}px Arial`;
-                            ctx.textAlign = elements[elementId].align || 'center';
-                            ctx.fillText(textElement.text, 
-                                elements[elementId].x * dpi + (elements[elementId].width * dpi) / 2, 
-                                elements[elementId].y * dpi + (elements[elementId].height * dpi) / 2);
-                        }
-                    });
-                } else if (label.text && elements.textContainer) {
-                    // Fallback to single text element
-                    ctx.fillStyle = '#000000';
-                    ctx.font = `${elements.textContainer.fontSize || 14}px Arial`;
-                    ctx.textAlign = elements.textContainer.align || 'center';
-                    ctx.fillText(label.text, 
-                        elements.textContainer.x * dpi + (elements.textContainer.width * dpi) / 2, 
-                        elements.textContainer.y * dpi + (elements.textContainer.height * dpi) / 2);
-                }
-                
-                // Add static texts
-                if (label.staticTexts && label.staticTexts.length > 0) {
-                    label.staticTexts.forEach((staticText, staticIndex) => {
-                        const elementId = `static-${staticIndex}`;
-                        if (elements[elementId]) {
-                            ctx.fillStyle = '#666666';
-                            ctx.font = `${elements[elementId].fontSize || 10}px Arial`;
-                            ctx.textAlign = elements[elementId].align || 'center';
-                            ctx.fillText(staticText.text, 
-                                elements[elementId].x * dpi + (elements[elementId].width * dpi) / 2, 
-                                elements[elementId].y * dpi + (elements[elementId].height * dpi) / 2);
-                        }
-                    });
+                // Render elements recursively
+                const rootElement = label.elements.find(el => el.id === 'root');
+                if (rootElement) {
+                    drawElementOnCanvas(ctx, rootElement, label, 0, 0, width, height, dpi);
                 }
                 
                 // Convert to blob and add to ZIP
@@ -2645,6 +2605,63 @@ function downloadZIP() {
         console.error('ZIP generation error:', error);
         showError('ZIP Error', 'There was an error generating the ZIP file');
         hideProgress();
+    }
+}
+
+function drawElementOnCanvas(ctx, element, label, parentX, parentY, parentWidth, parentHeight, dpi) {
+    const scale = dpi / 96; // Scale from screen DPI to canvas DPI
+
+    const elementX = parentX + (element.style.padding || 0) * scale;
+    const elementY = parentY + (element.style.padding || 0) * scale;
+    
+    switch (element.type) {
+        case 'barcode':
+            try {
+                const barcodeCanvas = document.createElement('canvas');
+                JsBarcode(barcodeCanvas, label.barcode, {
+                    format: label.barcodeType,
+                    width: 3,
+                    height: 60,
+                    displayValue: element.properties.showText || false
+                });
+                
+                const barcodeWidth = (element.properties.width || 150) * scale;
+                const barcodeHeight = (element.properties.height || 50) * scale;
+                
+                ctx.drawImage(barcodeCanvas, elementX, elementY, barcodeWidth, barcodeHeight);
+            } catch (error) {
+                ctx.fillStyle = '#000000';
+                ctx.font = `${(element.properties.fontSize || 16) * scale}px Arial`;
+                ctx.textAlign = element.properties.textAlign || 'center';
+                ctx.fillText('Invalid barcode', elementX + (parentWidth / 2), elementY + (parentHeight / 2));
+            }
+            break;
+            
+        case 'text':
+            let textContent = element.properties.content;
+            if (element.properties.columnIndex !== undefined) {
+                const mappedText = label.textElements.find(t => t.columnIndex === element.properties.columnIndex);
+                if (mappedText) {
+                    textContent = mappedText.text;
+                } else {
+                    textContent = element.properties.columnName; // Fallback
+                }
+            }
+            
+            ctx.fillStyle = element.properties.color || '#000000';
+            ctx.font = `${(element.properties.fontSize || 14) * scale}px Arial`;
+            ctx.textAlign = element.properties.textAlign || 'center';
+            ctx.fillText(textContent, elementX + (parentWidth / 2), elementY + (parentHeight / 2));
+            break;
+            
+        case 'container':
+            element.children.forEach(childId => {
+                const childElement = label.elements.find(el => el.id === childId);
+                if (childElement) {
+                    drawElementOnCanvas(ctx, childElement, label, elementX, elementY, parentWidth, parentHeight, dpi);
+                }
+            });
+            break;
     }
 }
 
