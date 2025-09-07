@@ -17,10 +17,13 @@ let appState = {
         staticTexts: [],
         fontSize: 'medium',
         spacing: 'normal',
+        textLayout: 'vertical',
+        textGap: 2,
         elements: {
             barcode: { x: 0.1, y: 0.1, width: 1.8, height: 0.4, fontSize: 10, align: 'center' },
-            text: { x: 0.1, y: 0.6, width: 1.8, height: 0.3, fontSize: 10, align: 'center' }
-        }
+            textContainer: { x: 0.1, y: 0.6, width: 1.8, height: 0.3, fontSize: 10, align: 'center' }
+        },
+        textElements: []
     },
     generatedLabels: [],
     quantitySettings: {
@@ -224,10 +227,13 @@ function startOver() {
                 staticTexts: [],
                 fontSize: 'medium',
                 spacing: 'normal',
+                textLayout: 'vertical',
+                textGap: 2,
                 elements: {
                     barcode: { x: 0.1, y: 0.1, width: 1.8, height: 0.4, fontSize: 10, align: 'center' },
-                    text: { x: 0.1, y: 0.6, width: 1.8, height: 0.3, fontSize: 10, align: 'center' }
-                }
+                    textContainer: { x: 0.1, y: 0.6, width: 1.8, height: 0.3, fontSize: 10, align: 'center' }
+                },
+                textElements: []
             },
             generatedLabels: [],
             quantitySettings: { type: 'column', fixedQuantity: 1, manualQuantities: {} }
@@ -617,16 +623,146 @@ function createLabelElements() {
     const previewLabel = document.getElementById('design-preview-label');
     previewLabel.innerHTML = '';
     
-    // Create barcode element
-    createDraggableElement('barcode', 'Barcode', 'preview-barcode');
+    // Create barcode element with proper preview
+    createBarcodeElement();
     
-    // Create text element
-    createDraggableElement('text', 'Product Text', 'preview-text');
+    // Create text container with individual text elements
+    createTextContainer();
     
     // Create static text elements
     appState.labelSettings.staticTexts.forEach((staticText, index) => {
-        createDraggableElement(`static-${index}`, staticText.text, 'preview-static');
+        createStaticTextElement(index, staticText);
     });
+}
+
+function createBarcodeElement() {
+    const previewLabel = document.getElementById('design-preview-label');
+    const barcodeElement = document.createElement('div');
+    barcodeElement.className = 'preview-barcode';
+    barcodeElement.id = 'element-barcode';
+    barcodeElement.dataset.elementId = 'barcode';
+    
+    // Create barcode container
+    const barcodeContainer = document.createElement('div');
+    barcodeContainer.className = 'barcode-container';
+    
+    // Create SVG for barcode
+    const svg = document.createElement('svg');
+    svg.id = 'design-preview-barcode';
+    svg.className = 'barcode-svg';
+    
+    // Create barcode number display
+    const barcodeNumber = document.createElement('div');
+    barcodeNumber.className = 'barcode-number';
+    barcodeNumber.id = 'barcode-number-display';
+    
+    barcodeContainer.appendChild(svg);
+    barcodeContainer.appendChild(barcodeNumber);
+    barcodeElement.appendChild(barcodeContainer);
+    
+    // Set position and size
+    const elementConfig = appState.labelSettings.elements.barcode || getDefaultElementConfig('barcode');
+    updateElementPosition(barcodeElement, elementConfig);
+    
+    // Add event listeners
+    barcodeElement.addEventListener('mousedown', handleElementMouseDown);
+    barcodeElement.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(barcodeElement);
+    });
+    
+    previewLabel.appendChild(barcodeElement);
+}
+
+function createTextContainer() {
+    const previewLabel = document.getElementById('design-preview-label');
+    const textContainer = document.createElement('div');
+    textContainer.className = 'preview-text text-container';
+    textContainer.id = 'element-textContainer';
+    textContainer.dataset.elementId = 'textContainer';
+    
+    // Set layout direction
+    textContainer.classList.add(appState.labelSettings.textLayout);
+    textContainer.style.gap = `${appState.labelSettings.textGap}px`;
+    
+    // Create individual text elements for each mapped column
+    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
+        appState.mappedColumns.text.forEach((column, index) => {
+            const textElement = document.createElement('div');
+            textElement.className = 'text-element';
+            textElement.id = `text-element-${index}`;
+            textElement.dataset.elementId = `text-${index}`;
+            textElement.dataset.columnIndex = column.index;
+            textElement.dataset.columnName = column.name;
+            
+            // Set sample text
+            if (appState.excelData && appState.excelData.length > 0) {
+                const sampleValue = appState.excelData[0][column.index];
+                textElement.textContent = sampleValue ? sampleValue.toString() : column.name;
+            } else {
+                textElement.textContent = column.name;
+            }
+            
+            // Add event listeners
+            textElement.addEventListener('mousedown', handleElementMouseDown);
+            textElement.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectElement(textElement);
+            });
+            
+            textContainer.appendChild(textElement);
+        });
+    } else {
+        // Default text element
+        const textElement = document.createElement('div');
+        textElement.className = 'text-element';
+        textElement.id = 'text-element-default';
+        textElement.dataset.elementId = 'text-default';
+        textElement.textContent = 'Sample Product Information';
+        
+        textElement.addEventListener('mousedown', handleElementMouseDown);
+        textElement.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectElement(textElement);
+        });
+        
+        textContainer.appendChild(textElement);
+    }
+    
+    // Set position and size
+    const elementConfig = appState.labelSettings.elements.textContainer || getDefaultElementConfig('textContainer');
+    updateElementPosition(textContainer, elementConfig);
+    
+    // Add event listeners for container
+    textContainer.addEventListener('mousedown', handleElementMouseDown);
+    textContainer.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(textContainer);
+    });
+    
+    previewLabel.appendChild(textContainer);
+}
+
+function createStaticTextElement(index, staticText) {
+    const previewLabel = document.getElementById('design-preview-label');
+    const staticElement = document.createElement('div');
+    staticElement.className = 'preview-static';
+    staticElement.id = `element-static-${index}`;
+    staticElement.dataset.elementId = `static-${index}`;
+    staticElement.textContent = staticText.text;
+    
+    // Set position and size
+    const elementConfig = appState.labelSettings.elements[`static-${index}`] || getDefaultElementConfig(`static-${index}`);
+    updateElementPosition(staticElement, elementConfig);
+    
+    // Add event listeners
+    staticElement.addEventListener('mousedown', handleElementMouseDown);
+    staticElement.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement(staticElement);
+    });
+    
+    previewLabel.appendChild(staticElement);
 }
 
 function createDraggableElement(id, content, className) {
@@ -670,9 +806,12 @@ function getDefaultElementConfig(id) {
     switch (id) {
         case 'barcode':
             return { x: 0.1, y: 0.1, width: labelWidth - 0.2, height: 0.4, fontSize: 10, align: 'center' };
-        case 'text':
+        case 'textContainer':
             return { x: 0.1, y: 0.6, width: labelWidth - 0.2, height: 0.3, fontSize: 10, align: 'center' };
         default:
+            if (id.startsWith('static-')) {
+                return { x: 0.1, y: 0.9, width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
+            }
             return { x: 0.1, y: 0.9, width: labelWidth - 0.2, height: 0.1, fontSize: 8, align: 'center' };
     }
 }
@@ -900,6 +1039,33 @@ function setupElementPropertyControls() {
             control.addEventListener('input', updateElementFromProperties);
         }
     });
+    
+    // Add layout controls
+    const textLayout = document.getElementById('text-layout');
+    const textGap = document.getElementById('text-gap');
+    
+    if (textLayout) {
+        textLayout.addEventListener('change', updateTextLayout);
+    }
+    
+    if (textGap) {
+        textGap.addEventListener('input', updateTextLayout);
+    }
+}
+
+function updateTextLayout() {
+    const textLayout = document.getElementById('text-layout').value;
+    const textGap = parseInt(document.getElementById('text-gap').value) || 2;
+    
+    appState.labelSettings.textLayout = textLayout;
+    appState.labelSettings.textGap = textGap;
+    
+    // Update text container
+    const textContainer = document.getElementById('element-textContainer');
+    if (textContainer) {
+        textContainer.className = `preview-text text-container ${textLayout}`;
+        textContainer.style.gap = `${textGap}px`;
+    }
 }
 
 function updateElementFromProperties() {
@@ -1095,40 +1261,66 @@ function handleCustomSizeChange() {
 }
 
 function updateDesignPreview() {
-    // Update barcode content
+    // Update barcode content with number display
     const barcodeElement = document.getElementById('element-barcode');
     if (barcodeElement) {
         const svg = barcodeElement.querySelector('svg');
+        const barcodeNumber = barcodeElement.querySelector('.barcode-number');
+        
         if (svg && appState.mappedColumns.barcode && appState.excelData.length > 0) {
             const sampleBarcode = appState.excelData[0][appState.mappedColumns.barcode.index];
             if (sampleBarcode) {
                 try {
+                    // Generate barcode with number display for EAN-13
+                    const displayValue = appState.labelSettings.barcodeType === 'EAN13';
                     JsBarcode(svg, sampleBarcode, {
                         format: appState.labelSettings.barcodeType,
                         width: 2,
                         height: 50,
-                        displayValue: false
+                        displayValue: displayValue
                     });
+                    
+                    // Update barcode number display
+                    if (barcodeNumber) {
+                        barcodeNumber.textContent = sampleBarcode.toString();
+                    }
                 } catch (error) {
                     svg.innerHTML = '<text>Invalid barcode</text>';
+                    if (barcodeNumber) {
+                        barcodeNumber.textContent = 'Invalid';
+                    }
+                }
+            }
+        } else {
+            // Show sample barcode
+            try {
+                JsBarcode(svg, '1234567890123', {
+                    format: appState.labelSettings.barcodeType,
+                    width: 2,
+                    height: 50,
+                    displayValue: appState.labelSettings.barcodeType === 'EAN13'
+                });
+                if (barcodeNumber) {
+                    barcodeNumber.textContent = '1234567890123';
+                }
+            } catch (error) {
+                svg.innerHTML = '<text>Sample Barcode</text>';
+                if (barcodeNumber) {
+                    barcodeNumber.textContent = 'Sample';
                 }
             }
         }
     }
     
-    // Update text content
-    const textElement = document.getElementById('element-text');
-    if (textElement) {
-        if (appState.mappedColumns.text.length > 0 && appState.excelData.length > 0) {
-            const textParts = appState.mappedColumns.text.map(col => {
-                const value = appState.excelData[0][col.index];
-                return value ? value.toString() : '';
-            }).filter(text => text.length > 0);
-            
-            textElement.textContent = textParts.join(' | ') || 'Sample Product Information';
-        } else {
-            textElement.textContent = 'Sample Product Information';
-        }
+    // Update text elements in container
+    if (appState.mappedColumns.text && appState.mappedColumns.text.length > 0) {
+        appState.mappedColumns.text.forEach((column, index) => {
+            const textElement = document.getElementById(`text-element-${index}`);
+            if (textElement && appState.excelData && appState.excelData.length > 0) {
+                const sampleValue = appState.excelData[0][column.index];
+                textElement.textContent = sampleValue ? sampleValue.toString() : column.name;
+            }
+        });
     }
     
     // Update static text elements
@@ -1331,9 +1523,16 @@ function generateLabels() {
         
         // Generate labels for this product
         for (let i = 0; i < quantity; i++) {
+            // Create individual text elements
+            const textElements = appState.mappedColumns.text.map(col => ({
+                text: row[col.index] ? row[col.index].toString() : '',
+                columnName: col.name
+            }));
+            
             const label = {
                 barcode: barcode.toString(),
                 text: textFields.join(' | '),
+                textElements: textElements,
                 staticTexts: appState.labelSettings.staticTexts,
                 barcodeType: appState.labelSettings.barcodeType,
                 size: appState.labelSettings.size,
@@ -1341,6 +1540,8 @@ function generateLabels() {
                 customHeight: appState.labelSettings.customHeight,
                 fontSize: appState.labelSettings.fontSize,
                 spacing: appState.labelSettings.spacing,
+                textLayout: appState.labelSettings.textLayout,
+                textGap: appState.labelSettings.textGap,
                 elements: appState.labelSettings.elements
             };
             
@@ -1370,6 +1571,20 @@ function updateGenerationProgress(processed, total) {
 }
 
 // Export Functions
+function showPageSizeSelection() {
+    const pageSizeSelection = document.getElementById('page-size-selection');
+    pageSizeSelection.style.display = 'block';
+    
+    // Add generate PDF button
+    const generatePdfBtn = document.createElement('button');
+    generatePdfBtn.className = 'btn btn-primary btn-large';
+    generatePdfBtn.innerHTML = '<span class="btn-icon">📄</span> Generate PDF';
+    generatePdfBtn.onclick = downloadPDF;
+    
+    const downloadOptions = document.querySelector('.download-options');
+    downloadOptions.appendChild(generatePdfBtn);
+}
+
 function downloadPDF() {
     if (appState.generatedLabels.length === 0) {
         showError('No labels', 'Please generate labels first');
@@ -1380,7 +1595,28 @@ function downloadPDF() {
     
     try {
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('p', 'mm', 'a4');
+        
+        // Get selected page size
+        const selectedPageSize = document.querySelector('input[name="page-size"]:checked').value;
+        let pageSize, orientation;
+        
+        switch (selectedPageSize) {
+            case 'letter':
+                pageSize = 'letter';
+                orientation = 'p';
+                break;
+            case 'legal':
+                pageSize = 'legal';
+                orientation = 'p';
+                break;
+            case 'a4':
+            default:
+                pageSize = 'a4';
+                orientation = 'p';
+                break;
+        }
+        
+        const doc = new jsPDF(orientation, 'mm', pageSize);
         
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
@@ -1422,15 +1658,16 @@ function downloadPDF() {
             // Add elements based on positioning
             const elements = label.elements || appState.labelSettings.elements;
             
-            // Add barcode
+            // Add barcode with number display
             if (elements.barcode) {
                 try {
                     const canvas = document.createElement('canvas');
+                    const displayValue = label.barcodeType === 'EAN13';
                     JsBarcode(canvas, label.barcode, {
                         format: label.barcodeType,
                         width: 2,
                         height: 30,
-                        displayValue: false
+                        displayValue: displayValue
                     });
                     
                     const barcodeDataURL = canvas.toDataURL();
@@ -1440,18 +1677,36 @@ function downloadPDF() {
                     const barcodeHeight = elements.barcode.height * 25.4;
                     
                     doc.addImage(barcodeDataURL, 'PNG', barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+                    
+                    // Add barcode number if not displayed in barcode
+                    if (!displayValue) {
+                        doc.setFontSize(6);
+                        doc.text(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 3, { align: 'center' });
+                    }
                 } catch (error) {
                     doc.setFontSize(8);
                     doc.text('Invalid barcode', x + (elements.barcode.x * 25.4), y + (elements.barcode.y * 25.4) + 5);
                 }
             }
             
-            // Add product text
-            if (label.text && elements.text) {
-                doc.setFontSize(elements.text.fontSize || 8);
-                doc.text(label.text, x + (elements.text.x * 25.4), y + (elements.text.y * 25.4) + 5, { 
-                    maxWidth: elements.text.width * 25.4,
-                    align: elements.text.align || 'left'
+            // Add product text elements
+            if (label.textElements && label.textElements.length > 0) {
+                label.textElements.forEach((textElement, index) => {
+                    const elementId = `text-${index}`;
+                    if (elements[elementId]) {
+                        doc.setFontSize(elements[elementId].fontSize || 8);
+                        doc.text(textElement.text, x + (elements[elementId].x * 25.4), y + (elements[elementId].y * 25.4) + 5, { 
+                            maxWidth: elements[elementId].width * 25.4,
+                            align: elements[elementId].align || 'left'
+                        });
+                    }
+                });
+            } else if (label.text && elements.textContainer) {
+                // Fallback to single text element
+                doc.setFontSize(elements.textContainer.fontSize || 8);
+                doc.text(label.text, x + (elements.textContainer.x * 25.4), y + (elements.textContainer.y * 25.4) + 5, { 
+                    maxWidth: elements.textContainer.width * 25.4,
+                    align: elements.textContainer.align || 'left'
                 });
             }
             
@@ -1528,15 +1783,16 @@ function downloadZIP() {
                 // Add elements based on positioning
                 const elements = label.elements || appState.labelSettings.elements;
                 
-                // Add barcode
+                // Add barcode with number display
                 if (elements.barcode) {
                     try {
                         const barcodeCanvas = document.createElement('canvas');
+                        const displayValue = label.barcodeType === 'EAN13';
                         JsBarcode(barcodeCanvas, label.barcode, {
                             format: label.barcodeType,
                             width: 3,
                             height: 60,
-                            displayValue: false
+                            displayValue: displayValue
                         });
                         
                         const barcodeX = elements.barcode.x * dpi;
@@ -1546,6 +1802,14 @@ function downloadZIP() {
                         
                         // Scale barcode to fit the element size
                         ctx.drawImage(barcodeCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight);
+                        
+                        // Add barcode number if not displayed in barcode
+                        if (!displayValue) {
+                            ctx.fillStyle = '#000000';
+                            ctx.font = '12px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(label.barcode, barcodeX + (barcodeWidth / 2), barcodeY + barcodeHeight + 15);
+                        }
                     } catch (error) {
                         ctx.fillStyle = '#000000';
                         ctx.font = `${elements.barcode.fontSize || 16}px Arial`;
@@ -1556,14 +1820,27 @@ function downloadZIP() {
                     }
                 }
                 
-                // Add product text
-                if (label.text && elements.text) {
+                // Add product text elements
+                if (label.textElements && label.textElements.length > 0) {
+                    label.textElements.forEach((textElement, index) => {
+                        const elementId = `text-${index}`;
+                        if (elements[elementId]) {
+                            ctx.fillStyle = '#000000';
+                            ctx.font = `${elements[elementId].fontSize || 14}px Arial`;
+                            ctx.textAlign = elements[elementId].align || 'center';
+                            ctx.fillText(textElement.text, 
+                                elements[elementId].x * dpi + (elements[elementId].width * dpi) / 2, 
+                                elements[elementId].y * dpi + (elements[elementId].height * dpi) / 2);
+                        }
+                    });
+                } else if (label.text && elements.textContainer) {
+                    // Fallback to single text element
                     ctx.fillStyle = '#000000';
-                    ctx.font = `${elements.text.fontSize || 14}px Arial`;
-                    ctx.textAlign = elements.text.align || 'center';
+                    ctx.font = `${elements.textContainer.fontSize || 14}px Arial`;
+                    ctx.textAlign = elements.textContainer.align || 'center';
                     ctx.fillText(label.text, 
-                        elements.text.x * dpi + (elements.text.width * dpi) / 2, 
-                        elements.text.y * dpi + (elements.text.height * dpi) / 2);
+                        elements.textContainer.x * dpi + (elements.textContainer.width * dpi) / 2, 
+                        elements.textContainer.y * dpi + (elements.textContainer.height * dpi) / 2);
                 }
                 
                 // Add static texts
