@@ -769,23 +769,92 @@ body {
 /* Element Handles */
 .element-handle {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   background: var(--color-primary);
-  border: 1px solid var(--color-white);
-  border-radius: 50%;
+  border: 2px solid var(--color-white);
+  border-radius: 2px;
   cursor: pointer;
-  z-index: 10;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-.element-handle.nw { top: -4px; left: -4px; cursor: nw-resize; }
-.element-handle.ne { top: -4px; right: -4px; cursor: ne-resize; }
-.element-handle.sw { bottom: -4px; left: -4px; cursor: sw-resize; }
-.element-handle.se { bottom: -4px; right: -4px; cursor: se-resize; }
-.element-handle.n { top: -4px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
-.element-handle.s { bottom: -4px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
-.element-handle.w { left: -4px; top: 50%; transform: translateY(-50%); cursor: w-resize; }
-.element-handle.e { right: -4px; top: 50%; transform: translateY(-50%); cursor: e-resize; }
+.element-handle:hover {
+  background: var(--color-primary-dark);
+  transform: scale(1.1);
+}
+
+.element-handle.nw { top: -6px; left: -6px; cursor: nw-resize; }
+.element-handle.ne { top: -6px; right: -6px; cursor: ne-resize; }
+.element-handle.sw { bottom: -6px; left: -6px; cursor: sw-resize; }
+.element-handle.se { bottom: -6px; right: -6px; cursor: se-resize; }
+.element-handle.n { top: -6px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
+.element-handle.s { bottom: -6px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+.element-handle.w { left: -6px; top: 50%; transform: translateY(-50%); cursor: w-resize; }
+.element-handle.e { right: -6px; top: 50%; transform: translateY(-50%); cursor: e-resize; }
+
+/* Flexbox Container for Text Elements */
+.text-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  min-height: 20px;
+}
+
+.text-container.horizontal {
+  flex-direction: row;
+  align-items: center;
+}
+
+.text-container.vertical {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.text-element {
+  position: relative;
+  border: 1px dashed var(--color-primary);
+  background: rgba(37, 99, 235, 0.1);
+  cursor: move;
+  user-select: none;
+  padding: 2px 4px;
+  min-height: 16px;
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  word-wrap: break-word;
+}
+
+.text-element:hover {
+  background: rgba(37, 99, 235, 0.2);
+}
+
+.text-element.selected {
+  border-color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.2);
+}
+
+/* Barcode with Number Display */
+.barcode-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.barcode-svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.barcode-number {
+  font-size: 8px;
+  font-family: monospace;
+  text-align: center;
+  color: var(--color-gray-700);
+  margin-top: 2px;
+}
 
 /* Print-specific styles for accurate sizing */
 @media print {
@@ -964,6 +1033,62 @@ body {
 /* Download Section */
 .download-section {
   margin-bottom: var(--space-8);
+}
+
+/* Page Size Selection */
+.page-size-selection {
+  background: var(--color-gray-50);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--color-gray-200);
+}
+
+.page-size-selection h5 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin-bottom: var(--space-4);
+  text-align: center;
+}
+
+.page-size-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.page-size-options .option-group {
+  padding: var(--space-3);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  transition: var(--transition-normal);
+}
+
+.page-size-options .option-group:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  background-opacity: 0.02;
+}
+
+.page-size-options .option-group input[type="radio"]:checked + label {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.page-size-options .option-group input[type="radio"]:checked + label .option-title {
+  color: var(--color-primary);
+}
+
+/* Layout Controls */
+.layout-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-gray-200);
 }
 
 .download-section h4 {

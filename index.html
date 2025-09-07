@@ -241,6 +241,24 @@
                                 </div>
                             </div>
 
+                            <!-- Text Layout Controls -->
+                            <div class="control-group">
+                                <label>Text Layout</label>
+                                <div class="layout-controls">
+                                    <div class="prop-row">
+                                        <label for="text-layout">Layout Direction:</label>
+                                        <select class="form-control" id="text-layout">
+                                            <option value="vertical">Vertical (Stacked)</option>
+                                            <option value="horizontal">Horizontal (Side by Side)</option>
+                                        </select>
+                                    </div>
+                                    <div class="prop-row">
+                                        <label for="text-gap">Gap Between Elements:</label>
+                                        <input type="number" class="form-control" id="text-gap" value="2" step="1" min="0" max="20">
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Element Properties -->
                             <div class="control-group" id="element-properties" style="display: none;">
                                 <label>Element Properties</label>
@@ -442,21 +460,50 @@
 
                     <div class="download-section hidden" id="download-section">
                         <h4>Download Your Labels</h4>
+                        
+                        <!-- Page Size Selection for PDF -->
+                        <div class="page-size-selection" id="page-size-selection" style="display: none;">
+                            <h5>Select Page Size for PDF</h5>
+                            <div class="page-size-options">
+                                <div class="option-group">
+                                    <input type="radio" id="page-a4" name="page-size" value="a4" checked>
+                                    <label for="page-a4">
+                                        <span class="option-title">A4 (210 × 297 mm)</span>
+                                        <span class="option-description">Standard international size</span>
+                                    </label>
+                                </div>
+                                <div class="option-group">
+                                    <input type="radio" id="page-letter" name="page-size" value="letter">
+                                    <label for="page-letter">
+                                        <span class="option-title">Letter (8.5 × 11 in)</span>
+                                        <span class="option-description">Standard US size</span>
+                                    </label>
+                                </div>
+                                <div class="option-group">
+                                    <input type="radio" id="page-legal" name="page-size" value="legal">
+                                    <label for="page-legal">
+                                        <span class="option-title">Legal (8.5 × 14 in)</span>
+                                        <span class="option-description">Extended length</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="download-options">
-                            <button class="btn btn-primary btn-large" onclick="downloadPDF()" id="download-pdf">
-                                <span class="btn-icon">📄</span>
-                                Download PDF
-                                <span class="btn-description">Print-ready labels in PDF format</span>
-                            </button>
-                            <button class="btn btn-secondary btn-large" onclick="downloadZIP()" id="download-zip">
+                            <button class="btn btn-primary btn-large" onclick="downloadZIP()" id="download-zip">
                                 <span class="btn-icon">📦</span>
                                 Download ZIP
                                 <span class="btn-description">Individual label images</span>
                             </button>
+                            <button class="btn btn-secondary btn-large" onclick="showPageSizeSelection()" id="download-pdf">
+                                <span class="btn-icon">📄</span>
+                                Download PDF
+                                <span class="btn-description">Print-ready labels in PDF format</span>
+                            </button>
                         </div>
                         <div class="download-info">
-                            <p><strong>PDF Format:</strong> Optimized for printing with proper margins and cut lines. Compatible with Avery label sheets.</p>
                             <p><strong>ZIP Format:</strong> Contains individual high-resolution label images for custom printing or integration.</p>
+                            <p><strong>PDF Format:</strong> Optimized for printing with proper margins and cut lines. Compatible with Avery label sheets.</p>
                         </div>
                     </div>
 
