@@ -2453,16 +2453,20 @@ function updateGenerationProgress(processed, total) {
 let isExporting = false; // Prevent multiple simultaneous exports
 
 async function getLabelBlob(label) {
+    // Create a unique container for this label to avoid DOM conflicts
+    const uniqueId = `label-renderer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    let renderer = null;
+    
     try {
         console.log('getLabelBlob: Starting blob generation...');
         
-        const renderer = document.getElementById('offscreen-renderer');
-        if (!renderer) {
-            throw new Error('Offscreen renderer not found');
-        }
-        
-        console.log('getLabelBlob: Clearing renderer...');
-        renderer.innerHTML = ''; // Clear previous
+        renderer = document.createElement('div');
+        renderer.id = uniqueId;
+        renderer.style.position = 'absolute';
+        renderer.style.left = '-9999px';
+        renderer.style.top = '-9999px';
+        renderer.style.visibility = 'hidden';
+        document.body.appendChild(renderer);
 
         const canvas = document.createElement('div');
         canvas.className = 'label-canvas';
@@ -2522,9 +2526,22 @@ async function getLabelBlob(label) {
         });
         
         console.log('getLabelBlob: Converting to blob...');
-        return new Promise(resolve => outputCanvas.toBlob(resolve, 'image/png', 1.0));
+        const blob = await new Promise(resolve => outputCanvas.toBlob(resolve, 'image/png', 1.0));
+        
+        // Clean up the temporary DOM element
+        document.body.removeChild(renderer);
+        
+        return blob;
     } catch (error) {
         console.error('Error in getLabelBlob:', error);
+        // Clean up the temporary DOM element in case of error
+        try {
+            if (renderer && renderer.parentNode) {
+                document.body.removeChild(renderer);
+            }
+        } catch (cleanupError) {
+            console.warn('Error cleaning up renderer:', cleanupError);
+        }
         throw error;
     }
 }
@@ -2656,22 +2673,33 @@ async function downloadPDF() {
         const startX = margin + (usableWidth - totalLabelWidth) / 2;
         const startY = margin + (usableHeight - totalLabelHeight) / 2;
         
-        console.log('Generating all label blobs in parallel...');
+        console.log('Generating label blobs in batches...');
         showProgress(`Generating ${appState.generatedLabels.length} label images...`);
         
-        // Generate all label blobs in parallel
-        const labelBlobs = await Promise.all(
-            appState.generatedLabels.map(async (label, index) => {
-                try {
-                    console.log(`Generating blob for label ${index + 1}...`);
-                    const blob = await getLabelBlob(label);
-                    return { blob, index, success: true };
-                } catch (error) {
-                    console.error(`Error generating blob for label ${index + 1}:`, error);
-                    return { blob: null, index, success: false, error };
-                }
-            })
-        );
+        // Generate label blobs in batches to prevent browser overload
+        const batchSize = 5; // Process 5 labels at a time
+        const labelBlobs = [];
+        
+        for (let i = 0; i < appState.generatedLabels.length; i += batchSize) {
+            const batch = appState.generatedLabels.slice(i, i + batchSize);
+            console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(appState.generatedLabels.length / batchSize)}...`);
+            
+            const batchResults = await Promise.all(
+                batch.map(async (label, batchIndex) => {
+                    const globalIndex = i + batchIndex;
+                    try {
+                        console.log(`Generating blob for label ${globalIndex + 1}...`);
+                        const blob = await getLabelBlob(label);
+                        return { blob, index: globalIndex, success: true };
+                    } catch (error) {
+                        console.error(`Error generating blob for label ${globalIndex + 1}:`, error);
+                        return { blob: null, index: globalIndex, success: false, error };
+                    }
+                })
+            );
+            
+            labelBlobs.push(...batchResults);
+        }
         
         console.log(`Generated ${labelBlobs.filter(lb => lb.success).length} out of ${labelBlobs.length} label blobs`);
         showProgress('Adding labels to PDF...');
@@ -2760,22 +2788,33 @@ async function downloadZIP() {
         console.log('JSZip library found, creating archive...');
         const zip = new JSZip();
         
-        console.log('Generating all label blobs in parallel...');
+        console.log('Generating label blobs in batches...');
         showProgress(`Generating ${appState.generatedLabels.length} label images...`);
         
-        // Generate all label blobs in parallel
-        const labelBlobs = await Promise.all(
-            appState.generatedLabels.map(async (label, index) => {
-                try {
-                    console.log(`Generating blob for label ${index + 1}...`);
-                    const blob = await getLabelBlob(label);
-                    return { blob, index, success: true };
-                } catch (error) {
-                    console.error(`Error generating blob for label ${index + 1}:`, error);
-                    return { blob: null, index, success: false, error };
-                }
-            })
-        );
+        // Generate label blobs in batches to prevent browser overload
+        const batchSize = 5; // Process 5 labels at a time
+        const labelBlobs = [];
+        
+        for (let i = 0; i < appState.generatedLabels.length; i += batchSize) {
+            const batch = appState.generatedLabels.slice(i, i + batchSize);
+            console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(appState.generatedLabels.length / batchSize)}...`);
+            
+            const batchResults = await Promise.all(
+                batch.map(async (label, batchIndex) => {
+                    const globalIndex = i + batchIndex;
+                    try {
+                        console.log(`Generating blob for label ${globalIndex + 1}...`);
+                        const blob = await getLabelBlob(label);
+                        return { blob, index: globalIndex, success: true };
+                    } catch (error) {
+                        console.error(`Error generating blob for label ${globalIndex + 1}:`, error);
+                        return { blob: null, index: globalIndex, success: false, error };
+                    }
+                })
+            );
+            
+            labelBlobs.push(...batchResults);
+        }
         
         console.log(`Generated ${labelBlobs.filter(lb => lb.success).length} out of ${labelBlobs.length} label blobs`);
         showProgress('Adding labels to ZIP...');
