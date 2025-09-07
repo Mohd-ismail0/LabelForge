@@ -655,6 +655,8 @@ function createBarcodeElement() {
     const svg = document.createElement('svg');
     svg.id = 'design-preview-barcode';
     svg.className = 'barcode-svg';
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
     
     // Create barcode number display
     const barcodeNumber = document.createElement('div');
@@ -1276,6 +1278,9 @@ function updateDesignPreview() {
         const barcodeNumber = barcodeElement.querySelector('.barcode-number');
         
         if (svg) {
+            // Clear the SVG first
+            svg.innerHTML = '';
+            
             // Get example barcode data based on selected type
             let barcodeData = getExampleBarcodeData(appState.labelSettings.barcodeType);
             
