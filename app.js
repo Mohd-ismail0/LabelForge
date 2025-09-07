@@ -1690,6 +1690,96 @@ function updateTextLayout() {
         textContainer.className = `preview-text text-container ${textLayout}`;
         textContainer.style.gap = `${textGap}px`;
     }
+    
+    // Cache the design configuration for export
+    setTimeout(() => cacheDesignConfiguration(), 100); // Small delay to ensure DOM is updated
+}
+
+function cacheDesignConfiguration() {
+    // Capture the exact design configuration from Step 3
+    const designCache = {
+        textLayout: appState.labelSettings.textLayout,
+        textGap: appState.labelSettings.textGap,
+        fontSize: appState.labelSettings.fontSize,
+        spacing: appState.labelSettings.spacing,
+        elements: {},
+        textContainer: null,
+        textElements: [],
+        staticElements: []
+    };
+    
+    // Cache text container configuration
+    const textContainer = document.getElementById('element-textContainer');
+    if (textContainer) {
+        const computedStyle = window.getComputedStyle(textContainer);
+        designCache.textContainer = {
+            className: textContainer.className,
+            display: computedStyle.display,
+            flexDirection: computedStyle.flexDirection,
+            alignItems: computedStyle.alignItems,
+            justifyContent: computedStyle.justifyContent,
+            gap: computedStyle.gap,
+            padding: computedStyle.padding,
+            margin: computedStyle.margin,
+            width: computedStyle.width,
+            height: computedStyle.height,
+            position: computedStyle.position,
+            left: computedStyle.left,
+            top: computedStyle.top
+        };
+    }
+    
+    // Cache individual text elements
+    const textElements = document.querySelectorAll('[id^="element-text-"]');
+    textElements.forEach((element, index) => {
+        const computedStyle = window.getComputedStyle(element);
+        designCache.textElements.push({
+            id: element.id,
+            textContent: element.textContent,
+            className: element.className,
+            display: computedStyle.display,
+            fontSize: computedStyle.fontSize,
+            textAlign: computedStyle.textAlign,
+            padding: computedStyle.padding,
+            margin: computedStyle.margin,
+            width: computedStyle.width,
+            height: computedStyle.height,
+            position: computedStyle.position,
+            left: computedStyle.left,
+            top: computedStyle.top,
+            flex: computedStyle.flex,
+            minWidth: computedStyle.minWidth
+        });
+    });
+    
+    // Cache static text elements
+    const staticElements = document.querySelectorAll('[id^="element-static-"]');
+    staticElements.forEach((element, index) => {
+        const computedStyle = window.getComputedStyle(element);
+        designCache.staticElements.push({
+            id: element.id,
+            textContent: element.textContent,
+            className: element.className,
+            display: computedStyle.display,
+            fontSize: computedStyle.fontSize,
+            textAlign: computedStyle.textAlign,
+            padding: computedStyle.padding,
+            margin: computedStyle.margin,
+            width: computedStyle.width,
+            height: computedStyle.height,
+            position: computedStyle.position,
+            left: computedStyle.left,
+            top: computedStyle.top
+        });
+    });
+    
+    // Store in appState for use during export
+    appState.designCache = designCache;
+    
+    // Also store in localStorage for persistence
+    localStorage.setItem('labelDesignCache', JSON.stringify(designCache));
+    
+    console.log('Design configuration cached:', designCache);
 }
 
 function updateElementFromProperties() {
@@ -1944,6 +2034,9 @@ function updateDesignPreview() {
     });
 
     previewLabel.appendChild(barcodeDiv);
+    
+    // Cache design configuration after adding barcode
+    setTimeout(() => cacheDesignConfiguration(), 100);
 
     // Position and generate barcode content (same as Step 2 logic)
     let barcodeConfig = appState.labelSettings.elements.barcode;
@@ -2001,6 +2094,9 @@ function updateDesignPreview() {
             console.log('Created draggable text element:', `text-${index}`, textDiv);
 
             previewLabel.appendChild(textDiv);
+            
+            // Cache design configuration after adding text element
+            setTimeout(() => cacheDesignConfiguration(), 100);
 
             // Position element
             let textConfig = appState.labelSettings.elements[`text-${index}`];
@@ -2032,6 +2128,9 @@ function updateDesignPreview() {
             console.log('Created draggable text element (no data):', `text-${index}`, textDiv);
 
             previewLabel.appendChild(textDiv);
+            
+            // Cache design configuration after adding text element
+            setTimeout(() => cacheDesignConfiguration(), 100);
 
             let textConfig = appState.labelSettings.elements[`text-${index}`];
             if (!textConfig) {
@@ -2057,6 +2156,9 @@ function updateDesignPreview() {
         });
 
         previewLabel.appendChild(staticDiv);
+        
+        // Cache design configuration after adding static element
+        setTimeout(() => cacheDesignConfiguration(), 100);
 
         let staticConfig = appState.labelSettings.elements[`static-${index}`];
         if (!staticConfig) {
@@ -2455,6 +2557,10 @@ function updateGenerationProgress(processed, total) {
 function createLabelCanvas(label) {
     console.log('Creating label canvas for:', label);
     
+    // Load cached design configuration
+    const designCache = appState.designCache || JSON.parse(localStorage.getItem('labelDesignCache') || '{}');
+    console.log('Using cached design configuration:', designCache);
+    
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
@@ -2522,31 +2628,29 @@ function createLabelCanvas(label) {
         }
     }
     
-    // Add product text elements with proper flexbox-like positioning
+    // Add product text elements using cached design configuration
     if (label.textElements && label.textElements.length > 0) {
         const labelWidth = appState.labelSettings.size === 'custom' 
             ? appState.labelSettings.customWidth 
             : LABEL_SIZES[appState.labelSettings.size].width;
         
-        // Calculate text container position (center of label)
-        const textContainerY = 0.6; // Fixed Y position for text container
-        const textContainerWidth = labelWidth - 0.2; // 0.1 margin on each side
-        const textGap = (label.textGap || 4) / 96; // Convert pixels to inches
+        // Use cached text layout configuration
+        const textLayout = designCache.textLayout || 'horizontal';
+        const textGap = designCache.textGap || 4;
+        const textGapInches = textGap / 96; // Convert pixels to inches
         
-        // Use the actual text layout from appState instead of label.textLayout
-        const actualTextLayout = appState.labelSettings.textLayout;
-        console.log('Actual text layout from appState:', actualTextLayout);
-        console.log('Label text layout:', label.textLayout, 'Text gap:', label.textGap, 'Text elements:', label.textElements.length);
+        console.log('Using cached text layout:', textLayout, 'gap:', textGap);
         
-        // Force horizontal layout for now to match the design
-        if (true) { // actualTextLayout === 'horizontal' || 
+        if (textLayout === 'horizontal') {
             // Horizontal layout: distribute text elements across the width
-            const totalGap = (label.textElements.length - 1) * textGap;
+            const textContainerY = 0.6; // Fixed Y position for text container
+            const textContainerWidth = labelWidth - 0.2; // 0.1 margin on each side
+            const totalGap = (label.textElements.length - 1) * textGapInches;
             const availableWidth = textContainerWidth - totalGap;
             const elementWidth = availableWidth / label.textElements.length;
             
             label.textElements.forEach((textElement, index) => {
-                const x = 0.1 + (index * (elementWidth + textGap));
+                const x = 0.1 + (index * (elementWidth + textGapInches));
                 const y = textContainerY;
                 
                 ctx.fillStyle = '#000000';
@@ -2560,6 +2664,7 @@ function createLabelCanvas(label) {
             });
         } else {
             // Vertical layout: stack text elements
+            const textContainerY = 0.6;
             label.textElements.forEach((textElement, index) => {
                 const x = 0.1;
                 const y = textContainerY + (index * 0.15);
@@ -2568,7 +2673,7 @@ function createLabelCanvas(label) {
                 ctx.font = '10px Arial';
                 ctx.textAlign = 'center';
                 
-                const textX = x * dpi + (textContainerWidth * dpi) / 2;
+                const textX = x * dpi + ((labelWidth - 0.2) * dpi) / 2;
                 const textY = y * dpi + 15; // Offset for baseline
                 
                 ctx.fillText(textElement.text, textX, textY);
@@ -2576,16 +2681,16 @@ function createLabelCanvas(label) {
         }
     }
     
-    // Add static texts below the text elements
+    // Add static texts using cached design configuration
     if (label.staticTexts && label.staticTexts.length > 0) {
-        console.log('Static texts:', label.staticTexts.length, 'Text layout:', label.textLayout);
+        console.log('Static texts:', label.staticTexts.length);
         const labelWidth = appState.labelSettings.size === 'custom' 
             ? appState.labelSettings.customWidth 
             : LABEL_SIZES[appState.labelSettings.size].width;
         
-        // Position static text below text elements using actual layout
-        const actualTextLayout = appState.labelSettings.textLayout;
-        const baseY = 0.8; // Force horizontal layout positioning
+        // Position static text below text elements
+        const textLayout = designCache.textLayout || 'horizontal';
+        const baseY = textLayout === 'horizontal' ? 0.8 : 0.6 + (label.textElements.length * 0.15);
         
         label.staticTexts.forEach((staticText, index) => {
             const x = 0.1;
