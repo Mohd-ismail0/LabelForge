@@ -149,6 +149,7 @@ function setStep(stepNumber) {
     switch (stepNumber) {
         case 2:
             setupColumnMapping();
+            updateContinueButton();
             break;
         case 3:
             initializeLabelDesigner();
@@ -458,12 +459,6 @@ function handleZoneDrop(e) {
     updateColumnMapping();
     updateMappingPreview();
     updateContinueButton();
-    
-    console.log('After drop:', { 
-        zoneType, 
-        columnName: data.columnName, 
-        mappedColumns: appState.mappedColumns 
-    });
 }
 
 function removeColumnFromAllZones(columnName) {
@@ -514,9 +509,6 @@ function updateColumnMapping() {
             name: barcodeColumn.dataset.columnName,
             index: parseInt(barcodeColumn.dataset.columnIndex)
         };
-        console.log('Barcode mapped:', appState.mappedColumns.barcode);
-    } else {
-        console.log('No barcode column found in zone');
     }
     
     // Update text mappings
