@@ -1408,3 +1408,27 @@ body {
   background: rgba(255, 255, 255, 0.2);
   color: white;
 }
+
+/* Drag and Drop Styles */
+.tree-item.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg);
+}
+
+.tree-item[draggable="true"] {
+  cursor: grab;
+}
+
+.tree-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.tree-item:hover {
+  background: var(--color-gray-50);
+  transform: translateX(2px);
+  transition: all 0.2s ease;
+}
+
+.tree-item.dragging:hover {
+  transform: rotate(2deg) translateX(2px);
+}

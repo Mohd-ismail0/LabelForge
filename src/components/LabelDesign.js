@@ -31,7 +31,7 @@ const LabelDesign = () => {
       isStatic: type === 'text', // Mark static text elements
       size: {
         width: type === 'barcode' ? 80 : 100,
-        height: type === 'barcode' ? 40 : 20
+        height: type === 'barcode' ? 50 : 20
       },
       flexbox: {
         flexDirection: 'row',
@@ -115,6 +115,7 @@ const LabelDesign = () => {
 
   const [draggedElement, setDraggedElement] = useState(null);
   const [selectedElements, setSelectedElements] = useState([]);
+  const [draggedTreeElement, setDraggedTreeElement] = useState(null);
 
   const moveElementToGroup = (elementId, groupId) => {
     const element = labelSettings.elements.find(el => el.id === elementId);
@@ -221,6 +222,44 @@ const LabelDesign = () => {
     }
   };
 
+  // Element tree drag and drop functions
+  const handleTreeDragStart = (e, elementId) => {
+    setDraggedTreeElement(elementId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', elementId);
+  };
+
+  const handleTreeDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleTreeDrop = (e, targetElementId) => {
+    e.preventDefault();
+    
+    if (!draggedTreeElement || draggedTreeElement === targetElementId) {
+      setDraggedTreeElement(null);
+      return;
+    }
+
+    const elements = [...labelSettings.elements];
+    const draggedIndex = elements.findIndex(el => el.id === draggedTreeElement);
+    const targetIndex = elements.findIndex(el => el.id === targetElementId);
+
+    if (draggedIndex !== -1 && targetIndex !== -1) {
+      // Remove dragged element from its current position
+      const [draggedEl] = elements.splice(draggedIndex, 1);
+      
+      // Insert at new position
+      const newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      elements.splice(newTargetIndex, 0, draggedEl);
+      
+      actions.setLabelSettings({ elements });
+    }
+    
+    setDraggedTreeElement(null);
+  };
+
   const handleDragStart = (e, elementId) => {
     setDraggedElement(elementId);
     e.dataTransfer.effectAllowed = 'move';
@@ -282,7 +321,7 @@ const LabelDesign = () => {
           columnName: state.mappedColumns.barcode,
             size: {
               width: 80,
-              height: 40
+              height: 50
             },
           flexbox: {
             flexDirection: 'row',
@@ -508,7 +547,7 @@ const LabelDesign = () => {
                 {labelSettings.elements.map((element) => (
                   <div key={element.id} className="tree-element-container">
                     <div
-                      className={`tree-item ${element.type === 'group' ? 'group-item' : 'element-item'} ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''}`}
+                      className={`tree-item ${element.type === 'group' ? 'group-item' : 'element-item'} ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''} ${draggedTreeElement === element.id ? 'dragging' : ''}`}
                       onClick={(e) => {
                         if (element.type === 'group') {
                           selectGroup(element.id);
@@ -516,8 +555,10 @@ const LabelDesign = () => {
                           handleElementSelect(element.id, e.shiftKey);
                         }
                       }}
-                      draggable={element.type !== 'group'}
-                      onDragStart={(e) => handleDragStart(e, element.id)}
+                      draggable={true}
+                      onDragStart={(e) => handleTreeDragStart(e, element.id)}
+                      onDragOver={handleTreeDragOver}
+                      onDrop={(e) => handleTreeDrop(e, element.id)}
                     >
                       <span className="tree-icon">
                         {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : '📦'}
@@ -628,15 +669,17 @@ const LabelDesign = () => {
                     style={{
                       ...element.flexbox,
                       width: element.size?.width ? `${element.size.width}%` : '100%',
-                      height: element.size?.height ? `${element.size.height}px` : (element.type === 'barcode' ? '40px' : '20px'),
+                      height: 'fit-content',
+                      minHeight: element.size?.height ? `${element.size.height}px` : (element.type === 'barcode' ? '50px' : '20px'),
                       border: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
                       background: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.8)',
                       cursor: 'pointer',
                       borderRadius: '4px',
-                      overflow: 'hidden',
+                      overflow: 'visible', // Allow barcode to extend if needed for clarity
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center'
+                      justifyContent: 'center',
+                      padding: element.type === 'barcode' ? '8px' : '0px' // More padding for barcode elements
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -809,7 +852,7 @@ const ElementProperties = ({ element, onUpdate }) => {
               id="barcode-height"
               min="20"
               max="100"
-              value={element.size?.height || '40'}
+              value={element.size?.height || '50'}
               onChange={(e) => onUpdate({
                 size: { ...element.size, height: parseInt(e.target.value) }
               })}
@@ -1152,18 +1195,18 @@ const BarcodeElement = ({ element }) => {
       const sampleBarcode = excelData.rows[0]?.[barcodeColumnIndex];
 
       if (sampleBarcode) {
-        // Calculate actual pixel dimensions for preview
-        const previewWidth = element.size?.width ? 
-          Math.max(50, (element.size.width / 100) * 200) : // Scale based on percentage
-          120; // Default width
-        const previewHeight = element.size?.height || 40;
+        // Calculate preview container size based on element percentage
+        const containerWidth = element.size?.width ? 
+          Math.max(120, (element.size.width / 100) * 400) : // Scale based on percentage
+          200; // Default width
+        const containerHeight = element.size?.height || 60;
         
-        // Use shared rendering function for consistency
+        // Use shared rendering function for consistency - it will handle high-res generation
         const canvas = renderBarcode(
           sampleBarcode,
           labelSettings.barcodeType,
-          previewWidth,
-          previewHeight,
+          containerWidth,
+          containerHeight,
           true
         );
         
