@@ -212,11 +212,11 @@ const LabelDesign = () => {
   const createGroupFromSelected = () => {
     if (selectedElements.length < 2) return;
 
-    // Find elements to group (only top-level elements, not nested ones)
+    // Find elements and groups to group (only top-level, not nested ones)
     const elementsToGroup = [];
     const remainingElements = [];
     
-    // Only process top-level elements to avoid duplication
+    // Process top-level elements and groups
     labelSettings.elements.forEach(el => {
       if (selectedElements.includes(el.id)) {
         elementsToGroup.push(el);
@@ -224,6 +224,9 @@ const LabelDesign = () => {
         remainingElements.push(el);
       }
     });
+    
+    // Only proceed if we found elements to group
+    if (elementsToGroup.length < 2) return;
     
     const newGroup = {
       id: labelSettings.nextElementId,
@@ -335,28 +338,14 @@ const LabelDesign = () => {
     return size;
   };
 
-  // Get preview size that matches the final output proportions
-  const getPreviewSize = () => {
-    const size = getCurrentSize();
-    // Use 96 DPI for screen preview but maintain the same proportions as 300 DPI output
-    const previewDPI = 96;
-    const outputDPI = 300;
-    const scale = previewDPI / outputDPI;
-    
-    return {
-      width: size.width * previewDPI,
-      height: size.height * previewDPI,
-      scale: scale
-    };
-  };
 
   const renderElement = (element) => {
     if (element.type === 'barcode') {
-      return <BarcodeElement element={element} previewSize={getPreviewSize()} />;
+      return <BarcodeElement element={element} />;
     } else if (element.type === 'text') {
       return <TextElement element={element} />;
     } else if (element.type === 'group') {
-      return <GroupElement element={element} previewSize={getPreviewSize()} />;
+      return <GroupElement element={element} />;
     }
     return null;
   };
@@ -364,11 +353,11 @@ const LabelDesign = () => {
   // Helper function to render nested elements recursively
   const renderNestedElement = (element) => {
     if (element.type === 'barcode') {
-      return <BarcodeElement element={element} previewSize={getPreviewSize()} />;
+      return <BarcodeElement element={element} />;
     } else if (element.type === 'text') {
       return <TextElement element={element} />;
     } else if (element.type === 'group') {
-      return <GroupElement element={element} previewSize={getPreviewSize()} />;
+      return <GroupElement element={element} />;
     }
     return null;
   };
@@ -640,12 +629,8 @@ const LabelDesign = () => {
                        onClick={(e) => {
                          if (element.type === 'group') {
                            if (e.shiftKey) {
-                             // Shift+click for multi-selection of groups
-                             setSelectedElements(prev => 
-                               prev.includes(element.id) 
-                                 ? prev.filter(id => id !== element.id)
-                                 : [...prev, element.id]
-                             );
+                             // Shift+click for multi-selection of groups - use same logic as elements
+                             handleElementSelect(element.id, true);
                            } else {
                              // Regular click for single group selection
                              setSelectedElements([]); // Clear multi-selections
@@ -697,12 +682,8 @@ const LabelDesign = () => {
                                onClick={(e) => {
                                  if (child.type === 'group') {
                                    if (e.shiftKey) {
-                                     // Shift+click for multi-selection of groups
-                                     setSelectedElements(prev => 
-                                       prev.includes(child.id) 
-                                         ? prev.filter(id => id !== child.id)
-                                         : [...prev, child.id]
-                                     );
+                                     // Shift+click for multi-selection of groups - use same logic as elements
+                                     handleElementSelect(child.id, true);
                                    } else {
                                      // Regular click for single group selection
                                      setSelectedElements([]); // Clear multi-selections
@@ -793,16 +774,15 @@ const LabelDesign = () => {
               <h4>Label Canvas</h4>
               <div className="canvas-info">
                 <span>Size: {getCurrentSize().width}" × {getCurrentSize().height}"</span>
-                <span>Preview DPI: 96 (matches final output proportions)</span>
-                <span>Output DPI: 300</span>
+                <span>DPI: {getCurrentSize().dpi}</span>
               </div>
             </div>
             <div className="canvas-container">
               <div
                 className={`label-canvas flexbox-canvas ${selectedElement === 'label' ? 'selected' : ''}`}
                 style={{
-                  width: `${getPreviewSize().width}px`, // Use consistent preview sizing
-                  height: `${getPreviewSize().height}px`,
+                  width: `${getCurrentSize().width * 96}px`, // Use 96 DPI for screen display
+                  height: `${getCurrentSize().height * 96}px`,
                   display: 'flex',
                   flexDirection: labelSettings.labelFlexbox?.flexDirection || 'column',
                   justifyContent: labelSettings.labelFlexbox?.justifyContent || 'center',
@@ -845,12 +825,8 @@ const LabelDesign = () => {
                       e.stopPropagation();
                       if (element.type === 'group') {
                         if (e.shiftKey) {
-                          // Shift+click for multi-selection of groups
-                          setSelectedElements(prev => 
-                            prev.includes(element.id) 
-                              ? prev.filter(id => id !== element.id)
-                              : [...prev, element.id]
-                          );
+                          // Shift+click for multi-selection of groups - use same logic as elements
+                          handleElementSelect(element.id, true);
                         } else {
                           // Regular click for single group selection
                           setSelectedElements([]); // Clear multi-selections
@@ -1331,7 +1307,7 @@ const GroupProperties = ({ group, onUpdate }) => {
 };
 
 // Group Element Component
-const GroupElement = ({ element, previewSize }) => {
+const GroupElement = ({ element }) => {
   return (
     <div
       style={{
@@ -1356,11 +1332,11 @@ const GroupElement = ({ element, previewSize }) => {
             }}
           >
             {child.type === 'barcode' ? (
-              <BarcodeElement element={child} previewSize={previewSize} />
+              <BarcodeElement element={child} />
             ) : child.type === 'text' ? (
               <TextElement element={child} />
             ) : child.type === 'group' ? (
-              <GroupElement element={child} previewSize={previewSize} />
+              <GroupElement element={child} />
             ) : null}
           </div>
         ))
@@ -1374,7 +1350,7 @@ const GroupElement = ({ element, previewSize }) => {
 };
 
 // Barcode Element Component
-const BarcodeElement = ({ element, previewSize }) => {
+const BarcodeElement = ({ element }) => {
   const { state } = useApp();
   const { excelData, mappedColumns, labelSettings } = state;
   const [barcodeCanvas, setBarcodeCanvas] = useState(null);
@@ -1386,14 +1362,14 @@ const BarcodeElement = ({ element, previewSize }) => {
       const barcodeColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.barcode);
       const sampleBarcode = excelData.rows[0]?.[barcodeColumnIndex];
 
-      if (sampleBarcode && previewSize) {
-        // Calculate preview container size that matches the final output proportions
+      if (sampleBarcode) {
+        // Calculate preview container size based on element percentage
         const containerWidth = element.size?.width ? 
-          Math.max(120, (element.size.width / 100) * previewSize.width) : // Scale based on percentage
-          previewSize.width * 0.8; // Default 80% width
-        const containerHeight = (element.size?.height || 50) * previewSize.scale;
+          Math.max(120, (element.size.width / 100) * 400) : // Scale based on percentage
+          200; // Default width
+        const containerHeight = element.size?.height || 60;
         
-        // Use shared rendering function with preview DPI for consistency
+        // Use shared rendering function for consistency - it will handle high-res generation
         const canvas = renderBarcode(
           sampleBarcode,
           labelSettings.barcodeType,
@@ -1407,7 +1383,7 @@ const BarcodeElement = ({ element, previewSize }) => {
     } catch (error) {
       console.error('Error generating barcode preview:', error);
     }
-  }, [element, excelData, mappedColumns, labelSettings.barcodeType, previewSize]);
+  }, [element, excelData, mappedColumns, labelSettings.barcodeType]);
 
   if (!barcodeCanvas) {
     return (
