@@ -29,7 +29,7 @@ const Generation = () => {
     if (quantitySettings.type === 'column' && mappedColumns.quantity) {
       const quantityColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.quantity);
       totalLabels = excelData.rows.reduce((sum, row) => {
-        const qty = parseInt(row[quantityColumnIndex]) || 1;
+        const qty = parseInt(row[quantityColumnIndex]) || 0;
         return sum + qty;
       }, 0);
     } else if (quantitySettings.type === 'fixed') {
@@ -83,12 +83,15 @@ const Generation = () => {
         let quantity = 1;
         if (quantitySettings.type === 'column' && mappedColumns.quantity) {
           const quantityColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.quantity);
-          quantity = parseInt(row[quantityColumnIndex]) || 1;
+          quantity = parseInt(row[quantityColumnIndex]) || 0;
         } else if (quantitySettings.type === 'fixed') {
           quantity = quantitySettings.fixedQuantity;
         } else if (quantitySettings.type === 'manual') {
           quantity = quantitySettings.manualQuantities[rowIndex] || 1;
         }
+        
+        // Skip rows with zero quantity
+        if (quantity <= 0) continue;
 
         // Get text content
         const textContent = textColumns.map(colIndex => row[colIndex]).filter(val => val).join(' - ');

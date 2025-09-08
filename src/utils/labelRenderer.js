@@ -11,62 +11,57 @@ export const LABEL_SIZES = {
 };
 
 export const renderBarcode = (barcode, barcodeType, width, height, showText = true) => {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  
-  // Set canvas size
-  canvas.width = width;
-  canvas.height = height;
-  
-  // Fill background with transparent
-  ctx.clearRect(0, 0, width, height);
-  
   try {
-    // Generate barcode with height 100% and width proportional to height
-    const BARCODE_ASPECT_RATIO = 2; // Locked aspect ratio for optimal scanning
-    const MIN_BARCODE_WIDTH = 1; // Minimum barcode width for JsBarcode
-    
-    // Use full height and calculate width proportionally
-    const barcodeHeight = height; // 100% height
-    const barcodeWidth = height * BARCODE_ASPECT_RATIO; // Width proportional to height
+    // First, generate the barcode to determine its actual width
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
     
     // Reserve space for text if needed (20% of height)
-    let finalBarcodeHeight = barcodeHeight;
+    let finalBarcodeHeight = height;
     if (showText) {
-      const textHeight = Math.max(8, barcodeHeight * 0.2);
-      finalBarcodeHeight = Math.max(barcodeHeight - textHeight, barcodeHeight * 0.8);
+      const textHeight = Math.max(8, height * 0.2);
+      finalBarcodeHeight = Math.max(height - textHeight, height * 0.8);
     }
     
-    // Generate barcode at calculated dimensions
-    const barcodeCanvas = document.createElement('canvas');
-    barcodeCanvas.width = barcodeWidth;
-    barcodeCanvas.height = finalBarcodeHeight;
-    
-    JsBarcode(barcodeCanvas, barcode.toString(), {
+    // Generate barcode with optimal settings
+    JsBarcode(tempCanvas, barcode.toString(), {
       format: barcodeType,
-      width: Math.max(MIN_BARCODE_WIDTH, barcodeWidth / 100), // Scale for optimal line width
+      width: 2, // Optimal line width for scanning
       height: finalBarcodeHeight,
       displayValue: showText,
-      fontSize: Math.max(8, Math.min(16, finalBarcodeHeight * 0.15)), // Proportional font size
+      fontSize: Math.max(8, Math.min(16, finalBarcodeHeight * 0.15)),
       margin: 0, // No margin for minimal white space
       lineColor: 'black',
       textAlign: 'center',
       textPosition: 'bottom',
-      textMargin: 0 // No text margin for minimal spacing
+      textMargin: 0
     });
     
-    // Center the barcode horizontally within the container (flexbox center alignment)
-    const barcodeX = (width - barcodeCanvas.width) / 2;
-    const barcodeY = 0; // Start from top since we're using full height
+    // Now create the final canvas with the actual barcode width
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
     
-    // Draw barcode with high quality
+    // Set canvas size to match the actual barcode width
+    canvas.width = tempCanvas.width;
+    canvas.height = height;
+    
+    // Fill background with transparent
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw the barcode
     ctx.imageSmoothingEnabled = false; // Disable smoothing for crisp barcode lines
-    ctx.drawImage(barcodeCanvas, barcodeX, barcodeY);
+    ctx.drawImage(tempCanvas, 0, 0);
     
     return canvas;
   } catch (error) {
     console.error('Error generating barcode:', error);
-    // Draw error text
+    // Create error canvas
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = width;
+    canvas.height = height;
+    ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = 'red';
     ctx.font = `${Math.max(8, height * 0.1)}px Arial`;
     ctx.textAlign = 'center';
