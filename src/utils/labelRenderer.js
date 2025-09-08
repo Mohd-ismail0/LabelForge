@@ -129,17 +129,15 @@ export const renderLabel = async (labelData, labelSettings, elements = [], targe
     canvas.width = width;
     canvas.height = height;
     
-    // Fill background with transparent
-    ctx.clearRect(0, 0, width, height);
+    // Fill background with white and add border
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, width, height);
     
-    // Debug logging
-    console.log('renderLabel called with:', {
-      labelData,
-      elements: elements?.length || 0,
-      targetDPI,
-      width,
-      height
-    });
+    // Add a very light border around the label
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, width, height);
+    
   
   // If no elements defined, use default layout
   if (!elements || elements.length === 0) {
@@ -184,7 +182,6 @@ export const renderLabel = async (labelData, labelSettings, elements = [], targe
     const availableHeight = Math.max(0, height - (labelPadding * 2));
     
     // Render elements with proper flexbox layout that respects label boundaries
-    console.log('Calling renderFlexboxLayout with elements:', elements.length);
     await renderFlexboxLayout(ctx, elements, {
       x: labelPadding,
       y: labelPadding,
@@ -334,13 +331,6 @@ const renderImage = (imageData, width, height, aspectRatio = 'auto') => {
 const renderFlexboxLayout = async (ctx, elements, container) => {
   const { x, y, width, height, flexDirection, justifyContent, alignItems, gap, labelData, labelSettings, dpi } = container;
   
-  console.log('renderFlexboxLayout called with:', {
-    elementsCount: elements.length,
-    container: { x, y, width, height },
-    flexDirection,
-    justifyContent,
-    alignItems
-  });
   
   // Calculate element dimensions first
   const elementDimensions = await Promise.all(elements.map(async element => {
@@ -455,11 +445,15 @@ const calculateElementDimensions = (element, container) => {
       (containerWidth * 0.8);
     const elementHeight = (element.size?.height || 40) * (dpi / 96);
     
+    // Ensure minimum dimensions for quality
+    const minWidth = Math.max(elementWidth, 100);
+    const minHeight = Math.max(elementHeight, 30);
+    
     const canvas = renderBarcode(
       labelData.barcode,
       element.barcodeType || labelSettings.barcodeType || 'EAN13',
-      elementWidth,
-      elementHeight
+      minWidth,
+      minHeight
     );
     
     return { width: canvas.width, height: canvas.height, canvas };
@@ -479,7 +473,11 @@ const calculateElementDimensions = (element, container) => {
       containerWidth;
     const elementHeight = (element.size?.height || 20) * (dpi / 96);
     
-    const canvas = renderText(textContent, element.style, elementWidth, elementHeight);
+    // Ensure minimum dimensions for quality
+    const minWidth = Math.max(elementWidth, 50);
+    const minHeight = Math.max(elementHeight, 15);
+    
+    const canvas = renderText(textContent, element.style, minWidth, minHeight);
     
     return { width: canvas.width, height: canvas.height, canvas };
   } else if (element.type === 'image') {
@@ -488,10 +486,14 @@ const calculateElementDimensions = (element, container) => {
       (containerWidth * 0.6);
     const elementHeight = (element.size?.height || 40) * (dpi / 96);
     
+    // Ensure minimum dimensions for quality
+    const minWidth = Math.max(elementWidth, 50);
+    const minHeight = Math.max(elementHeight, 30);
+    
     // For images, we need to return a promise-based canvas
     return { 
-      width: elementWidth, 
-      height: elementHeight, 
+      width: minWidth, 
+      height: minHeight, 
       canvas: null, // Will be set by async rendering
       isAsync: true,
       imageData: element.imageData,
@@ -518,23 +520,35 @@ const calculateGroupDimensions = async (group, container) => {
   const groupAvailableWidth = containerWidth - (groupPadding * 2);
   const groupAvailableHeight = containerHeight - (groupPadding * 2);
   
-  // Calculate child dimensions
+  // Calculate child dimensions - handle both individual elements and nested groups
   const childDimensions = await Promise.all(group.children.map(async child => {
-    const dim = calculateElementDimensions(child, { 
-      width: groupAvailableWidth, 
-      height: groupAvailableHeight, 
-      labelData, 
-      labelSettings, 
-      dpi 
-    });
-    
-    // Handle async image rendering
-    if (dim.isAsync && child.type === 'image') {
-      const canvas = await renderImage(dim.imageData, dim.width, dim.height, dim.aspectRatio);
-      return { ...dim, canvas };
+    if (child.type === 'group') {
+      // Recursively handle nested groups
+      return await calculateGroupDimensions(child, { 
+        width: groupAvailableWidth, 
+        height: groupAvailableHeight, 
+        labelData, 
+        labelSettings, 
+        dpi 
+      });
+    } else {
+      // Handle individual elements
+      const dim = calculateElementDimensions(child, { 
+        width: groupAvailableWidth, 
+        height: groupAvailableHeight, 
+        labelData, 
+        labelSettings, 
+        dpi 
+      });
+      
+      // Handle async image rendering
+      if (dim.isAsync && child.type === 'image') {
+        const canvas = await renderImage(dim.imageData, dim.width, dim.height, dim.aspectRatio);
+        return { ...dim, canvas };
+      }
+      
+      return dim;
     }
-    
-    return dim;
   }));
   
   // Calculate group size based on flex direction
@@ -572,9 +586,21 @@ const renderGroup = (ctx, group, groupDim, container) => {
   let childY = y + groupPadding;
   
   children.forEach((childDim, index) => {
-    // Ensure canvas exists and is valid before drawing
-    if (childDim.canvas && childDim.canvas.width > 0 && childDim.canvas.height > 0) {
-      ctx.drawImage(childDim.canvas, childX, childY);
+    // Handle nested groups recursively
+    if (childDim.children && childDim.children.length > 0) {
+      // This is a nested group, render it recursively
+      renderGroup(ctx, group.children[index], childDim, { 
+        x: childX, 
+        y: childY, 
+        labelData, 
+        labelSettings, 
+        dpi 
+      });
+    } else {
+      // This is an individual element, draw its canvas
+      if (childDim.canvas && childDim.canvas.width > 0 && childDim.canvas.height > 0) {
+        ctx.drawImage(childDim.canvas, childX, childY);
+      }
     }
     
     if (groupFlexDirection === 'row') {
