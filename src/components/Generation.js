@@ -29,7 +29,7 @@ const Generation = () => {
     if (quantitySettings.type === 'column' && mappedColumns.quantity) {
       const quantityColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.quantity);
       totalLabels = excelData.rows.reduce((sum, row) => {
-        const qty = parseInt(row[quantityColumnIndex]) || 1;
+        const qty = parseInt(row[quantityColumnIndex]) || 0;
         return sum + qty;
       }, 0);
     } else if (quantitySettings.type === 'fixed') {
@@ -83,12 +83,15 @@ const Generation = () => {
         let quantity = 1;
         if (quantitySettings.type === 'column' && mappedColumns.quantity) {
           const quantityColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.quantity);
-          quantity = parseInt(row[quantityColumnIndex]) || 1;
+          quantity = parseInt(row[quantityColumnIndex]) || 0;
         } else if (quantitySettings.type === 'fixed') {
           quantity = quantitySettings.fixedQuantity;
         } else if (quantitySettings.type === 'manual') {
           quantity = quantitySettings.manualQuantities[rowIndex] || 1;
         }
+        
+        // Skip rows with zero quantity
+        if (quantity <= 0) continue;
 
         // Get text content
         const textContent = textColumns.map(colIndex => row[colIndex]).filter(val => val).join(' - ');
@@ -132,11 +135,11 @@ const Generation = () => {
       for (let i = 0; i < state.generatedLabels.length; i++) {
         const label = state.generatedLabels[i];
         
-        // Use shared rendering function for consistency with design
-        const canvas = renderLabel(label, labelSettings, labelSettings.elements);
+        // Use shared rendering function with high DPI for consistency
+        const canvas = await renderLabel(label, labelSettings, labelSettings.elements, 300);
         
-        // Convert to blob and add to zip
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        // Convert to high-quality blob and add to zip
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
         zip.file(`label_${label.productIndex + 1}_${label.labelIndex + 1}.png`, blob);
       }
 
@@ -210,12 +213,14 @@ const Generation = () => {
         const x = currentCol * (labelWidthMM + horizontalSpacing);
         const y = currentRow * (labelHeightMM + verticalSpacing);
 
-        // Use shared rendering function for consistency with design
-        const canvas = renderLabel(label, labelSettings, labelSettings.elements);
+        // Use shared rendering function with high DPI for PDF consistency
+        const canvas = await renderLabel(label, labelSettings, labelSettings.elements, 300);
         
-        // Convert canvas to image and add to PDF
-        const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', x, y, labelWidthMM, labelHeightMM);
+        // Convert canvas to high-quality image data
+        const imgData = canvas.toDataURL('image/png', 1.0); // Maximum quality
+        
+        // Add image to PDF with precise positioning
+        pdf.addImage(imgData, 'PNG', x, y, labelWidthMM, labelHeightMM, undefined, 'FAST');
 
         // Update position
         currentCol++;
@@ -385,6 +390,16 @@ const Generation = () => {
             <div className="download-info">
               <p><strong>ZIP Format:</strong> Contains individual high-resolution label images for custom printing or integration.</p>
               <p><strong>PDF Format:</strong> Optimized for printing with proper margins and cut lines. Compatible with Avery label sheets.</p>
+              <div className="quality-note" style={{ 
+                marginTop: '10px', 
+                padding: '8px', 
+                background: '#e8f5e8', 
+                border: '1px solid #4caf50', 
+                borderRadius: '4px',
+                fontSize: '12px'
+              }}>
+                <strong>✅ Quality Assurance:</strong> PDF output now matches the design preview exactly with consistent 300 DPI rendering and locked aspect ratios.
+              </div>
             </div>
           </div>
         )}

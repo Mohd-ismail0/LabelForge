@@ -10,7 +10,7 @@ const QuantityManagement = () => {
     if (quantitySettings.type === 'manual' && excelData) {
       const initialQuantities = {};
       excelData.rows.forEach((row, index) => {
-        initialQuantities[index] = 1;
+        initialQuantities[index] = 0;
       });
       setManualQuantities(initialQuantities);
     }
@@ -25,7 +25,7 @@ const QuantityManagement = () => {
   };
 
   const handleManualQuantityChange = (rowIndex, value) => {
-    const newQuantities = { ...manualQuantities, [rowIndex]: parseInt(value) || 1 };
+    const newQuantities = { ...manualQuantities, [rowIndex]: Math.max(0, parseInt(value) || 0) };
     setManualQuantities(newQuantities);
     actions.setQuantitySettings({ manualQuantities: newQuantities });
   };
@@ -39,7 +39,7 @@ const QuantityManagement = () => {
     if (quantitySettings.type === 'column' && mappedColumns.quantity) {
       const quantityColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.quantity);
       totalLabels = excelData.rows.reduce((sum, row) => {
-        const qty = parseInt(row[quantityColumnIndex]) || 1;
+        const qty = parseInt(row[quantityColumnIndex]) || 0;
         return sum + qty;
       }, 0);
     } else if (quantitySettings.type === 'fixed') {
@@ -174,8 +174,8 @@ const QuantityManagement = () => {
                           <input
                             type="number"
                             className="quantity-input"
-                            value={manualQuantities[index] || 1}
-                            min="1"
+                            value={manualQuantities[index] || 0}
+                            min="0"
                             max="1000"
                             onChange={(e) => handleManualQuantityChange(index, e.target.value)}
                           />
