@@ -170,14 +170,16 @@
                 <span style="color:#999;font-size:12px">logo</span>
               </div>
 
-              <div id="labelContent" style="padding-right:80px">
-                <div id="staticLine1" contenteditable="true" style="font-weight:700;direction:rtl">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com</div>
-                <div id="staticLine2" contenteditable="true" style="font-size:12px">Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com</div>
+              <div id="labelContent" style="padding-right:80px;width:100%">
+                <div id="staticLine1" contenteditable="true" style="font-weight:700;direction:rtl;width:100%">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com</div>
+                <div id="staticLine2" contenteditable="true" style="font-size:12px;width:100%">Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com</div>
                 <div id="dynamicPairs" style="margin-top:8px"></div>
                 <div id="barcodeArea" style="margin-top:8px"></div>
-                <div style="margin-top:8px;font-size:12px">
-                  <div id="staticLine3" contenteditable="true">info@advistaltd.com | بنغالور، الهند</div>
-                  <div id="staticLine4" contenteditable="true">info@advistaltd.com | Bangalore, India</div>
+                <div style="margin-top:8px;font-size:12px;width:100%">
+                  <div id="staticLine3" contenteditable="true" style="width:100%">info@advistaltd.com | بنغالور، الهند</div>
+                  <div id="staticLine4" contenteditable="true" style="width:100%">info@advistaltd.com | Bangalore, India</div>
+                  <div id="staticLine5" contenteditable="true" style="width:100%"></div>
+                  <div id="staticLine6" contenteditable="true" style="width:100%"></div>
                 </div>
               </div>
             </div>
@@ -202,16 +204,13 @@ const mmToPx = (mm, dpi=300) => Math.round(mm * dpi / 25.4); // convert mm to px
 
 /* ---------- Defaults & state ---------- */
 const presetStatic = `
-مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com
-Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com
-
-info@advistaltd.com | بنغالور، الهند
-info@advistaltd.com | Bangalore, India
-
-رقم ضريبة القيمة المضافة (VAT): 313061260900003
+مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | بنغالور، الهند
+Imported and Marketed By: Advista Marketing Pvt Ltd | info@advistaltd.com 
 
 تركيبة الخامة: نايلون + سباندكس
 Material Composition: Nylon + Spandex
+
+رقم ضريبة القيمة المضافة (VAT): 313061260900003
 `.trim();
 
 document.getElementById('staticText').value = presetStatic;
@@ -429,10 +428,11 @@ function renderMappingPreview(){
   });
   // static lines mapping
   const staticLines = staticTextArea.value.split('\n').map(s=>s.trim()).filter(Boolean);
-  if(staticLines.length>=1) document.getElementById('staticLine1').textContent = staticLines[0];
-  if(staticLines.length>=2) document.getElementById('staticLine2').textContent = staticLines[1];
-  if(staticLines.length>=3) document.getElementById('staticLine3').textContent = staticLines[2];
-  if(staticLines.length>=4) document.getElementById('staticLine4').textContent = staticLines[3];
+  const ids = ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'];
+  ids.forEach((id, i)=>{
+    const el = document.getElementById(id);
+    if(el) el.textContent = staticLines[i] || '';
+  });
 
   // barcode rendering for preview
   renderBarcodePreview();
@@ -569,9 +569,9 @@ generatePdfBtn.addEventListener('click', async ()=>{
             ${ currentLogoDataUrl ? `<img src="${currentLogoDataUrl}" style="max-width:100%;max-height:100%;display:block" />` : `<div style=\"color:#888;font-size:${12}px\">logo</div>` }
           </div>
 
-          <div style="padding-right:${logoBoxPx + 6}px">
-            <div style="font-weight:700;font-size:${line1Px}px;direction:rtl">${escapeHtml(line1)}</div>
-            <div style="font-size:${line2Px}px;margin-top:4px">${escapeHtml(line2)}</div>
+          <div style="padding-right:${logoBoxPx + 6}px;width:100%">
+            <div style="font-weight:700;font-size:${line1Px}px;direction:rtl;width:100%">${escapeHtml(line1)}</div>
+            <div style="font-size:${line2Px}px;margin-top:4px;width:100%">${escapeHtml(line2)}</div>
 
             <div id="dynContent" style="margin-top:8px;font-size:${dynPx}px;line-height:1.1">
               ${selectedCols.map(col => `<div><strong>${escapeHtml(col)}:</strong> ${escapeHtml(String(row[col] ?? ''))}</div>`).join('')}
@@ -579,9 +579,9 @@ generatePdfBtn.addEventListener('click', async ()=>{
 
             <div id="barcodeHolder" style="margin-top:8px"></div>
 
-            <div style="position:absolute;bottom:${padPx}px;left:${padPx}px;right:${padPx}px;font-size:${infoPx}px">
-              <div>${escapeHtml(line3)}</div>
-              <div style="font-size:${infoPx}px">${escapeHtml(line4)}</div>
+            <div style="position:absolute;bottom:${padPx}px;left:${padPx}px;right:${padPx}px;font-size:${infoPx}px;width:calc(100% - ${padPx*2}px)">
+              <div style="width:100%">${escapeHtml(line3)}</div>
+              <div style="font-size:${infoPx}px;width:100%">${escapeHtml(line4)}</div>
             </div>
           </div>
         </div>
@@ -615,17 +615,6 @@ generatePdfBtn.addEventListener('click', async ()=>{
     return {dataUrl, pxW, pxH};
   } // end renderLabelToDataUrl
 
-  // Pre-render all labels sequentially (could be optimized in batches)
-  const rendered = [];
-  for(let i=0;i<items.length;i++){
-    const it = items[i];
-    // show progress in title
-    if(i % 5 === 0) document.title = `Rendering ${i+1}/${items.length}...`;
-    const r = await renderLabelToDataUrl(it.row);
-    rendered.push(r);
-  }
-  document.title = 'Label Maker';
-
   // Compose pages using jsPDF
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({unit:'mm', format:'a4', compress:true});
@@ -640,27 +629,28 @@ generatePdfBtn.addEventListener('click', async ()=>{
   let pageIndex = 0;
   let labelIndex = 0;
 
-  while(labelIndex < rendered.length){
+  while(labelIndex < items.length){
     if(pageIndex > 0) pdf.addPage();
     // for each row & col on page:
     for(let r=0;r<rowsPerPage;r++){
       for(let c=0;c<colsPerPage;c++){
         const globalIndex = pageIndex*perPage + r*colsPerPage + c;
-        if(globalIndex >= rendered.length) break;
-        const itemRendered = rendered[globalIndex];
+        if(globalIndex >= items.length) break;
+        const it = items[globalIndex];
         // compute x,y in mm
         const x = startX + c*(labelSizeMM.w + spacing);
         const y = startY + r*(labelSizeMM.h + spacing);
-        // add image: convert dataUrl to jsPDF image, specify width/height in mm
+        // render this label on the fly and add image
         try{
-          pdf.addImage(itemRendered.dataUrl, 'PNG', x, y, labelSizeMM.w, labelSizeMM.h);
+          const renderedItem = await renderLabelToDataUrl(it.row);
+          pdf.addImage(renderedItem.dataUrl, 'PNG', x, y, labelSizeMM.w, labelSizeMM.h);
         }catch(e){
           console.error('addImage error', e);
           pdf.text('Image add error', x+5, y+10);
         }
         labelIndex++;
       }
-      if(labelIndex >= rendered.length) break;
+      if(labelIndex >= items.length) break;
     }
     pageIndex++;
   }
