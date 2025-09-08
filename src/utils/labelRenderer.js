@@ -110,7 +110,7 @@ export const renderText = (text, style, width, height) => {
   return canvas;
 };
 
-export const renderLabel = (labelData, labelSettings, elements = [], targetDPI = null) => {
+export const renderLabel = async (labelData, labelSettings, elements = [], targetDPI = null) => {
   const currentSize = LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
   const size = labelSettings.size === 'custom' 
     ? { width: labelSettings.customWidth, height: labelSettings.customHeight }
@@ -174,7 +174,7 @@ export const renderLabel = (labelData, labelSettings, elements = [], targetDPI =
     const availableHeight = Math.max(0, height - (labelPadding * 2));
     
     // Render elements with proper flexbox layout that respects label boundaries
-    renderFlexboxLayout(ctx, elements, {
+    await renderFlexboxLayout(ctx, elements, {
       x: labelPadding,
       y: labelPadding,
       width: availableWidth,
@@ -192,18 +192,138 @@ export const renderLabel = (labelData, labelSettings, elements = [], targetDPI =
   return canvas;
 };
 
+// Render an image element
+const renderImage = (imageData, width, height, aspectRatio = 'auto') => {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas size
+    canvas.width = width;
+    canvas.height = height;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    if (!imageData) {
+      // Draw placeholder if no image
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#999';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('No Image', width / 2, height / 2);
+      resolve(canvas);
+      return;
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+      // Calculate scaling based on aspect ratio
+      let drawWidth = width;
+      let drawHeight = height;
+      let drawX = 0;
+      let drawY = 0;
+      
+      if (aspectRatio === 'auto') {
+        // Maintain original aspect ratio
+        const imgAspect = img.width / img.height;
+        const canvasAspect = width / height;
+        
+        if (imgAspect > canvasAspect) {
+          // Image is wider, fit to width
+          drawHeight = width / imgAspect;
+          drawY = (height - drawHeight) / 2;
+        } else {
+          // Image is taller, fit to height
+          drawWidth = height * imgAspect;
+          drawX = (width - drawWidth) / 2;
+        }
+      } else if (aspectRatio === 'square') {
+        // Force square aspect ratio
+        const size = Math.min(width, height);
+        drawWidth = size;
+        drawHeight = size;
+        drawX = (width - size) / 2;
+        drawY = (height - size) / 2;
+      } else if (aspectRatio === '16:9') {
+        // Force 16:9 aspect ratio
+        const targetAspect = 16 / 9;
+        if (width / height > targetAspect) {
+          drawHeight = height;
+          drawWidth = height * targetAspect;
+          drawX = (width - drawWidth) / 2;
+        } else {
+          drawWidth = width;
+          drawHeight = width / targetAspect;
+          drawY = (height - drawHeight) / 2;
+        }
+      } else if (aspectRatio === '4:3') {
+        // Force 4:3 aspect ratio
+        const targetAspect = 4 / 3;
+        if (width / height > targetAspect) {
+          drawHeight = height;
+          drawWidth = height * targetAspect;
+          drawX = (width - drawWidth) / 2;
+        } else {
+          drawWidth = width;
+          drawHeight = width / targetAspect;
+          drawY = (height - drawHeight) / 2;
+        }
+      } else if (aspectRatio === '3:2') {
+        // Force 3:2 aspect ratio
+        const targetAspect = 3 / 2;
+        if (width / height > targetAspect) {
+          drawHeight = height;
+          drawWidth = height * targetAspect;
+          drawX = (width - drawWidth) / 2;
+        } else {
+          drawWidth = width;
+          drawHeight = width / targetAspect;
+          drawY = (height - drawHeight) / 2;
+        }
+      }
+      
+      // Draw the image
+      ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+      resolve(canvas);
+    };
+    
+    img.onerror = () => {
+      // Draw error placeholder
+      ctx.fillStyle = '#ffebee';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#f44336';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Error loading image', width / 2, height / 2);
+      resolve(canvas);
+    };
+    
+    img.src = imageData;
+  });
+};
+
 // Proper flexbox layout rendering that respects boundaries
-const renderFlexboxLayout = (ctx, elements, container) => {
+const renderFlexboxLayout = async (ctx, elements, container) => {
   const { x, y, width, height, flexDirection, justifyContent, alignItems, gap, labelData, labelSettings, dpi } = container;
   
   // Calculate element dimensions first
-  const elementDimensions = elements.map(element => {
+  const elementDimensions = await Promise.all(elements.map(async element => {
     if (element.type === 'group') {
-      return calculateGroupDimensions(element, { width, height, labelData, labelSettings, dpi });
+      return await calculateGroupDimensions(element, { width, height, labelData, labelSettings, dpi });
     } else {
-      return calculateElementDimensions(element, { width, height, labelData, labelSettings, dpi });
+      const dim = calculateElementDimensions(element, { width, height, labelData, labelSettings, dpi });
+      
+      // Handle async image rendering
+      if (dim.isAsync && element.type === 'image') {
+        const canvas = await renderImage(dim.imageData, dim.width, dim.height, dim.aspectRatio);
+        return { ...dim, canvas };
+      }
+      
+      return dim;
     }
-  });
+  }));
   
   // Calculate total size needed
   let totalSize = 0;
@@ -325,13 +445,28 @@ const calculateElementDimensions = (element, container) => {
     const canvas = renderText(textContent, element.style, elementWidth, elementHeight);
     
     return { width: canvas.width, height: canvas.height, canvas };
+  } else if (element.type === 'image') {
+    const elementWidth = element.size?.width ? 
+      (containerWidth * element.size.width / 100) : 
+      (containerWidth * 0.6);
+    const elementHeight = (element.size?.height || 40) * (dpi / 96);
+    
+    // For images, we need to return a promise-based canvas
+    return { 
+      width: elementWidth, 
+      height: elementHeight, 
+      canvas: null, // Will be set by async rendering
+      isAsync: true,
+      imageData: element.imageData,
+      aspectRatio: element.aspectRatio || 'auto'
+    };
   }
   
   return { width: 0, height: 0 };
 };
 
 // Calculate dimensions for groups
-const calculateGroupDimensions = (group, container) => {
+const calculateGroupDimensions = async (group, container) => {
   const { width: containerWidth, height: containerHeight, labelData, labelSettings, dpi } = container;
   
   if (!group.children || group.children.length === 0) {
@@ -347,15 +482,23 @@ const calculateGroupDimensions = (group, container) => {
   const groupAvailableHeight = containerHeight - (groupPadding * 2);
   
   // Calculate child dimensions
-  const childDimensions = group.children.map(child => 
-    calculateElementDimensions(child, { 
+  const childDimensions = await Promise.all(group.children.map(async child => {
+    const dim = calculateElementDimensions(child, { 
       width: groupAvailableWidth, 
       height: groupAvailableHeight, 
       labelData, 
       labelSettings, 
       dpi 
-    })
-  );
+    });
+    
+    // Handle async image rendering
+    if (dim.isAsync && child.type === 'image') {
+      const canvas = await renderImage(dim.imageData, dim.width, dim.height, dim.aspectRatio);
+      return { ...dim, canvas };
+    }
+    
+    return dim;
+  }));
   
   // Calculate group size based on flex direction
   let groupWidth = 0;

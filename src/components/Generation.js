@@ -136,7 +136,7 @@ const Generation = () => {
         const label = state.generatedLabels[i];
         
         // Use shared rendering function with high DPI for consistency
-        const canvas = renderLabel(label, labelSettings, labelSettings.elements, 300);
+        const canvas = await renderLabel(label, labelSettings, labelSettings.elements, 300);
         
         // Convert to high-quality blob and add to zip
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
@@ -214,7 +214,7 @@ const Generation = () => {
         const y = currentRow * (labelHeightMM + verticalSpacing);
 
         // Use shared rendering function with high DPI for PDF consistency
-        const canvas = renderLabel(label, labelSettings, labelSettings.elements, 300);
+        const canvas = await renderLabel(label, labelSettings, labelSettings.elements, 300);
         
         // Convert canvas to high-quality image data
         const imgData = canvas.toDataURL('image/png', 1.0); // Maximum quality

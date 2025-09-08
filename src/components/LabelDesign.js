@@ -23,6 +23,31 @@ const LabelDesign = () => {
     actions.setLabelSettings({ barcodeType: e.target.value });
   };
 
+  const handleImageUpload = (elementId, file) => {
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageData = e.target.result;
+      const imageUrl = URL.createObjectURL(file);
+      
+      // Update the element with image data
+      const updatedElements = labelSettings.elements.map(element => {
+        if (element.id === elementId) {
+          return {
+            ...element,
+            imageData,
+            imageUrl
+          };
+        }
+        return element;
+      });
+      
+      actions.setLabelSettings({ elements: updatedElements });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const addElement = (type) => {
     const newElement = {
       id: labelSettings.nextElementId,
@@ -30,8 +55,8 @@ const LabelDesign = () => {
       content: type === 'text' ? 'Static Text' : '',
       isStatic: type === 'text', // Mark static text elements
       size: {
-        width: type === 'barcode' ? 80 : 100,
-        height: type === 'barcode' ? 50 : 20
+        width: type === 'barcode' ? 80 : (type === 'image' ? 60 : 100),
+        height: type === 'barcode' ? 50 : (type === 'image' ? 40 : 20)
       },
       flexbox: {
         flexDirection: 'row',
@@ -46,7 +71,13 @@ const LabelDesign = () => {
         fontWeight: 'normal',
         color: '#000000',
         textAlign: 'center'
-      }
+      },
+      // Image-specific properties
+      ...(type === 'image' && {
+        imageData: null, // Will store base64 image data
+        imageUrl: null,  // Will store object URL for preview
+        aspectRatio: 'auto' // 'auto', 'square', '16:9', '4:3', etc.
+      })
     };
 
     actions.setLabelSettings({
@@ -344,6 +375,8 @@ const LabelDesign = () => {
       return <BarcodeElement element={element} />;
     } else if (element.type === 'text') {
       return <TextElement element={element} />;
+    } else if (element.type === 'image') {
+      return <ImageElement element={element} />;
     } else if (element.type === 'group') {
       return <GroupElement element={element} />;
     }
@@ -356,6 +389,8 @@ const LabelDesign = () => {
       return <BarcodeElement element={element} />;
     } else if (element.type === 'text') {
       return <TextElement element={element} />;
+    } else if (element.type === 'image') {
+      return <ImageElement element={element} />;
     } else if (element.type === 'group') {
       return <GroupElement element={element} />;
     }
@@ -563,6 +598,13 @@ const LabelDesign = () => {
                 </button>
                 <button
                   className="btn btn-outline btn-sm"
+                  onClick={() => addElement('image')}
+                >
+                  <span className="btn-icon">🖼️</span>
+                  Image
+                </button>
+                <button
+                  className="btn btn-outline btn-sm"
                   onClick={addGroup}
                 >
                   <span className="btn-icon">📦</span>
@@ -646,7 +688,7 @@ const LabelDesign = () => {
                        onDrop={(e) => handleTreeDrop(e, element.id)}
                      >
                        <span className="tree-icon">
-                         {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : '📦'}
+                         {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : element.type === 'image' ? '🖼️' : '📦'}
                        </span>
                        <span className="tree-label">
                          {element.type === 'group' 
@@ -657,7 +699,7 @@ const LabelDesign = () => {
                          }
                        </span>
                        <span className="tree-size">
-                         {element.size?.width ? `${element.size.width}%` : '100%'} × {element.size?.height || (element.type === 'barcode' ? '40' : '20')}px
+                         {element.size?.width ? `${element.size.width}%` : '100%'} × {element.size?.height || (element.type === 'barcode' ? '40' : element.type === 'image' ? '40' : '20')}px
                        </span>
                        <button
                          className="remove-element"
@@ -810,7 +852,7 @@ const LabelDesign = () => {
                       ...element.flexbox,
                       width: element.size?.width ? `${element.size.width}%` : '100%',
                       height: 'fit-content',
-                      minHeight: element.size?.height ? `${element.size.height}px` : (element.type === 'barcode' ? '50px' : '20px'),
+                      minHeight: element.size?.height ? `${element.size.height}px` : (element.type === 'barcode' ? '50px' : element.type === 'image' ? '40px' : '20px'),
                       border: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
                       background: 'transparent',
                       cursor: 'pointer',
@@ -819,7 +861,7 @@ const LabelDesign = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                       padding: element.type === 'barcode' ? '2px' : '0px' // Minimal padding for barcode elements
+                       padding: element.type === 'barcode' ? '2px' : element.type === 'image' ? '2px' : '0px' // Minimal padding for barcode and image elements
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1025,6 +1067,108 @@ const ElementProperties = ({ element, onUpdate }) => {
            </div>
          </>
        )}
+      
+      {element.type === 'image' && (
+        <>
+          <h5>Image</h5>
+          <div className="prop-row">
+            <label htmlFor="image-upload">Upload Image:</label>
+            <input
+              type="file"
+              className="form-control"
+              id="image-upload"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  handleImageUpload(element.id, file);
+                }
+              }}
+            />
+            <small className="form-text text-muted">Supported formats: JPG, PNG, GIF, WebP</small>
+          </div>
+          
+          {element.imageUrl && (
+            <div className="prop-row">
+              <label>Preview:</label>
+              <div style={{ 
+                border: '1px solid #ddd', 
+                borderRadius: '4px', 
+                padding: '8px', 
+                textAlign: 'center',
+                maxWidth: '200px'
+              }}>
+                <img 
+                  src={element.imageUrl} 
+                  alt="Preview" 
+                  style={{ 
+                    maxWidth: '100%', 
+                    maxHeight: '100px', 
+                    objectFit: 'contain' 
+                  }} 
+                />
+              </div>
+            </div>
+          )}
+          
+          <div className="prop-row">
+            <label htmlFor="image-width">Width (% of parent):</label>
+            <input
+              type="number"
+              className="form-control"
+              id="image-width"
+              min="10"
+              max="100"
+              value={element.size?.width || '60'}
+              onChange={(e) => {
+                const newWidth = parseInt(e.target.value);
+                onUpdate({
+                  size: { ...element.size, width: newWidth }
+                });
+              }}
+            />
+          </div>
+          
+          <div className="prop-row">
+            <label htmlFor="image-height">Height (px):</label>
+            <input
+              type="number"
+              className="form-control"
+              id="image-height"
+              min="20"
+              max="200"
+              value={element.size?.height || '40'}
+              onChange={(e) => {
+                const newHeight = parseInt(e.target.value);
+                onUpdate({
+                  size: { ...element.size, height: newHeight }
+                });
+              }}
+            />
+          </div>
+          
+          <div className="prop-row">
+            <label htmlFor="image-aspect-ratio">Aspect Ratio:</label>
+            <select
+              className="form-control"
+              id="image-aspect-ratio"
+              value={element.aspectRatio || 'auto'}
+              onChange={(e) => {
+                onUpdate({
+                  aspectRatio: e.target.value
+                });
+              }}
+            >
+              <option value="auto">Auto (Original)</option>
+              <option value="square">Square (1:1)</option>
+              <option value="16:9">Widescreen (16:9)</option>
+              <option value="4:3">Standard (4:3)</option>
+              <option value="3:2">Photo (3:2)</option>
+            </select>
+            <small className="form-text text-muted">Controls how the image is scaled within its container</small>
+          </div>
+        </>
+      )}
       
       <h5>Flexbox Layout</h5>
       <div className="prop-row">
@@ -1460,6 +1604,43 @@ const TextElement = ({ element }) => {
       >
       {textContent}
       </div>
+  );
+};
+
+const ImageElement = ({ element }) => {
+  if (!element.imageUrl) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: '2px dashed #ccc',
+          borderRadius: '4px',
+          color: '#666',
+          fontSize: '12px',
+          textAlign: 'center',
+          padding: '8px'
+        }}
+      >
+        No Image
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={element.imageUrl}
+      alt="Label Image"
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+        borderRadius: '2px'
+      }}
+    />
   );
 };
 
