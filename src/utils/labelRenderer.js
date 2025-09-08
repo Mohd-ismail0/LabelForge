@@ -117,7 +117,7 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
     const barcodeHeight = height * 0.6;
     const barcodeCanvas = renderBarcode(
       labelData.barcode,
-      labelSettings.barcodeType,
+      labelSettings.barcodeType || 'EAN13',
       width * 0.8,
       barcodeHeight,
       true
@@ -136,36 +136,80 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
       ctx.fillText(labelData.text, width / 2, textY);
     }
   } else {
-    // Render each element
+    // Render each element using flexbox layout
+    let currentY = 10; // Start with some margin
+    
     elements.forEach(element => {
-      if (element.type === 'barcode') {
-        const elementCanvas = renderBarcode(
-          labelData.barcode,
-          labelSettings.barcodeType,
-          element.size.width * (dpi / 96), // Convert from display pixels to print pixels
-          element.size.height * (dpi / 96)
-        );
-        
-        const x = element.position.x * (dpi / 96);
-        const y = element.position.y * (dpi / 96);
-        ctx.drawImage(elementCanvas, x, y);
-      } else if (element.type === 'text') {
-        // Replace placeholder text with actual data
-        let textContent = element.content;
-        if (labelData.text && (textContent.includes('Sample') || textContent === 'Sample Text')) {
-          textContent = labelData.text;
+      if (element.type === 'group') {
+        // Render group elements
+        if (element.children && element.children.length > 0) {
+          let currentX = 10; // Start with some margin
+          
+          element.children.forEach((child, index) => {
+            if (child.type === 'barcode') {
+              const elementCanvas = renderBarcode(
+                labelData.barcode,
+                child.barcodeType || labelSettings.barcodeType || 'EAN13',
+                120 * (dpi / 96), // Convert from display pixels to print pixels
+                40 * (dpi / 96)
+              );
+              
+              ctx.drawImage(elementCanvas, currentX, currentY);
+              currentX += elementCanvas.width + 10; // Add spacing
+            } else if (child.type === 'text') {
+              // Use static text or Excel data
+              let textContent = child.content;
+              if (!child.isStatic && labelData.text) {
+                textContent = labelData.text;
+              }
+              
+              const elementCanvas = renderText(
+                textContent,
+                child.style,
+                100 * (dpi / 96),
+                20 * (dpi / 96)
+              );
+              
+              ctx.drawImage(elementCanvas, currentX, currentY);
+              currentX += elementCanvas.width + 10; // Add spacing
+            }
+          });
+          
+          currentY += 50; // Move to next row
         }
-        
-        const elementCanvas = renderText(
-          textContent,
-          element.style,
-          element.size.width * (dpi / 96),
-          element.size.height * (dpi / 96)
-        );
-        
-        const x = element.position.x * (dpi / 96);
-        const y = element.position.y * (dpi / 96);
-        ctx.drawImage(elementCanvas, x, y);
+      } else {
+        // Render individual elements
+        if (element.type === 'barcode') {
+          const elementCanvas = renderBarcode(
+            labelData.barcode,
+            element.barcodeType || labelSettings.barcodeType || 'EAN13',
+            120 * (dpi / 96), // Convert from display pixels to print pixels
+            40 * (dpi / 96)
+          );
+          
+          const x = 10; // Center horizontally
+          const y = currentY;
+          ctx.drawImage(elementCanvas, x, y);
+          currentY += elementCanvas.height + 10; // Add spacing
+        } else if (element.type === 'text') {
+          // Use static text or Excel data
+          let textContent = element.content;
+          if (!element.isStatic && labelData.text) {
+            textContent = labelData.text;
+          }
+          
+          const elementCanvas = renderText(
+            textContent,
+            element.style,
+            150 * (dpi / 96),
+            20 * (dpi / 96)
+          );
+          
+          const x = 10; // Center horizontally
+          const y = currentY;
+          ctx.drawImage(elementCanvas, x, y);
+          currentY += elementCanvas.height + 10; // Add spacing
+        }
       }
     });
   }

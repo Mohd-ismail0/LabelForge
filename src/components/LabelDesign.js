@@ -6,8 +6,7 @@ const LabelDesign = () => {
   const { state, actions } = useApp();
   const { labelSettings } = state;
   const [selectedElement, setSelectedElement] = useState(null);
-
-  // Use shared LABEL_SIZES from utils
+  const [selectedGroup, setSelectedGroup] = useState(null);
 
   const handleLabelSizeChange = (e) => {
     const size = e.target.value;
@@ -28,14 +27,21 @@ const LabelDesign = () => {
     const newElement = {
       id: labelSettings.nextElementId,
       type,
-      content: type === 'text' ? 'Sample Text' : '',
-      position: { x: 10, y: 10 },
-      size: { width: type === 'barcode' ? 150 : 100, height: type === 'barcode' ? 50 : 20 },
+      content: type === 'text' ? 'Static Text' : '',
+      isStatic: type === 'text', // Mark static text elements
+      flexbox: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '5px',
+        padding: '5px',
+        margin: '0px'
+      },
       style: {
         fontSize: 12,
         fontWeight: 'normal',
         color: '#000000',
-        textAlign: 'left'
+        textAlign: 'center'
       }
     };
 
@@ -45,9 +51,39 @@ const LabelDesign = () => {
     });
   };
 
+  const addGroup = () => {
+    const newGroup = {
+      id: labelSettings.nextElementId,
+      type: 'group',
+      name: `Group ${labelSettings.nextElementId}`,
+      children: [],
+      flexbox: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '10px',
+        margin: '5px',
+        border: '1px dashed #ccc',
+        borderRadius: '4px'
+      }
+    };
+
+    actions.setLabelSettings({
+      elements: [...labelSettings.elements, newGroup],
+      nextElementId: labelSettings.nextElementId + 1
+    });
+  };
+
   const selectElement = (elementId) => {
     setSelectedElement(elementId);
+    setSelectedGroup(null);
     actions.setLabelSettings({ selectedElementId: elementId });
+  };
+
+  const selectGroup = (groupId) => {
+    setSelectedGroup(groupId);
+    setSelectedElement(null);
   };
 
   const updateElement = (elementId, updates) => {
@@ -57,25 +93,11 @@ const LabelDesign = () => {
     actions.setLabelSettings({ elements: updatedElements });
   };
 
-  const handleElementDrag = (elementId, e) => {
-    e.preventDefault();
-    const element = labelSettings.elements.find(el => el.id === elementId);
-    if (!element) return;
-
-    const canvas = e.currentTarget.parentElement;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    // Constrain to canvas bounds
-    const maxX = canvas.offsetWidth - element.size.width;
-    const maxY = canvas.offsetHeight - element.size.height;
-    const constrainedX = Math.max(0, Math.min(x, maxX));
-    const constrainedY = Math.max(0, Math.min(y, maxY));
-
-    updateElement(elementId, {
-      position: { x: constrainedX, y: constrainedY }
-    });
+  const updateGroup = (groupId, updates) => {
+    const updatedElements = labelSettings.elements.map(el =>
+      el.id === groupId ? { ...el, ...updates } : el
+    );
+    actions.setLabelSettings({ elements: updatedElements });
   };
 
   const deleteElement = (elementId) => {
@@ -84,6 +106,51 @@ const LabelDesign = () => {
     if (selectedElement === elementId) {
       setSelectedElement(null);
       actions.setLabelSettings({ selectedElementId: null });
+    }
+  };
+
+  const moveElementToGroup = (elementId, groupId) => {
+    const element = labelSettings.elements.find(el => el.id === elementId);
+    const group = labelSettings.elements.find(el => el.id === groupId);
+    
+    if (element && group) {
+      // Remove element from main elements
+      const updatedElements = labelSettings.elements.filter(el => el.id !== elementId);
+      
+      // Add element to group
+      const updatedGroup = {
+        ...group,
+        children: [...group.children, element]
+      };
+      
+      const finalElements = updatedElements.map(el => 
+        el.id === groupId ? updatedGroup : el
+      );
+      
+      actions.setLabelSettings({ elements: finalElements });
+    }
+  };
+
+  const removeElementFromGroup = (elementId, groupId) => {
+    const group = labelSettings.elements.find(el => el.id === groupId);
+    
+    if (group) {
+      const element = group.children.find(child => child.id === elementId);
+      const updatedGroup = {
+        ...group,
+        children: group.children.filter(child => child.id !== elementId)
+      };
+      
+      const updatedElements = labelSettings.elements.map(el => 
+        el.id === groupId ? updatedGroup : el
+      );
+      
+      // Add element back to main elements
+      if (element) {
+        updatedElements.push(element);
+      }
+      
+      actions.setLabelSettings({ elements: updatedElements });
     }
   };
 
@@ -100,6 +167,8 @@ const LabelDesign = () => {
       return <BarcodeElement element={element} />;
     } else if (element.type === 'text') {
       return <TextElement element={element} />;
+    } else if (element.type === 'group') {
+      return <GroupElement element={element} />;
     }
     return null;
   };
@@ -120,8 +189,15 @@ const LabelDesign = () => {
         id: 1,
         type: 'barcode',
         content: '',
-        position: { x: 20, y: 20 },
-        size: { width: 150, height: 50 },
+        isStatic: false,
+        flexbox: {
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '5px',
+          padding: '5px',
+          margin: '0px'
+        },
         style: {
           fontSize: 12,
           fontWeight: 'normal',
@@ -134,9 +210,16 @@ const LabelDesign = () => {
       const defaultText = {
         id: 2,
         type: 'text',
-        content: 'Sample Text',
-        position: { x: 20, y: 80 },
-        size: { width: 150, height: 20 },
+        content: 'Static Text',
+        isStatic: true,
+        flexbox: {
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '5px',
+          padding: '5px',
+          margin: '0px'
+        },
         style: {
           fontSize: 12,
           fontWeight: 'normal',
@@ -157,11 +240,11 @@ const LabelDesign = () => {
       <div className="card-header">
         <h2>Step 3: Design Your Labels</h2>
         <p className="card-description">
-          Design labels with flexible layouts and element positioning
+          Design labels with flexbox-based layout system
         </p>
       </div>
       <div className="card-body">
-        <div className="figma-interface">
+        <div className="flexbox-interface">
           {/* Left Panel: Settings */}
           <div className="left-panel">
             <div className="panel-section">
@@ -234,7 +317,7 @@ const LabelDesign = () => {
                   onClick={() => addElement('text')}
                 >
                   <span className="btn-icon">T</span>
-                  Text
+                  Static Text
                 </button>
                 <button
                   className="btn btn-outline btn-sm"
@@ -243,31 +326,64 @@ const LabelDesign = () => {
                   <span className="btn-icon">|||</span>
                   Barcode
                 </button>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={addGroup}
+                >
+                  <span className="btn-icon">📦</span>
+                  Group
+                </button>
               </div>
             </div>
 
             <div className="panel-section">
-              <h4>Elements</h4>
+              <h4>Elements & Groups</h4>
               <div className="element-tree">
                 {labelSettings.elements.map((element) => (
-                  <div
-                    key={element.id}
-                    className={`tree-item ${selectedElement === element.id ? 'selected' : ''}`}
-                    onClick={() => selectElement(element.id)}
-                  >
-                    <span className="tree-icon">
-                      {element.type === 'text' ? 'T' : '|||'}
-                    </span>
-                    <span>{element.type} {element.id}</span>
-                    <button
-                      className="remove-element"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteElement(element.id);
-                      }}
+                  <div key={element.id}>
+                    <div
+                      className={`tree-item ${selectedElement === element.id || selectedGroup === element.id ? 'selected' : ''}`}
+                      onClick={() => element.type === 'group' ? selectGroup(element.id) : selectElement(element.id)}
                     >
-                      ×
-                    </button>
+                      <span className="tree-icon">
+                        {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : '📦'}
+                      </span>
+                      <span>{element.type === 'group' ? element.name : `${element.type} ${element.id}`}</span>
+                      <button
+                        className="remove-element"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteElement(element.id);
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    {element.type === 'group' && element.children && element.children.length > 0 && (
+                      <div className="tree-children">
+                        {element.children.map((child) => (
+                          <div
+                            key={child.id}
+                            className={`tree-item child ${selectedElement === child.id ? 'selected' : ''}`}
+                            onClick={() => selectElement(child.id)}
+                          >
+                            <span className="tree-icon">
+                              {child.type === 'text' ? 'T' : '|||'}
+                            </span>
+                            <span>{child.type} {child.id}</span>
+                            <button
+                              className="remove-element"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeElementFromGroup(child.id, element.id);
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -281,33 +397,35 @@ const LabelDesign = () => {
             </div>
             <div className="canvas-container">
               <div
-                className="label-canvas"
+                className="label-canvas flexbox-canvas"
                 style={{
                   width: `${getCurrentSize().width * 96}px`,
-                  height: `${getCurrentSize().height * 96}px`
+                  height: `${getCurrentSize().height * 96}px`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px',
+                  border: '2px dashed #ccc',
+                  borderRadius: '8px',
+                  background: '#f9f9f9'
                 }}
               >
                 {labelSettings.elements.map((element) => (
                   <div
                     key={element.id}
-                    className={`canvas-element ${element.type} ${selectedElement === element.id ? 'selected' : ''}`}
+                    className={`canvas-element ${element.type} ${selectedElement === element.id || selectedGroup === element.id ? 'selected' : ''}`}
                     style={{
-                      position: 'absolute',
-                      left: `${element.position.x}px`,
-                      top: `${element.position.y}px`,
-                      width: `${element.size.width}px`,
-                      height: `${element.size.height}px`,
-                      border: selectedElement === element.id ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
-                      background: selectedElement === element.id ? 'rgba(37, 99, 235, 0.1)' : 'rgba(37, 99, 235, 0.05)',
+                      ...element.flexbox,
+                      border: selectedElement === element.id || selectedGroup === element.id ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
+                      background: selectedElement === element.id || selectedGroup === element.id ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.8)',
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '4px',
-                      overflow: 'hidden'
+                      borderRadius: '4px',
+                      minHeight: element.type === 'barcode' ? '40px' : '20px',
+                      minWidth: element.type === 'barcode' ? '100px' : '50px'
                     }}
-                    onClick={() => selectElement(element.id)}
-                    onMouseDown={(e) => handleElementDrag(element.id, e)}
+                    onClick={() => element.type === 'group' ? selectGroup(element.id) : selectElement(element.id)}
                   >
                     {renderElement(element)}
                   </div>
@@ -325,9 +443,14 @@ const LabelDesign = () => {
                   element={labelSettings.elements.find(el => el.id === selectedElement)}
                   onUpdate={(updates) => updateElement(selectedElement, updates)}
                 />
+              ) : selectedGroup ? (
+                <GroupProperties
+                  group={labelSettings.elements.find(el => el.id === selectedGroup)}
+                  onUpdate={(updates) => updateGroup(selectedGroup, updates)}
+                />
               ) : (
                 <div className="no-selection">
-                  <p>Select an element to edit its properties</p>
+                  <p>Select an element or group to edit its properties</p>
                 </div>
               )}
             </div>
@@ -360,9 +483,9 @@ const ElementProperties = ({ element, onUpdate }) => {
     onUpdate({ content: value });
   };
 
-  const handleSizeChange = (field, value) => {
+  const handleFlexboxChange = (field, value) => {
     onUpdate({
-      size: { ...element.size, [field]: parseFloat(value) || 0 }
+      flexbox: { ...element.flexbox, [field]: value }
     });
   };
 
@@ -370,7 +493,7 @@ const ElementProperties = ({ element, onUpdate }) => {
     <div className="property-group">
       {element.type === 'text' && (
         <>
-          <h5>Text</h5>
+          <h5>Text Content</h5>
           <div className="prop-row">
             <label htmlFor="text-content">Content:</label>
             <input
@@ -379,6 +502,7 @@ const ElementProperties = ({ element, onUpdate }) => {
               id="text-content"
               value={element.content}
               onChange={(e) => handleContentChange(e.target.value)}
+              placeholder="Enter static text"
             />
           </div>
           <div className="prop-row">
@@ -435,45 +559,221 @@ const ElementProperties = ({ element, onUpdate }) => {
         <>
           <h5>Barcode</h5>
           <div className="prop-row">
-            <label htmlFor="barcode-height">Height (px):</label>
-            <input
-              type="number"
-              className="form-control"
-              id="barcode-height"
-              min="20"
-              max="200"
-              value={element.size.height}
-              onChange={(e) => handleSizeChange('height', e.target.value)}
-            />
+            <label>Barcode will use data from Excel</label>
+            <p className="help-text">Barcode content comes from your mapped column</p>
           </div>
         </>
       )}
       
-      <h5>Size</h5>
+      <h5>Flexbox Layout</h5>
       <div className="prop-row">
-        <label htmlFor="element-width">Width (px):</label>
+        <label htmlFor="flex-direction">Direction:</label>
+        <select
+          className="form-control"
+          id="flex-direction"
+          value={element.flexbox.flexDirection}
+          onChange={(e) => handleFlexboxChange('flexDirection', e.target.value)}
+        >
+          <option value="row">Row (Horizontal)</option>
+          <option value="column">Column (Vertical)</option>
+        </select>
+      </div>
+      <div className="prop-row">
+        <label htmlFor="justify-content">Justify Content:</label>
+        <select
+          className="form-control"
+          id="justify-content"
+          value={element.flexbox.justifyContent}
+          onChange={(e) => handleFlexboxChange('justifyContent', e.target.value)}
+        >
+          <option value="flex-start">Start</option>
+          <option value="center">Center</option>
+          <option value="flex-end">End</option>
+          <option value="space-between">Space Between</option>
+          <option value="space-around">Space Around</option>
+        </select>
+      </div>
+      <div className="prop-row">
+        <label htmlFor="align-items">Align Items:</label>
+        <select
+          className="form-control"
+          id="align-items"
+          value={element.flexbox.alignItems}
+          onChange={(e) => handleFlexboxChange('alignItems', e.target.value)}
+        >
+          <option value="flex-start">Start</option>
+          <option value="center">Center</option>
+          <option value="flex-end">End</option>
+          <option value="stretch">Stretch</option>
+        </select>
+      </div>
+      <div className="prop-row">
+        <label htmlFor="gap">Gap (px):</label>
         <input
           type="number"
           className="form-control"
-          id="element-width"
-          min="10"
-          max="500"
-          value={element.size.width}
-          onChange={(e) => handleSizeChange('width', e.target.value)}
+          id="gap"
+          min="0"
+          max="50"
+          value={parseInt(element.flexbox.gap) || 0}
+          onChange={(e) => handleFlexboxChange('gap', `${e.target.value}px`)}
         />
       </div>
       <div className="prop-row">
-        <label htmlFor="element-height">Height (px):</label>
+        <label htmlFor="padding">Padding (px):</label>
         <input
           type="number"
           className="form-control"
-          id="element-height"
-          min="10"
-          max="500"
-          value={element.size.height}
-          onChange={(e) => handleSizeChange('height', e.target.value)}
+          id="padding"
+          min="0"
+          max="50"
+          value={parseInt(element.flexbox.padding) || 0}
+          onChange={(e) => handleFlexboxChange('padding', `${e.target.value}px`)}
         />
       </div>
+    </div>
+  );
+};
+
+const GroupProperties = ({ group, onUpdate }) => {
+  if (!group) return null;
+
+  const handleFlexboxChange = (field, value) => {
+    onUpdate({
+      flexbox: { ...group.flexbox, [field]: value }
+    });
+  };
+
+  const handleNameChange = (value) => {
+    onUpdate({ name: value });
+  };
+
+  return (
+    <div className="property-group">
+      <h5>Group Settings</h5>
+      <div className="prop-row">
+        <label htmlFor="group-name">Group Name:</label>
+        <input
+          type="text"
+          className="form-control"
+          id="group-name"
+          value={group.name}
+          onChange={(e) => handleNameChange(e.target.value)}
+        />
+      </div>
+      
+      <h5>Flexbox Layout</h5>
+      <div className="prop-row">
+        <label htmlFor="group-flex-direction">Direction:</label>
+        <select
+          className="form-control"
+          id="group-flex-direction"
+          value={group.flexbox.flexDirection}
+          onChange={(e) => handleFlexboxChange('flexDirection', e.target.value)}
+        >
+          <option value="row">Row (Horizontal)</option>
+          <option value="column">Column (Vertical)</option>
+        </select>
+      </div>
+      <div className="prop-row">
+        <label htmlFor="group-justify-content">Justify Content:</label>
+        <select
+          className="form-control"
+          id="group-justify-content"
+          value={group.flexbox.justifyContent}
+          onChange={(e) => handleFlexboxChange('justifyContent', e.target.value)}
+        >
+          <option value="flex-start">Start</option>
+          <option value="center">Center</option>
+          <option value="flex-end">End</option>
+          <option value="space-between">Space Between</option>
+          <option value="space-around">Space Around</option>
+        </select>
+      </div>
+      <div className="prop-row">
+        <label htmlFor="group-align-items">Align Items:</label>
+        <select
+          className="form-control"
+          id="group-align-items"
+          value={group.flexbox.alignItems}
+          onChange={(e) => handleFlexboxChange('alignItems', e.target.value)}
+        >
+          <option value="flex-start">Start</option>
+          <option value="center">Center</option>
+          <option value="flex-end">End</option>
+          <option value="stretch">Stretch</option>
+        </select>
+      </div>
+      <div className="prop-row">
+        <label htmlFor="group-gap">Gap (px):</label>
+        <input
+          type="number"
+          className="form-control"
+          id="group-gap"
+          min="0"
+          max="50"
+          value={parseInt(group.flexbox.gap) || 0}
+          onChange={(e) => handleFlexboxChange('gap', `${e.target.value}px`)}
+        />
+      </div>
+      <div className="prop-row">
+        <label htmlFor="group-padding">Padding (px):</label>
+        <input
+          type="number"
+          className="form-control"
+          id="group-padding"
+          min="0"
+          max="50"
+          value={parseInt(group.flexbox.padding) || 0}
+          onChange={(e) => handleFlexboxChange('padding', `${e.target.value}px`)}
+        />
+      </div>
+      
+      <h5>Group Contents</h5>
+      <div className="prop-row">
+        <label>Elements in group: {group.children?.length || 0}</label>
+        <p className="help-text">Drag elements from the main canvas into this group</p>
+      </div>
+    </div>
+  );
+};
+
+// Group Element Component
+const GroupElement = ({ element }) => {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        ...element.flexbox,
+        width: '100%',
+        height: '100%',
+        minHeight: '40px'
+      }}
+    >
+      {element.children && element.children.length > 0 ? (
+        element.children.map((child) => (
+          <div
+            key={child.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: child.type === 'barcode' ? '80px' : '40px',
+              minHeight: child.type === 'barcode' ? '30px' : '20px'
+            }}
+          >
+            {child.type === 'barcode' ? (
+              <BarcodeElement element={child} />
+            ) : (
+              <TextElement element={child} />
+            )}
+          </div>
+        ))
+      ) : (
+        <div style={{ color: '#999', fontSize: '12px' }}>
+          Empty Group
+        </div>
+      )}
     </div>
   );
 };
@@ -496,8 +796,8 @@ const BarcodeElement = ({ element }) => {
         const canvas = renderBarcode(
           sampleBarcode,
           labelSettings.barcodeType,
-          element.size.width,
-          element.size.height,
+          120, // Fixed width for preview
+          40,  // Fixed height for preview
           true
         );
         
@@ -509,7 +809,19 @@ const BarcodeElement = ({ element }) => {
   }, [element, excelData, mappedColumns, labelSettings.barcodeType]);
 
   if (!barcodeCanvas) {
-    return <div style={{ color: '#666', fontSize: '12px' }}>Barcode</div>;
+    return (
+      <div style={{ 
+        color: '#666', 
+        fontSize: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%'
+      }}>
+        Barcode
+      </div>
+    );
   }
 
   return (
@@ -529,68 +841,42 @@ const BarcodeElement = ({ element }) => {
 const TextElement = ({ element }) => {
   const { state } = useApp();
   const { excelData, mappedColumns } = state;
-  const [textCanvas, setTextCanvas] = useState(null);
 
-  useEffect(() => {
-    // Get sample text from mapped columns if available
-    let textContent = element.content;
+  // Get text content - use static text if it's a static element, otherwise use Excel data
+  let textContent = element.content;
+  
+  if (!element.isStatic && excelData && mappedColumns.text.length > 0) {
+    const textValues = mappedColumns.text.map(col => {
+      const colIndex = excelData.columnHeaders.indexOf(col);
+      return excelData.rows[0]?.[colIndex] || '';
+    }).filter(val => val);
     
-    if (excelData && mappedColumns.text.length > 0) {
-      const textValues = mappedColumns.text.map(col => {
-        const colIndex = excelData.columnHeaders.indexOf(col);
-        return excelData.rows[0]?.[colIndex] || '';
-      }).filter(val => val);
-      
-      if (textValues.length > 0) {
-        textContent = textValues.join(' - ');
-      }
+    if (textValues.length > 0) {
+      textContent = textValues.join(' - ');
     }
-
-    // Use shared rendering function for consistency
-    const canvas = renderText(
-      textContent,
-      element.style,
-      element.size.width,
-      element.size.height
-    );
-    
-    setTextCanvas(canvas);
-  }, [element, excelData, mappedColumns]);
-
-  if (!textCanvas) {
-    return (
-      <div
-        style={{
-          fontSize: `${element.style.fontSize}px`,
-          fontWeight: element.style.fontWeight,
-          color: element.style.color,
-          textAlign: element.style.textAlign,
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: element.style.textAlign === 'center' ? 'center' : 
-                        element.style.textAlign === 'right' ? 'flex-end' : 'flex-start',
-          padding: '2px',
-          wordWrap: 'break-word',
-          overflow: 'hidden'
-        }}
-      >
-        {element.content}
-      </div>
-    );
   }
 
   return (
-    <img
-      src={textCanvas.toDataURL()}
-      alt="Text"
+    <div
       style={{
-        maxWidth: '100%',
-        maxHeight: '100%',
-        objectFit: 'contain'
+        fontSize: `${element.style.fontSize}px`,
+        fontWeight: element.style.fontWeight,
+        color: element.style.color,
+        textAlign: element.style.textAlign,
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: element.style.textAlign === 'center' ? 'center' : 
+                      element.style.textAlign === 'right' ? 'flex-end' : 'flex-start',
+        padding: '2px',
+        wordWrap: 'break-word',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap'
       }}
-    />
+    >
+      {textContent}
+    </div>
   );
 };
 

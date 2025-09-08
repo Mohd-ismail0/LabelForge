@@ -93,3 +93,5 @@ jspm_packages/
 test-data.csv
 node_modules/
 node_modules
+
+package-lock.json

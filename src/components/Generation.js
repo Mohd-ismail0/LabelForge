@@ -178,9 +178,10 @@ const Generation = () => {
       const labelWidthMM = size.width * 25.4; // Convert inches to mm
       const labelHeightMM = size.height * 25.4;
       const margin = 10; // 10mm margin
+      const spacing = 2; // 2mm spacing between labels
       
-      const labelsPerRow = Math.floor((pageSizeInfo.width - 2 * margin) / labelWidthMM);
-      const labelsPerColumn = Math.floor((pageSizeInfo.height - 2 * margin) / labelHeightMM);
+      const labelsPerRow = Math.floor((pageSizeInfo.width - 2 * margin + spacing) / (labelWidthMM + spacing));
+      const labelsPerColumn = Math.floor((pageSizeInfo.height - 2 * margin + spacing) / (labelHeightMM + spacing));
       const labelsPerPage = labelsPerRow * labelsPerColumn;
 
       let currentPage = 0;
@@ -197,9 +198,9 @@ const Generation = () => {
           currentCol = 0;
         }
 
-        // Calculate position
-        const x = margin + currentCol * labelWidthMM;
-        const y = margin + currentRow * labelHeightMM;
+        // Calculate position with proper spacing
+        const x = margin + currentCol * (labelWidthMM + spacing);
+        const y = margin + currentRow * (labelHeightMM + spacing);
 
         // Use shared rendering function for consistency with design
         const canvas = renderLabel(label, labelSettings, labelSettings.elements);
