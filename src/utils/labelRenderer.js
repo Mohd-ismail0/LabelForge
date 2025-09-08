@@ -130,12 +130,14 @@ export const renderText = (text, style, width, height) => {
   return canvas;
 };
 
-export const renderLabel = (labelData, labelSettings, elements = []) => {
+export const renderLabel = (labelData, labelSettings, elements = [], targetDPI = null) => {
   const currentSize = LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
   const size = labelSettings.size === 'custom' 
     ? { width: labelSettings.customWidth, height: labelSettings.customHeight }
     : currentSize;
-  const dpi = currentSize.dpi;
+  
+  // Use target DPI if provided, otherwise use the default from label size
+  const dpi = targetDPI || currentSize.dpi;
   const width = size.width * dpi;
   const height = size.height * dpi;
   

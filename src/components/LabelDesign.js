@@ -335,13 +335,28 @@ const LabelDesign = () => {
     return size;
   };
 
+  // Get preview size that matches the final output proportions
+  const getPreviewSize = () => {
+    const size = getCurrentSize();
+    // Use 96 DPI for screen preview but maintain the same proportions as 300 DPI output
+    const previewDPI = 96;
+    const outputDPI = 300;
+    const scale = previewDPI / outputDPI;
+    
+    return {
+      width: size.width * previewDPI,
+      height: size.height * previewDPI,
+      scale: scale
+    };
+  };
+
   const renderElement = (element) => {
     if (element.type === 'barcode') {
-      return <BarcodeElement element={element} />;
+      return <BarcodeElement element={element} previewSize={getPreviewSize()} />;
     } else if (element.type === 'text') {
       return <TextElement element={element} />;
     } else if (element.type === 'group') {
-      return <GroupElement element={element} />;
+      return <GroupElement element={element} previewSize={getPreviewSize()} />;
     }
     return null;
   };
@@ -349,11 +364,11 @@ const LabelDesign = () => {
   // Helper function to render nested elements recursively
   const renderNestedElement = (element) => {
     if (element.type === 'barcode') {
-      return <BarcodeElement element={element} />;
+      return <BarcodeElement element={element} previewSize={getPreviewSize()} />;
     } else if (element.type === 'text') {
       return <TextElement element={element} />;
     } else if (element.type === 'group') {
-      return <GroupElement element={element} />;
+      return <GroupElement element={element} previewSize={getPreviewSize()} />;
     }
     return null;
   };
@@ -778,15 +793,16 @@ const LabelDesign = () => {
               <h4>Label Canvas</h4>
               <div className="canvas-info">
                 <span>Size: {getCurrentSize().width}" × {getCurrentSize().height}"</span>
-                <span>DPI: {getCurrentSize().dpi}</span>
+                <span>Preview DPI: 96 (matches final output proportions)</span>
+                <span>Output DPI: 300</span>
               </div>
             </div>
             <div className="canvas-container">
               <div
                 className={`label-canvas flexbox-canvas ${selectedElement === 'label' ? 'selected' : ''}`}
                 style={{
-                  width: `${getCurrentSize().width * 96}px`, // Use 96 DPI for screen display
-                  height: `${getCurrentSize().height * 96}px`,
+                  width: `${getPreviewSize().width}px`, // Use consistent preview sizing
+                  height: `${getPreviewSize().height}px`,
                   display: 'flex',
                   flexDirection: labelSettings.labelFlexbox?.flexDirection || 'column',
                   justifyContent: labelSettings.labelFlexbox?.justifyContent || 'center',
@@ -1315,7 +1331,7 @@ const GroupProperties = ({ group, onUpdate }) => {
 };
 
 // Group Element Component
-const GroupElement = ({ element }) => {
+const GroupElement = ({ element, previewSize }) => {
   return (
     <div
       style={{
@@ -1340,11 +1356,11 @@ const GroupElement = ({ element }) => {
             }}
           >
             {child.type === 'barcode' ? (
-              <BarcodeElement element={child} />
+              <BarcodeElement element={child} previewSize={previewSize} />
             ) : child.type === 'text' ? (
               <TextElement element={child} />
             ) : child.type === 'group' ? (
-              <GroupElement element={child} />
+              <GroupElement element={child} previewSize={previewSize} />
             ) : null}
           </div>
         ))
@@ -1358,7 +1374,7 @@ const GroupElement = ({ element }) => {
 };
 
 // Barcode Element Component
-const BarcodeElement = ({ element }) => {
+const BarcodeElement = ({ element, previewSize }) => {
   const { state } = useApp();
   const { excelData, mappedColumns, labelSettings } = state;
   const [barcodeCanvas, setBarcodeCanvas] = useState(null);
@@ -1370,14 +1386,14 @@ const BarcodeElement = ({ element }) => {
       const barcodeColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.barcode);
       const sampleBarcode = excelData.rows[0]?.[barcodeColumnIndex];
 
-      if (sampleBarcode) {
-        // Calculate preview container size based on element percentage
+      if (sampleBarcode && previewSize) {
+        // Calculate preview container size that matches the final output proportions
         const containerWidth = element.size?.width ? 
-          Math.max(120, (element.size.width / 100) * 400) : // Scale based on percentage
-          200; // Default width
-        const containerHeight = element.size?.height || 60;
+          Math.max(120, (element.size.width / 100) * previewSize.width) : // Scale based on percentage
+          previewSize.width * 0.8; // Default 80% width
+        const containerHeight = (element.size?.height || 50) * previewSize.scale;
         
-        // Use shared rendering function for consistency - it will handle high-res generation
+        // Use shared rendering function with preview DPI for consistency
         const canvas = renderBarcode(
           sampleBarcode,
           labelSettings.barcodeType,
@@ -1391,7 +1407,7 @@ const BarcodeElement = ({ element }) => {
     } catch (error) {
       console.error('Error generating barcode preview:', error);
     }
-  }, [element, excelData, mappedColumns, labelSettings.barcodeType]);
+  }, [element, excelData, mappedColumns, labelSettings.barcodeType, previewSize]);
 
   if (!barcodeCanvas) {
     return (
