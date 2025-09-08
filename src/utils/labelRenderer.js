@@ -194,25 +194,25 @@ export const renderLabel = async (labelData, labelSettings, elements = [], targe
 
 // Render an image element
 const renderImage = (imageData, width, height, aspectRatio = 'auto') => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
     // Set canvas size
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = Math.max(1, Math.round(width));
+    canvas.height = Math.max(1, Math.round(height));
     
     // Clear canvas
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     if (!imageData) {
       // Draw placeholder if no image
       ctx.fillStyle = '#f0f0f0';
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#999';
       ctx.font = '12px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('No Image', width / 2, height / 2);
+      ctx.fillText('No Image', canvas.width / 2, canvas.height / 2);
       resolve(canvas);
       return;
     }
@@ -220,67 +220,67 @@ const renderImage = (imageData, width, height, aspectRatio = 'auto') => {
     const img = new Image();
     img.onload = () => {
       // Calculate scaling based on aspect ratio
-      let drawWidth = width;
-      let drawHeight = height;
+      let drawWidth = canvas.width;
+      let drawHeight = canvas.height;
       let drawX = 0;
       let drawY = 0;
       
       if (aspectRatio === 'auto') {
         // Maintain original aspect ratio
         const imgAspect = img.width / img.height;
-        const canvasAspect = width / height;
+        const canvasAspect = canvas.width / canvas.height;
         
         if (imgAspect > canvasAspect) {
           // Image is wider, fit to width
-          drawHeight = width / imgAspect;
-          drawY = (height - drawHeight) / 2;
+          drawHeight = canvas.width / imgAspect;
+          drawY = (canvas.height - drawHeight) / 2;
         } else {
           // Image is taller, fit to height
-          drawWidth = height * imgAspect;
-          drawX = (width - drawWidth) / 2;
+          drawWidth = canvas.height * imgAspect;
+          drawX = (canvas.width - drawWidth) / 2;
         }
       } else if (aspectRatio === 'square') {
         // Force square aspect ratio
-        const size = Math.min(width, height);
+        const size = Math.min(canvas.width, canvas.height);
         drawWidth = size;
         drawHeight = size;
-        drawX = (width - size) / 2;
-        drawY = (height - size) / 2;
+        drawX = (canvas.width - size) / 2;
+        drawY = (canvas.height - size) / 2;
       } else if (aspectRatio === '16:9') {
         // Force 16:9 aspect ratio
         const targetAspect = 16 / 9;
-        if (width / height > targetAspect) {
-          drawHeight = height;
-          drawWidth = height * targetAspect;
-          drawX = (width - drawWidth) / 2;
+        if (canvas.width / canvas.height > targetAspect) {
+          drawHeight = canvas.height;
+          drawWidth = canvas.height * targetAspect;
+          drawX = (canvas.width - drawWidth) / 2;
         } else {
-          drawWidth = width;
-          drawHeight = width / targetAspect;
-          drawY = (height - drawHeight) / 2;
+          drawWidth = canvas.width;
+          drawHeight = canvas.width / targetAspect;
+          drawY = (canvas.height - drawHeight) / 2;
         }
       } else if (aspectRatio === '4:3') {
         // Force 4:3 aspect ratio
         const targetAspect = 4 / 3;
-        if (width / height > targetAspect) {
-          drawHeight = height;
-          drawWidth = height * targetAspect;
-          drawX = (width - drawWidth) / 2;
+        if (canvas.width / canvas.height > targetAspect) {
+          drawHeight = canvas.height;
+          drawWidth = canvas.height * targetAspect;
+          drawX = (canvas.width - drawWidth) / 2;
         } else {
-          drawWidth = width;
-          drawHeight = width / targetAspect;
-          drawY = (height - drawHeight) / 2;
+          drawWidth = canvas.width;
+          drawHeight = canvas.width / targetAspect;
+          drawY = (canvas.height - drawHeight) / 2;
         }
       } else if (aspectRatio === '3:2') {
         // Force 3:2 aspect ratio
         const targetAspect = 3 / 2;
-        if (width / height > targetAspect) {
-          drawHeight = height;
-          drawWidth = height * targetAspect;
-          drawX = (width - drawWidth) / 2;
+        if (canvas.width / canvas.height > targetAspect) {
+          drawHeight = canvas.height;
+          drawWidth = canvas.height * targetAspect;
+          drawX = (canvas.width - drawWidth) / 2;
         } else {
-          drawWidth = width;
-          drawHeight = width / targetAspect;
-          drawY = (height - drawHeight) / 2;
+          drawWidth = canvas.width;
+          drawHeight = canvas.width / targetAspect;
+          drawY = (canvas.height - drawHeight) / 2;
         }
       }
       
@@ -292,11 +292,11 @@ const renderImage = (imageData, width, height, aspectRatio = 'auto') => {
     img.onerror = () => {
       // Draw error placeholder
       ctx.fillStyle = '#ffebee';
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#f44336';
       ctx.font = '12px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('Error loading image', width / 2, height / 2);
+      ctx.fillText('Error loading image', canvas.width / 2, canvas.height / 2);
       resolve(canvas);
     };
     
@@ -393,7 +393,10 @@ const renderFlexboxLayout = async (ctx, elements, container) => {
     if (elements[index].type === 'group') {
       renderGroup(ctx, elements[index], dim, { x: elementX, y: elementY, labelData, labelSettings, dpi });
     } else {
-      ctx.drawImage(dim.canvas, elementX, elementY);
+      // Ensure canvas exists and is valid before drawing
+      if (dim.canvas && dim.canvas.width > 0 && dim.canvas.height > 0) {
+        ctx.drawImage(dim.canvas, elementX, elementY);
+      }
     }
     
     // Update position for next element
@@ -535,7 +538,10 @@ const renderGroup = (ctx, group, groupDim, container) => {
   let childY = y + groupPadding;
   
   children.forEach((childDim, index) => {
-    ctx.drawImage(childDim.canvas, childX, childY);
+    // Ensure canvas exists and is valid before drawing
+    if (childDim.canvas && childDim.canvas.width > 0 && childDim.canvas.height > 0) {
+      ctx.drawImage(childDim.canvas, childX, childY);
+    }
     
     if (groupFlexDirection === 'row') {
       childX += childDim.width + groupGap;
