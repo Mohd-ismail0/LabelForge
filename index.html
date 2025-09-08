@@ -13,6 +13,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- jsPDF for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- JSZip for ZIP downloads -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <style>
     :root{--accent:#2c7be5;--muted:#666;}
@@ -156,6 +158,7 @@
           <button id="renderBtn">Render Preview</button>
           <button id="generatePdf" style="background:#059669">Generate A4 PDF</button>
           <a id="downloadPdfLink" href="#" download="labels_a4.pdf" style="display:none;background:#10b981;color:#fff;padding:8px 10px;border-radius:8px;text-decoration:none">Download last PDF</a>
+          <button id="downloadZip" style="background:#6b7280">Download ZIP (PNG)</button>
         </div>
       </div>
 
@@ -166,7 +169,7 @@
         <div id="labelRenderWrapper" style="display:flex;flex-direction:column;gap:8px">
           <div id="labelCanvasDOM" class="label-preview" style="width:300px">
             <div id="labelInner" style="position:relative;padding:10px;box-sizing:border-box;min-height:130px">
-              <div id="logoContainer" class="logo-box" style="position:absolute;right:10px;top:10px;width:60px;height:60px;display:flex;align-items:center;justify-content:center;border-radius:4px;overflow:hidden">
+              <div id="logoContainer" class="logo-box" style="position:absolute;right:10px;top:10px;width:60px;height:60px;display:flex;align-items:center;justify-content:center;border-radius:4px;overflow:hidden;z-index:2">
                 <span style="color:#999;font-size:12px">logo</span>
               </div>
 
@@ -263,6 +266,7 @@ const dynamicPairsEl = document.getElementById('dynamicPairs');
 const barcodeArea = document.getElementById('barcodeArea');
 const mappingPreviewBox = document.getElementById('mappingPreview');
 const staticTextArea = document.getElementById('staticText');
+const downloadZipBtn = document.getElementById('downloadZip');
 
 /* ---------- File parse (Excel/CSV) ---------- */
 fileInput.addEventListener('change', async (e)=>{
@@ -525,32 +529,10 @@ generatePdfBtn.addEventListener('click', async ()=>{
   const pagesNeeded = Math.ceil(items.length / perPage);
   if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
 
-  // Function to render one label DOM instance into a dataURL at print DPI
-  async function renderLabelToDataUrl(row){
-    // Build a temporary DOM clone of labelCanvasDOM with actual mm->px size at labelDPI
+  // Fast canvas renderer (no html2canvas) — draws text, barcode and logo directly
+  async function renderLabelToDataUrl(row, selectedCols){
     const pxW = mmToPx(labelSizeMM.w, labelDPI);
     const pxH = mmToPx(labelSizeMM.h, labelDPI);
-
-    // Create a wrapper element offscreen
-    const wrapper = document.createElement('div');
-    wrapper.style.width = pxW + 'px';
-    wrapper.style.height = pxH + 'px';
-    wrapper.style.boxSizing = 'border-box';
-    wrapper.style.padding = '0';
-    wrapper.style.background = '#ffffff';
-    wrapper.style.position = 'fixed';
-    wrapper.style.left = '-99999px';
-    wrapper.style.top = '-99999px';
-    document.body.appendChild(wrapper);
-
-    // Compose inner HTML (simple, clean layout scaled for high DPI)
-    const staticLines = staticTextArea.value.split('\n').map(s=>s.trim()).filter(Boolean);
-    const line1 = staticLines[0] || '';
-    const line2 = staticLines[1] || '';
-    const line3 = staticLines[2] || '';
-    const line4 = staticLines[3] || '';
-
-    // Build content
     const padPx = getIntValue(padPxInput, 12);
     const logoBoxPx = getIntValue(logoBoxPxInput, 60);
     const logoTopPx = getIntValue(logoTopPxInput, 10);
@@ -562,58 +544,99 @@ generatePdfBtn.addEventListener('click', async ()=>{
     const bcHeightPx = getIntValue(bcHeightPxInput, 40);
     const bcFontPx = getIntValue(bcFontPxInput, 12);
 
-    wrapper.innerHTML = `
-      <div style="width:100%;height:100%;padding:${padPx}px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;color:#111;">
-        <div style="position:relative;height:100%;">
-          <div style="position:absolute;right:${logoRightPx}px;top:${logoTopPx}px;width:${logoBoxPx}px;height:${logoBoxPx}px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
-            ${ currentLogoDataUrl ? `<img src="${currentLogoDataUrl}" style="max-width:100%;max-height:100%;display:block" />` : `<div style=\"color:#888;font-size:${12}px\">logo</div>` }
-          </div>
+    const staticLines = staticTextArea.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const line1 = staticLines[0] || '';
+    const line2 = staticLines[1] || '';
+    const line3 = staticLines[2] || '';
+    const line4 = staticLines[3] || '';
 
-          <div style="padding-right:${logoBoxPx + 6}px;width:100%">
-            <div style="font-weight:700;font-size:${line1Px}px;direction:rtl;width:100%">${escapeHtml(line1)}</div>
-            <div style="font-size:${line2Px}px;margin-top:4px;width:100%">${escapeHtml(line2)}</div>
+    const canvas = document.createElement('canvas');
+    canvas.width = pxW; canvas.height = pxH;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,pxW,pxH);
+    ctx.fillStyle = '#111';
+    ctx.font = `${line2Px}px Arial`;
 
-            <div id="dynContent" style="margin-top:8px;font-size:${dynPx}px;line-height:1.1">
-              ${selectedCols.map(col => `<div><strong>${escapeHtml(col)}:</strong> ${escapeHtml(String(row[col] ?? ''))}</div>`).join('')}
-            </div>
+    // Content region
+    const contentRightPadding = logoRightPx + logoBoxPx + 12;
+    const contentX = padPx;
+    const contentY = padPx;
+    const contentW = Math.max(10, pxW - padPx - padPx - contentRightPadding);
 
-            <div id="barcodeHolder" style="margin-top:8px"></div>
+    function drawWrapped(text, x, y, maxW, lineH, align='left'){
+      ctx.textAlign = align;
+      const words = String(text).split(/\s+/);
+      let line = '';
+      let ty = y;
+      for(let i=0;i<words.length;i++){
+        const test = line ? line + ' ' + words[i] : words[i];
+        const w = ctx.measureText(test).width;
+        if(w > maxW && line){
+          ctx.fillText(line, x, ty);
+          line = words[i];
+          ty += lineH;
+        } else {
+          line = test;
+        }
+      }
+      if(line) ctx.fillText(line, x, ty);
+      return ty + lineH; // next baseline
+    }
 
-            <div style="position:absolute;bottom:${padPx}px;left:${padPx}px;right:${padPx}px;font-size:${infoPx}px;width:calc(100% - ${padPx*2}px)">
-              <div style="width:100%">${escapeHtml(line3)}</div>
-              <div style="font-size:${infoPx}px;width:100%">${escapeHtml(line4)}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+    // Top two lines
+    ctx.font = `bold ${line1Px}px Arial`;
+    ctx.direction = 'rtl';
+    let cursorY = contentY + line1Px;
+    cursorY = drawWrapped(line1, contentX + contentW, cursorY, contentW, Math.round(line1Px*1.25), 'right');
+    ctx.direction = 'ltr';
+    ctx.font = `${line2Px}px Arial`;
+    cursorY = drawWrapped(line2, contentX, cursorY + 4, contentW, Math.round(line2Px*1.25), 'left');
 
-    // Insert barcode canvas using JsBarcode into barcodeHolder
+    // Dynamic pairs
+    ctx.font = `${dynPx}px Arial`;
+    selectedCols.forEach(col=>{
+      const text = `${col}: ${String(row[col] ?? '')}`;
+      cursorY = drawWrapped(text, contentX, cursorY + 6, contentW, Math.round(dynPx*1.2), 'left');
+    });
+
+    // Barcode
     if(chosenBarcodeCol){
       const raw = String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'');
-      const bcVal = raw;
-      const barDiv = document.createElement('div');
-      wrapper.querySelector('#barcodeHolder').appendChild(barDiv);
-      const bCan = document.createElement('canvas');
-      // size settings tailored for label size
-      try {
-        JsBarcode(bCan, bcVal, {format:'ean13', width:2, height:bcHeightPx, displayValue:true, fontSize:bcFontPx, margin:4});
-        barDiv.appendChild(bCan);
-      } catch(e){
-        // on error, show error text
-        const errDiv = document.createElement('div'); errDiv.style.color='#b02a37'; errDiv.textContent = 'Invalid EAN-13: ' + e.message;
-        barDiv.appendChild(errDiv);
+      if(raw){
+        const bcCanvas = document.createElement('canvas');
+        // approximate width: contentW
+        bcCanvas.width = contentW; bcCanvas.height = bcHeightPx + bcFontPx + 10;
+        try{
+          JsBarcode(bcCanvas, raw, {format:'ean13', displayValue:true, fontSize:bcFontPx, height:bcHeightPx, margin:4});
+          ctx.drawImage(bcCanvas, contentX, cursorY + 8);
+          cursorY += 8 + bcCanvas.height;
+        }catch(e){ /* ignore */ }
       }
     }
 
-    // Now use html2canvas at scale = labelDPI / 96 approx.
-    const scale = labelDPI / 96;
-    const canvas = await html2canvas(wrapper, {width:pxW, height:pxH, scale:scale, backgroundColor:'#ffffff', useCORS:true});
-    const dataUrl = canvas.toDataURL('image/png', 1.0);
-    // cleanup
-    wrapper.remove();
+    // Bottom info lines
+    ctx.font = `${infoPx}px Arial`;
+    const bottomBlockH = Math.round(infoPx*1.2)*2 + 4;
+    const baseY = pxH - padPx - bottomBlockH + Math.round(infoPx*1.2);
+    ctx.textAlign = 'left';
+    ctx.fillText(line3, padPx, baseY);
+    ctx.fillText(line4, padPx, baseY + Math.round(infoPx*1.2));
+
+    // Logo (draw last so it sits above text visually)
+    if(currentLogoDataUrl){
+      await new Promise(resolve=>{
+        const img = new Image();
+        img.onload = ()=>{ ctx.drawImage(img, pxW - logoRightPx - logoBoxPx, logoTopPx, logoBoxPx, logoBoxPx); resolve(); };
+        img.onerror = resolve; img.src = currentLogoDataUrl;
+      });
+    } else {
+      ctx.strokeStyle = '#ddd'; ctx.strokeRect(pxW - logoRightPx - logoBoxPx, logoTopPx, logoBoxPx, logoBoxPx);
+    }
+
+    const dataUrl = canvas.toDataURL('image/png', 0.92);
     return {dataUrl, pxW, pxH};
-  } // end renderLabelToDataUrl
+  }
 
   // Compose pages using jsPDF
   const { jsPDF } = window.jspdf;
@@ -642,7 +665,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
         const y = startY + r*(labelSizeMM.h + spacing);
         // render this label on the fly and add image
         try{
-          const renderedItem = await renderLabelToDataUrl(it.row);
+          const renderedItem = await renderLabelToDataUrl(it.row, selectedCols);
           pdf.addImage(renderedItem.dataUrl, 'PNG', x, y, labelSizeMM.w, labelSizeMM.h);
         }catch(e){
           console.error('addImage error', e);
@@ -666,6 +689,39 @@ generatePdfBtn.addEventListener('click', async ()=>{
   }
   pdf.save('labels_a4.pdf');
   alert('PDF generated and downloaded. Pages: ' + pageIndex);
+});
+/* ---------- ZIP (PNG) download ---------- */
+downloadZipBtn.addEventListener('click', async ()=>{
+  if(!parsedData || parsedData.length===0){ alert('Load a sheet first'); return; }
+  const qtyCol = quantitySelect.value;
+  const selectedCols = Array.from(colsList.querySelectorAll('input[type=checkbox]:checked')).map(cb=>cb.dataset.col);
+  const items = [];
+  parsedData.forEach((row)=>{
+    let qty = 1;
+    if(qtyCol){
+      const raw = String(row[qtyCol] ?? '').trim();
+      const n = parseInt(raw,10);
+      qty = Number.isFinite(n) && n>0 ? n : 1;
+    }
+    for(let i=0;i<qty;i++) items.push({row});
+  });
+  if(items.length === 0){ alert('No labels to generate (0 items).'); return; }
+
+  const zip = new JSZip();
+  for(let i=0;i<items.length;i++){
+    const r = await renderLabelToDataUrl(items[i].row, selectedCols);
+    // convert dataURL to blob
+    const resp = await fetch(r.dataUrl);
+    const blob = await resp.blob();
+    const idx = (i+1).toString().padStart(4,'0');
+    zip.file(`label_${idx}.png`, blob);
+  }
+  const zipBlob = await zip.generateAsync({type:'blob'});
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'labels_png.zip';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
 });
 
 /* ---------- Helpers ---------- */
@@ -732,7 +788,7 @@ function applyStyleControlsToPreview(){
     logoContainer.style.height = logoBoxPx + 'px';
   }
   const labelContentEl = document.getElementById('labelContent');
-  if(labelContentEl) labelContentEl.style.paddingRight = (getIntValue(logoBoxPxInput, 60) + 6) + 'px';
+  if(labelContentEl) labelContentEl.style.paddingRight = (getIntValue(logoRightPxInput, 10) + getIntValue(logoBoxPxInput, 60) + 12) + 'px';
   const staticLine1El = document.getElementById('staticLine1');
   const staticLine2El = document.getElementById('staticLine2');
   if(staticLine1El) staticLine1El.style.fontSize = line1Px + 'px';
