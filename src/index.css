@@ -246,6 +246,31 @@ body {
   margin-bottom: var(--space-8);
 }
 
+/* Grouping Help Styles */
+.grouping-help {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-gray-200);
+}
+
+.grouping-help .help-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-600);
+  margin-bottom: var(--space-2);
+  line-height: 1.4;
+}
+
+.grouping-help .help-text:last-child {
+  margin-bottom: 0;
+}
+
+.grouping-help .help-text strong {
+  color: var(--color-gray-700);
+  font-weight: 600;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .container {
