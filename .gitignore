@@ -88,6 +88,8 @@ jspm_packages/
 /build
 /public/hot-update.json
 /public/static
-
+/node_modules
 # Test files
 test-data.csv
+node_modules/
+node_modules
