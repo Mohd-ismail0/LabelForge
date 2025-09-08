@@ -2,6 +2,9 @@ import JsBarcode from 'jsbarcode';
 
 // Shared label rendering utilities to ensure consistency between design and generation
 
+// Locked aspect ratio for barcode quality (2.5:1 is optimal for most barcode types)
+export const BARCODE_ASPECT_RATIO = 2.5;
+
 export const LABEL_SIZES = {
   '2x1': { width: 2, height: 1, dpi: 300 },
   '3x1': { width: 3, height: 1, dpi: 300 },
@@ -12,17 +15,37 @@ export const LABEL_SIZES = {
 
 export const renderBarcode = (barcode, barcodeType, width, height, showText = true) => {
   try {
-    // First, generate the barcode to determine its actual width
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = width;
-    tempCanvas.height = height;
+    // Use the shared aspect ratio constant
+    const LOCKED_ASPECT_RATIO = BARCODE_ASPECT_RATIO;
+    
+    // Calculate the optimal dimensions while maintaining aspect ratio
+    let barcodeWidth, barcodeHeight;
+    
+    // Determine which dimension to use as the constraint
+    const widthBasedHeight = width / LOCKED_ASPECT_RATIO;
+    const heightBasedWidth = height * LOCKED_ASPECT_RATIO;
+    
+    if (widthBasedHeight <= height) {
+      // Width is the limiting factor
+      barcodeWidth = width;
+      barcodeHeight = widthBasedHeight;
+    } else {
+      // Height is the limiting factor
+      barcodeWidth = heightBasedWidth;
+      barcodeHeight = height;
+    }
     
     // Reserve space for text if needed (20% of height)
-    let finalBarcodeHeight = height;
+    let finalBarcodeHeight = barcodeHeight;
     if (showText) {
-      const textHeight = Math.max(8, height * 0.2);
-      finalBarcodeHeight = Math.max(height - textHeight, height * 0.8);
+      const textHeight = Math.max(8, barcodeHeight * 0.2);
+      finalBarcodeHeight = Math.max(barcodeHeight - textHeight, barcodeHeight * 0.8);
     }
+    
+    // Create a temporary canvas for barcode generation
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = barcodeWidth;
+    tempCanvas.height = barcodeHeight;
     
     // Generate barcode with optimal settings
     JsBarcode(tempCanvas, barcode.toString(), {
@@ -38,13 +61,13 @@ export const renderBarcode = (barcode, barcodeType, width, height, showText = tr
       textMargin: 0
     });
     
-    // Now create the final canvas with the actual barcode width
+    // Create the final canvas with the actual barcode dimensions
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    // Set canvas size to match the actual barcode width
+    // Set canvas size to match the actual barcode dimensions
     canvas.width = tempCanvas.width;
-    canvas.height = height;
+    canvas.height = tempCanvas.height;
     
     // Fill background with transparent
     ctx.clearRect(0, 0, canvas.width, canvas.height);

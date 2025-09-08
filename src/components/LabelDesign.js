@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { renderBarcode, renderText, LABEL_SIZES } from '../utils/labelRenderer';
+import { renderBarcode, renderText, LABEL_SIZES, BARCODE_ASPECT_RATIO } from '../utils/labelRenderer';
 
 const LabelDesign = () => {
   const { state, actions } = useApp();
@@ -999,13 +999,13 @@ const ElementProperties = ({ element, onUpdate }) => {
                value={element.size?.width || '80'}
                onChange={(e) => {
                  const newWidth = parseInt(e.target.value);
-                 const aspectRatio = 2.5; // Locked aspect ratio
-                 const newHeight = Math.round(newWidth / aspectRatio);
+                 const newHeight = Math.round(newWidth / BARCODE_ASPECT_RATIO);
                  onUpdate({
                    size: { ...element.size, width: newWidth, height: newHeight }
                  });
                }}
              />
+             <small className="form-text text-muted">Height will auto-adjust to maintain {BARCODE_ASPECT_RATIO}:1 ratio</small>
            </div>
            <div className="prop-row">
              <label htmlFor="barcode-height">Height (px):</label>
@@ -1018,16 +1018,18 @@ const ElementProperties = ({ element, onUpdate }) => {
                value={element.size?.height || '50'}
                onChange={(e) => {
                  const newHeight = parseInt(e.target.value);
-                 const aspectRatio = 2.5; // Locked aspect ratio
-                 const newWidth = Math.round(newHeight * aspectRatio);
+                 const newWidth = Math.round(newHeight * BARCODE_ASPECT_RATIO);
                  onUpdate({
                    size: { ...element.size, width: newWidth, height: newHeight }
                  });
                }}
              />
+             <small className="form-text text-muted">Width will auto-adjust to maintain {BARCODE_ASPECT_RATIO}:1 ratio</small>
            </div>
            <div className="prop-row">
-             <p className="help-text">Width and height are locked in 2.5:1 proportion for optimal barcode quality</p>
+             <div className="alert alert-info" style={{ padding: '8px', fontSize: '12px', margin: '8px 0' }}>
+               <strong>🔒 Locked Aspect Ratio:</strong> Barcode dimensions are locked in {BARCODE_ASPECT_RATIO}:1 proportion to ensure optimal scanning quality and prevent distortion.
+             </div>
            </div>
          </>
        )}
