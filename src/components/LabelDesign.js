@@ -69,7 +69,8 @@ const LabelDesign = () => {
         padding: '0px',
         margin: '0px',
         border: '1px dashed #ccc',
-        borderRadius: '4px'
+        borderRadius: '4px',
+        background: 'transparent'
       }
     };
 
@@ -88,6 +89,7 @@ const LabelDesign = () => {
   const selectGroup = (groupId) => {
     setSelectedGroup(groupId);
     setSelectedElement(null);
+    // Don't clear selectedElements here - let the click handler decide
   };
 
   const updateElement = (elementId, updates) => {
@@ -102,6 +104,33 @@ const LabelDesign = () => {
       el.id === groupId ? { ...el, ...updates } : el
     );
     actions.setLabelSettings({ elements: updatedElements });
+  };
+
+  // Helper function to find nested elements recursively
+  const findNestedElement = (elements, elementId) => {
+    for (const element of elements) {
+      if (element.id === elementId) {
+        return element;
+      }
+      if (element.type === 'group' && element.children) {
+        const found = findNestedElement(element.children, elementId);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // Helper function to update nested elements recursively
+  const updateNestedElement = (elements, elementId, updates) => {
+    return elements.map(el => {
+      if (el.id === elementId) {
+        return { ...el, ...updates };
+      }
+      if (el.type === 'group' && el.children) {
+        return { ...el, children: updateNestedElement(el.children, elementId, updates) };
+      }
+      return el;
+    });
   };
 
   const deleteElement = (elementId) => {
@@ -170,7 +199,7 @@ const LabelDesign = () => {
           : [...prev, elementId]
       );
     } else {
-      setSelectedElements([elementId]);
+      setSelectedElements([]); // Clear multi-selections first
       setSelectedElement(elementId);
       setSelectedGroup(null);
     }
@@ -179,8 +208,25 @@ const LabelDesign = () => {
   const createGroupFromSelected = () => {
     if (selectedElements.length < 2) return;
 
-    const elementsToGroup = labelSettings.elements.filter(el => selectedElements.includes(el.id));
-    const remainingElements = labelSettings.elements.filter(el => !selectedElements.includes(el.id));
+    // Find elements to group (including nested elements)
+    const elementsToGroup = [];
+    const remainingElements = [];
+    
+    // Helper function to find elements recursively
+    const findElementsRecursively = (elements, parentPath = []) => {
+      elements.forEach(el => {
+        if (selectedElements.includes(el.id)) {
+          elementsToGroup.push({ ...el, parentPath });
+        } else {
+          remainingElements.push(el);
+          if (el.type === 'group' && el.children) {
+            findElementsRecursively(el.children, [...parentPath, el.id]);
+          }
+        }
+      });
+    };
+    
+    findElementsRecursively(labelSettings.elements);
     
     const newGroup = {
       id: labelSettings.nextElementId,
@@ -191,9 +237,9 @@ const LabelDesign = () => {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '10px',
-        padding: '10px',
-        margin: '5px',
+        gap: '0px',
+        padding: '0px',
+        margin: '0px',
         border: '1px dashed #ccc',
         borderRadius: '4px'
       }
@@ -287,6 +333,18 @@ const LabelDesign = () => {
   };
 
   const renderElement = (element) => {
+    if (element.type === 'barcode') {
+      return <BarcodeElement element={element} />;
+    } else if (element.type === 'text') {
+      return <TextElement element={element} />;
+    } else if (element.type === 'group') {
+      return <GroupElement element={element} />;
+    }
+    return null;
+  };
+
+  // Helper function to render nested elements recursively
+  const renderNestedElement = (element) => {
     if (element.type === 'barcode') {
       return <BarcodeElement element={element} />;
     } else if (element.type === 'text') {
@@ -544,86 +602,156 @@ const LabelDesign = () => {
                   <span>Label Container</span>
                 </div>
                 
-                {labelSettings.elements.map((element) => (
-                  <div key={element.id} className="tree-element-container">
-                    <div
-                      className={`tree-item ${element.type === 'group' ? 'group-item' : 'element-item'} ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''} ${draggedTreeElement === element.id ? 'dragging' : ''}`}
-                      onClick={(e) => {
-                        if (element.type === 'group') {
-                          selectGroup(element.id);
-                        } else {
-                          handleElementSelect(element.id, e.shiftKey);
-                        }
-                      }}
-                      draggable={true}
-                      onDragStart={(e) => handleTreeDragStart(e, element.id)}
-                      onDragOver={handleTreeDragOver}
-                      onDrop={(e) => handleTreeDrop(e, element.id)}
-                    >
-                      <span className="tree-icon">
-                        {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : '📦'}
-                      </span>
-                      <span className="tree-label">
-                        {element.type === 'group' 
-                          ? element.name 
-                          : element.columnName 
-                            ? `${element.type}: ${element.columnName}` 
-                            : `${element.type} ${element.id}`
-                        }
-                      </span>
-                      <span className="tree-size">
-                        {element.size?.width ? `${element.size.width}%` : '100%'} × {element.size?.height || (element.type === 'barcode' ? '40' : '20')}px
-                      </span>
-                      <button
-                        className="remove-element"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteElement(element.id);
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    {element.type === 'group' && element.children && element.children.length > 0 && (
-                      <div 
-                        className="tree-children"
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, element.id)}
-                      >
-                        {element.children.map((child) => (
-                          <div
-                            key={child.id}
-                            className={`tree-item child-item ${selectedElement === child.id || selectedElements.includes(child.id) ? 'selected' : ''}`}
-                            onClick={(e) => handleElementSelect(child.id, e.shiftKey)}
-                          >
-                            <span className="tree-indent">└─</span>
-                            <span className="tree-icon">
-                              {child.type === 'text' ? 'T' : '|||'}
-                            </span>
-                            <span className="tree-label">
-                              {child.columnName 
-                                ? `${child.type}: ${child.columnName}` 
-                                : `${child.type} ${child.id}`
-                              }
-                            </span>
-                            <span className="tree-size">
-                              {child.size?.width ? `${child.size.width}%` : '100%'} × {child.size?.height || (child.type === 'barcode' ? '40' : '20')}px
-                            </span>
-                            <button
-                              className="remove-element"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeElementFromGroup(child.id, element.id);
-                              }}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                 {labelSettings.elements.map((element) => (
+                   <div key={element.id} className="tree-element-container">
+                     <div
+                       className={`tree-item ${element.type === 'group' ? 'group-item' : 'element-item'} ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''} ${draggedTreeElement === element.id ? 'dragging' : ''}`}
+                       onClick={(e) => {
+                         if (element.type === 'group') {
+                           if (e.shiftKey) {
+                             // Shift+click for multi-selection of groups
+                             setSelectedElements(prev => 
+                               prev.includes(element.id) 
+                                 ? prev.filter(id => id !== element.id)
+                                 : [...prev, element.id]
+                             );
+                           } else {
+                             // Regular click for single group selection
+                             setSelectedElements([]); // Clear multi-selections
+                             selectGroup(element.id);
+                           }
+                         } else {
+                           handleElementSelect(element.id, e.shiftKey);
+                         }
+                       }}
+                       draggable={true}
+                       onDragStart={(e) => handleTreeDragStart(e, element.id)}
+                       onDragOver={handleTreeDragOver}
+                       onDrop={(e) => handleTreeDrop(e, element.id)}
+                     >
+                       <span className="tree-icon">
+                         {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : '📦'}
+                       </span>
+                       <span className="tree-label">
+                         {element.type === 'group' 
+                           ? element.name 
+                           : element.columnName 
+                             ? `${element.type}: ${element.columnName}` 
+                             : `${element.type} ${element.id}`
+                         }
+                       </span>
+                       <span className="tree-size">
+                         {element.size?.width ? `${element.size.width}%` : '100%'} × {element.size?.height || (element.type === 'barcode' ? '40' : '20')}px
+                       </span>
+                       <button
+                         className="remove-element"
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           deleteElement(element.id);
+                         }}
+                       >
+                         ×
+                       </button>
+                     </div>
+                     {element.type === 'group' && element.children && element.children.length > 0 && (
+                       <div 
+                         className="tree-children"
+                         onDragOver={handleDragOver}
+                         onDrop={(e) => handleDrop(e, element.id)}
+                       >
+                         {element.children.map((child) => (
+                           <div key={child.id} className="tree-element-container">
+                             <div
+                               className={`tree-item ${child.type === 'group' ? 'group-item child-item' : 'child-item'} ${selectedElement === child.id || selectedGroup === child.id || selectedElements.includes(child.id) ? 'selected' : ''}`}
+                               onClick={(e) => {
+                                 if (child.type === 'group') {
+                                   if (e.shiftKey) {
+                                     // Shift+click for multi-selection of groups
+                                     setSelectedElements(prev => 
+                                       prev.includes(child.id) 
+                                         ? prev.filter(id => id !== child.id)
+                                         : [...prev, child.id]
+                                     );
+                                   } else {
+                                     // Regular click for single group selection
+                                     setSelectedElements([]); // Clear multi-selections
+                                     selectGroup(child.id);
+                                   }
+                                 } else {
+                                   handleElementSelect(child.id, e.shiftKey);
+                                 }
+                               }}
+                               draggable={true}
+                               onDragStart={(e) => handleTreeDragStart(e, child.id)}
+                               onDragOver={handleTreeDragOver}
+                               onDrop={(e) => handleTreeDrop(e, child.id)}
+                             >
+                               <span className="tree-indent">└─</span>
+                               <span className="tree-icon">
+                                 {child.type === 'text' ? 'T' : child.type === 'barcode' ? '|||' : '📦'}
+                               </span>
+                               <span className="tree-label">
+                                 {child.type === 'group' 
+                                   ? child.name 
+                                   : child.columnName 
+                                     ? `${child.type}: ${child.columnName}` 
+                                     : `${child.type} ${child.id}`
+                                 }
+                               </span>
+                               <span className="tree-size">
+                                 {child.size?.width ? `${child.size.width}%` : '100%'} × {child.size?.height || (child.type === 'barcode' ? '40' : '20')}px
+                               </span>
+                               <button
+                                 className="remove-element"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   removeElementFromGroup(child.id, element.id);
+                                 }}
+                               >
+                                 ×
+                               </button>
+                             </div>
+                             {/* Render nested groups recursively */}
+                             {child.type === 'group' && child.children && child.children.length > 0 && (
+                               <div className="tree-children">
+                                 {child.children.map((grandChild) => (
+                                   <div
+                                     key={grandChild.id}
+                                     className={`tree-item child-item ${selectedElement === grandChild.id || selectedElements.includes(grandChild.id) ? 'selected' : ''}`}
+                                     onClick={(e) => handleElementSelect(grandChild.id, e.shiftKey)}
+                                   >
+                                     <span className="tree-indent">└─</span>
+                                     <span className="tree-icon">
+                                       {grandChild.type === 'text' ? 'T' : '|||'}
+                                     </span>
+                                     <span className="tree-label">
+                                       {grandChild.columnName 
+                                         ? `${grandChild.type}: ${grandChild.columnName}` 
+                                         : `${grandChild.type} ${grandChild.id}`
+                                       }
+                                     </span>
+                                     <span className="tree-size">
+                                       {grandChild.size?.width ? `${grandChild.size.width}%` : '100%'} × {grandChild.size?.height || (grandChild.type === 'barcode' ? '40' : '20')}px
+                                     </span>
+                                     <button
+                                       className="remove-element"
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         removeElementFromGroup(grandChild.id, child.id);
+                                       }}
+                                     >
+                                       ×
+                                     </button>
+                                   </div>
+                                 ))}
+                               </div>
+                             )}
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                 ))}
               </div>
             </div>
           </div>
@@ -652,7 +780,7 @@ const LabelDesign = () => {
                   margin: labelSettings.labelFlexbox?.margin || '0px',
                   border: selectedElement === 'label' ? '2px solid var(--color-primary)' : '2px dashed #ccc',
                   borderRadius: '8px',
-                  background: selectedElement === 'label' ? 'rgba(37, 99, 235, 0.1)' : '#f9f9f9',
+                  background: 'transparent',
                   cursor: 'pointer',
                   margin: '20px auto'
                 }}
@@ -672,19 +800,30 @@ const LabelDesign = () => {
                       height: 'fit-content',
                       minHeight: element.size?.height ? `${element.size.height}px` : (element.type === 'barcode' ? '50px' : '20px'),
                       border: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
-                      background: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.8)',
+                      background: 'transparent',
                       cursor: 'pointer',
                       borderRadius: '4px',
                       overflow: 'visible', // Allow barcode to extend if needed for clarity
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: element.type === 'barcode' ? '8px' : '0px' // More padding for barcode elements
+                       padding: element.type === 'barcode' ? '2px' : '0px' // Minimal padding for barcode elements
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (element.type === 'group') {
-                        selectGroup(element.id);
+                        if (e.shiftKey) {
+                          // Shift+click for multi-selection of groups
+                          setSelectedElements(prev => 
+                            prev.includes(element.id) 
+                              ? prev.filter(id => id !== element.id)
+                              : [...prev, element.id]
+                          );
+                        } else {
+                          // Regular click for single group selection
+                          setSelectedElements([]); // Clear multi-selections
+                          selectGroup(element.id);
+                        }
                       } else {
                         handleElementSelect(element.id, e.shiftKey);
                       }
@@ -706,12 +845,15 @@ const LabelDesign = () => {
                   labelSettings={labelSettings}
                   onUpdate={(updates) => actions.setLabelSettings(updates)}
                 />
-              ) : selectedElement ? (
-                <ElementProperties
-                  element={labelSettings.elements.find(el => el.id === selectedElement)}
-                  onUpdate={(updates) => updateElement(selectedElement, updates)}
-                />
-              ) : selectedGroup ? (
+               ) : selectedElement ? (
+                 <ElementProperties
+                   element={findNestedElement(labelSettings.elements, selectedElement)}
+                   onUpdate={(updates) => {
+                     const updatedElements = updateNestedElement(labelSettings.elements, selectedElement, updates);
+                     actions.setLabelSettings({ elements: updatedElements });
+                   }}
+                 />
+               ) : selectedGroup ? (
                 <GroupProperties
                   group={labelSettings.elements.find(el => el.id === selectedGroup)}
                   onUpdate={(updates) => updateGroup(selectedGroup, updates)}
@@ -823,43 +965,56 @@ const ElementProperties = ({ element, onUpdate }) => {
         </>
       )}
       
-      {element.type === 'barcode' && (
-        <>
-          <h5>Barcode</h5>
-          <div className="prop-row">
-            <label>Barcode will use data from Excel</label>
-            <p className="help-text">Barcode content comes from your mapped column</p>
-          </div>
-          <div className="prop-row">
-            <label htmlFor="barcode-width">Width (% of parent):</label>
-            <input
-              type="number"
-              className="form-control"
-              id="barcode-width"
-              min="10"
-              max="100"
-              value={element.size?.width || '80'}
-              onChange={(e) => onUpdate({
-                size: { ...element.size, width: parseInt(e.target.value) }
-              })}
-            />
-          </div>
-          <div className="prop-row">
-            <label htmlFor="barcode-height">Height (px):</label>
-            <input
-              type="number"
-              className="form-control"
-              id="barcode-height"
-              min="20"
-              max="100"
-              value={element.size?.height || '50'}
-              onChange={(e) => onUpdate({
-                size: { ...element.size, height: parseInt(e.target.value) }
-              })}
-            />
-          </div>
-        </>
-      )}
+       {element.type === 'barcode' && (
+         <>
+           <h5>Barcode</h5>
+           <div className="prop-row">
+             <label>Barcode will use data from Excel</label>
+             <p className="help-text">Barcode content comes from your mapped column</p>
+           </div>
+           <div className="prop-row">
+             <label htmlFor="barcode-width">Width (% of parent):</label>
+             <input
+               type="number"
+               className="form-control"
+               id="barcode-width"
+               min="10"
+               max="100"
+               value={element.size?.width || '80'}
+               onChange={(e) => {
+                 const newWidth = parseInt(e.target.value);
+                 const aspectRatio = 2.5; // Locked aspect ratio
+                 const newHeight = Math.round(newWidth / aspectRatio);
+                 onUpdate({
+                   size: { ...element.size, width: newWidth, height: newHeight }
+                 });
+               }}
+             />
+           </div>
+           <div className="prop-row">
+             <label htmlFor="barcode-height">Height (px):</label>
+             <input
+               type="number"
+               className="form-control"
+               id="barcode-height"
+               min="20"
+               max="100"
+               value={element.size?.height || '50'}
+               onChange={(e) => {
+                 const newHeight = parseInt(e.target.value);
+                 const aspectRatio = 2.5; // Locked aspect ratio
+                 const newWidth = Math.round(newHeight * aspectRatio);
+                 onUpdate({
+                   size: { ...element.size, width: newWidth, height: newHeight }
+                 });
+               }}
+             />
+           </div>
+           <div className="prop-row">
+             <p className="help-text">Width and height are locked in 2.5:1 proportion for optimal barcode quality</p>
+           </div>
+         </>
+       )}
       
       <h5>Flexbox Layout</h5>
       <div className="prop-row">
@@ -1150,7 +1305,8 @@ const GroupElement = ({ element }) => {
         ...element.flexbox,
         width: '100%',
         height: '100%',
-        minHeight: '40px'
+        minHeight: '40px',
+        background: 'transparent'
       }}
     >
       {element.children && element.children.length > 0 ? (
@@ -1167,9 +1323,11 @@ const GroupElement = ({ element }) => {
           >
             {child.type === 'barcode' ? (
               <BarcodeElement element={child} />
-            ) : (
+            ) : child.type === 'text' ? (
               <TextElement element={child} />
-            )}
+            ) : child.type === 'group' ? (
+              <GroupElement element={child} />
+            ) : null}
           </div>
         ))
       ) : (
