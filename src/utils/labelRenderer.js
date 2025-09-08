@@ -23,17 +23,25 @@ export const renderBarcode = (barcode, barcodeType, width, height, showText = tr
   ctx.fillRect(0, 0, width, height);
   
   try {
-    // Generate barcode
+    // Calculate barcode dimensions to fit within canvas
+    const margin = 5;
+    const availableWidth = width - (margin * 2);
+    const availableHeight = height - (margin * 2);
+    
+    // Generate barcode with proper scaling
     const barcodeCanvas = document.createElement('canvas');
     JsBarcode(barcodeCanvas, barcode.toString(), {
       format: barcodeType,
-      width: 2,
-      height: height * 0.6,
+      width: Math.max(1, availableWidth / 100), // Scale width based on available space
+      height: showText ? availableHeight * 0.7 : availableHeight, // Reserve space for text if needed
       displayValue: showText,
-      fontSize: Math.max(8, height * 0.15),
-      margin: 5,
+      fontSize: Math.max(8, Math.min(16, availableHeight * 0.2)), // Scale font size
+      margin: margin,
       background: 'white',
-      lineColor: 'black'
+      lineColor: 'black',
+      textAlign: 'center',
+      textPosition: 'bottom',
+      textMargin: 2
     });
     
     // Draw barcode centered
@@ -46,7 +54,7 @@ export const renderBarcode = (barcode, barcodeType, width, height, showText = tr
     console.error('Error generating barcode:', error);
     // Draw error text
     ctx.fillStyle = 'red';
-    ctx.font = '12px Arial';
+    ctx.font = `${Math.max(8, height * 0.15)}px Arial`;
     ctx.textAlign = 'center';
     ctx.fillText('Invalid Barcode', width / 2, height / 2);
     return canvas;
@@ -168,13 +176,22 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
           let groupHeight = 0;
           const childCanvases = [];
           
+          // Calculate group container width for percentage calculations
+          const groupContainerWidth = availableWidth - (groupPadding * 2);
+          
           element.children.forEach(child => {
             if (child.type === 'barcode') {
+              // Convert percentage to actual pixels
+              const childWidth = child.size?.width ? 
+                (groupContainerWidth * child.size.width / 100) : 
+                (groupContainerWidth * 0.8); // Default 80% width
+              const childHeight = (child.size?.height || 40) * (dpi / 96);
+              
               const childCanvas = renderBarcode(
                 labelData.barcode,
                 child.barcodeType || labelSettings.barcodeType || 'EAN13',
-                120 * (dpi / 96),
-                40 * (dpi / 96)
+                childWidth,
+                childHeight
               );
               childCanvases.push({ canvas: childCanvas, type: 'barcode' });
               groupWidth += childCanvas.width + groupGap;
@@ -192,11 +209,17 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
                 textContent = labelData.text;
               }
               
+              // Convert percentage to actual pixels
+              const childWidth = child.size?.width ? 
+                (groupContainerWidth * child.size.width / 100) : 
+                groupContainerWidth; // Default 100% width
+              const childHeight = (child.size?.height || 20) * (dpi / 96);
+              
               const childCanvas = renderText(
                 textContent,
                 child.style,
-                100 * (dpi / 96),
-                20 * (dpi / 96)
+                childWidth,
+                childHeight
               );
               childCanvases.push({ canvas: childCanvas, type: 'text' });
               groupWidth += childCanvas.width + groupGap;
@@ -225,11 +248,17 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
       } else {
         // Calculate individual element dimensions
         if (element.type === 'barcode') {
+          // Convert percentage to actual pixels
+          const elementWidth = element.size?.width ? 
+            (availableWidth * element.size.width / 100) : 
+            (availableWidth * 0.8); // Default 80% width
+          const elementHeight = (element.size?.height || 40) * (dpi / 96);
+          
           const elementCanvas = renderBarcode(
             labelData.barcode,
             element.barcodeType || labelSettings.barcodeType || 'EAN13',
-            120 * (dpi / 96),
-            40 * (dpi / 96)
+            elementWidth,
+            elementHeight
           );
           
           elementCanvases.push({
@@ -253,11 +282,17 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
             textContent = labelData.text;
           }
           
+          // Convert percentage to actual pixels
+          const elementWidth = element.size?.width ? 
+            (availableWidth * element.size.width / 100) : 
+            availableWidth; // Default 100% width
+          const elementHeight = (element.size?.height || 20) * (dpi / 96);
+          
           const elementCanvas = renderText(
             textContent,
             element.style,
-            100 * (dpi / 96),
-            20 * (dpi / 96)
+            elementWidth,
+            elementHeight
           );
           
           elementCanvases.push({

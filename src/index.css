@@ -1288,3 +1288,123 @@ body {
   color: white;
   border-color: var(--color-primary);
 }
+
+/* Enhanced Element Tree Styles */
+.tree-element-container {
+  margin-bottom: 4px;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 2px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  position: relative;
+}
+
+.tree-item:hover {
+  background: var(--color-gray-50);
+}
+
+.tree-item.selected {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.tree-item.group-item {
+  background: var(--color-gray-100);
+  border: 1px solid var(--color-gray-300);
+  font-weight: 600;
+}
+
+.tree-item.group-item.selected {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.tree-item.element-item {
+  background: white;
+  border: 1px solid var(--color-gray-200);
+}
+
+.tree-item.child-item {
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  margin-left: 20px;
+  font-size: 0.9em;
+}
+
+.tree-item.child-item.selected {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.tree-icon {
+  margin-right: 8px;
+  font-size: 14px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.tree-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tree-size {
+  font-size: 11px;
+  color: var(--color-gray-500);
+  margin-right: 8px;
+  font-family: monospace;
+}
+
+.tree-item.selected .tree-size {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.tree-indent {
+  margin-right: 4px;
+  color: var(--color-gray-400);
+  font-size: 12px;
+}
+
+.tree-item.selected .tree-indent {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.tree-children {
+  margin-top: 2px;
+}
+
+.remove-element {
+  background: none;
+  border: none;
+  color: var(--color-gray-400);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.remove-element:hover {
+  background: var(--color-error);
+  color: white;
+}
+
+.tree-item.selected .remove-element {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.tree-item.selected .remove-element:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}

@@ -29,12 +29,16 @@ const LabelDesign = () => {
       type,
       content: type === 'text' ? 'Static Text' : '',
       isStatic: type === 'text', // Mark static text elements
+      size: {
+        width: type === 'barcode' ? 80 : 100,
+        height: type === 'barcode' ? 40 : 20
+      },
       flexbox: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '5px',
-        padding: '5px',
+        gap: '0px',
+        padding: '0px',
         margin: '0px'
       },
       style: {
@@ -61,9 +65,9 @@ const LabelDesign = () => {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: '10px',
-        padding: '10px',
-        margin: '5px',
+        gap: '0px',
+        padding: '0px',
+        margin: '0px',
         border: '1px dashed #ccc',
         borderRadius: '4px'
       }
@@ -276,12 +280,16 @@ const LabelDesign = () => {
           content: '',
           isStatic: false,
           columnName: state.mappedColumns.barcode,
+            size: {
+              width: 80,
+              height: 40
+            },
           flexbox: {
             flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
-            gap: '5px',
-            padding: '5px',
+            gap: '0px',
+            padding: '0px',
             margin: '0px'
           },
           style: {
@@ -303,12 +311,16 @@ const LabelDesign = () => {
             content: '',
             isStatic: false,
             columnName: columnName,
+            size: {
+              width: 100,
+              height: 20
+            },
             flexbox: {
               flexDirection: 'row',
               justifyContent: 'center',
               alignItems: 'center',
-              gap: '5px',
-              padding: '5px',
+              gap: '0px',
+              padding: '0px',
               margin: '0px'
             },
             style: {
@@ -494,9 +506,9 @@ const LabelDesign = () => {
                 </div>
                 
                 {labelSettings.elements.map((element) => (
-                  <div key={element.id}>
+                  <div key={element.id} className="tree-element-container">
                     <div
-                      className={`tree-item ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''}`}
+                      className={`tree-item ${element.type === 'group' ? 'group-item' : 'element-item'} ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''}`}
                       onClick={(e) => {
                         if (element.type === 'group') {
                           selectGroup(element.id);
@@ -506,11 +518,11 @@ const LabelDesign = () => {
                       }}
                       draggable={element.type !== 'group'}
                       onDragStart={(e) => handleDragStart(e, element.id)}
-                  >
-                    <span className="tree-icon">
+                    >
+                      <span className="tree-icon">
                         {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : '📦'}
-                    </span>
-                      <span>
+                      </span>
+                      <span className="tree-label">
                         {element.type === 'group' 
                           ? element.name 
                           : element.columnName 
@@ -518,11 +530,14 @@ const LabelDesign = () => {
                             : `${element.type} ${element.id}`
                         }
                       </span>
-                    <button
-                      className="remove-element"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteElement(element.id);
+                      <span className="tree-size">
+                        {element.size?.width ? `${element.size.width}%` : '100%'} × {element.size?.height || (element.type === 'barcode' ? '40' : '20')}px
+                      </span>
+                      <button
+                        className="remove-element"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteElement(element.id);
                         }}
                       >
                         ×
@@ -537,30 +552,34 @@ const LabelDesign = () => {
                         {element.children.map((child) => (
                           <div
                             key={child.id}
-                            className={`tree-item child ${selectedElement === child.id || selectedElements.includes(child.id) ? 'selected' : ''}`}
+                            className={`tree-item child-item ${selectedElement === child.id || selectedElements.includes(child.id) ? 'selected' : ''}`}
                             onClick={(e) => handleElementSelect(child.id, e.shiftKey)}
                           >
+                            <span className="tree-indent">└─</span>
                             <span className="tree-icon">
                               {child.type === 'text' ? 'T' : '|||'}
                             </span>
-                            <span>
+                            <span className="tree-label">
                               {child.columnName 
                                 ? `${child.type}: ${child.columnName}` 
                                 : `${child.type} ${child.id}`
                               }
+                            </span>
+                            <span className="tree-size">
+                              {child.size?.width ? `${child.size.width}%` : '100%'} × {child.size?.height || (child.type === 'barcode' ? '40' : '20')}px
                             </span>
                             <button
                               className="remove-element"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 removeElementFromGroup(child.id, element.id);
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -608,12 +627,16 @@ const LabelDesign = () => {
                     className={`canvas-element ${element.type} ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''}`}
                     style={{
                       ...element.flexbox,
+                      width: element.size?.width ? `${element.size.width}%` : '100%',
+                      height: element.size?.height ? `${element.size.height}px` : (element.type === 'barcode' ? '40px' : '20px'),
                       border: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
                       background: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.8)',
                       cursor: 'pointer',
                       borderRadius: '4px',
-                      minHeight: element.type === 'barcode' ? '40px' : '20px',
-                      minWidth: element.type === 'barcode' ? '100px' : '50px'
+                      overflow: 'hidden',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -763,6 +786,34 @@ const ElementProperties = ({ element, onUpdate }) => {
           <div className="prop-row">
             <label>Barcode will use data from Excel</label>
             <p className="help-text">Barcode content comes from your mapped column</p>
+          </div>
+          <div className="prop-row">
+            <label htmlFor="barcode-width">Width (% of parent):</label>
+            <input
+              type="number"
+              className="form-control"
+              id="barcode-width"
+              min="10"
+              max="100"
+              value={element.size?.width || '80'}
+              onChange={(e) => onUpdate({
+                size: { ...element.size, width: parseInt(e.target.value) }
+              })}
+            />
+          </div>
+          <div className="prop-row">
+            <label htmlFor="barcode-height">Height (px):</label>
+            <input
+              type="number"
+              className="form-control"
+              id="barcode-height"
+              min="20"
+              max="100"
+              value={element.size?.height || '40'}
+              onChange={(e) => onUpdate({
+                size: { ...element.size, height: parseInt(e.target.value) }
+              })}
+            />
           </div>
         </>
       )}
@@ -1101,12 +1152,18 @@ const BarcodeElement = ({ element }) => {
       const sampleBarcode = excelData.rows[0]?.[barcodeColumnIndex];
 
       if (sampleBarcode) {
+        // Calculate actual pixel dimensions for preview
+        const previewWidth = element.size?.width ? 
+          Math.max(50, (element.size.width / 100) * 200) : // Scale based on percentage
+          120; // Default width
+        const previewHeight = element.size?.height || 40;
+        
         // Use shared rendering function for consistency
         const canvas = renderBarcode(
           sampleBarcode,
           labelSettings.barcodeType,
-          120, // Fixed width for preview
-          40,  // Fixed height for preview
+          previewWidth,
+          previewHeight,
           true
         );
         
@@ -1138,9 +1195,10 @@ const BarcodeElement = ({ element }) => {
       src={barcodeCanvas.toDataURL()}
       alt="Barcode"
       style={{
-        maxWidth: '100%',
-        maxHeight: '100%',
-        objectFit: 'contain'
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+        display: 'block'
       }}
     />
   );
