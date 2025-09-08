@@ -171,23 +171,25 @@ const LabelDesign = () => {
   const removeElementFromGroup = (elementId, groupId) => {
     const group = labelSettings.elements.find(el => el.id === groupId);
     
-    if (group) {
-      const element = group.children?.find(child => child.id === elementId);
-      const updatedGroup = {
-        ...group,
-        children: group.children?.filter(child => child.id !== elementId) || []
-      };
-      
-      const updatedElements = labelSettings.elements.map(el => 
-        el.id === groupId ? updatedGroup : el
-      );
-      
-      // Add element back to main elements
+    if (group && group.children) {
+      const element = group.children.find(child => child.id === elementId);
       if (element) {
-        updatedElements.push(element);
+        // Remove element from group
+        const updatedGroup = {
+          ...group,
+          children: group.children.filter(child => child.id !== elementId)
+        };
+        
+        // Update the group in elements array
+        const updatedElements = labelSettings.elements.map(el => 
+          el.id === groupId ? updatedGroup : el
+        );
+        
+        // Add element back to main elements array
+        const finalElements = [...updatedElements, element];
+        
+        actions.setLabelSettings({ elements: finalElements });
       }
-      
-      actions.setLabelSettings({ elements: updatedElements });
     }
   };
 
@@ -208,25 +210,18 @@ const LabelDesign = () => {
   const createGroupFromSelected = () => {
     if (selectedElements.length < 2) return;
 
-    // Find elements to group (including nested elements)
+    // Find elements to group (only top-level elements, not nested ones)
     const elementsToGroup = [];
     const remainingElements = [];
     
-    // Helper function to find elements recursively
-    const findElementsRecursively = (elements, parentPath = []) => {
-      elements.forEach(el => {
-        if (selectedElements.includes(el.id)) {
-          elementsToGroup.push({ ...el, parentPath });
-        } else {
-          remainingElements.push(el);
-          if (el.type === 'group' && el.children) {
-            findElementsRecursively(el.children, [...parentPath, el.id]);
-          }
-        }
-      });
-    };
-    
-    findElementsRecursively(labelSettings.elements);
+    // Only process top-level elements to avoid duplication
+    labelSettings.elements.forEach(el => {
+      if (selectedElements.includes(el.id)) {
+        elementsToGroup.push(el);
+      } else {
+        remainingElements.push(el);
+      }
+    });
     
     const newGroup = {
       id: labelSettings.nextElementId,
@@ -241,7 +236,8 @@ const LabelDesign = () => {
         padding: '0px',
         margin: '0px',
         border: '1px dashed #ccc',
-        borderRadius: '4px'
+        borderRadius: '4px',
+        background: 'transparent'
       }
     };
 
@@ -258,9 +254,14 @@ const LabelDesign = () => {
     if (selectedGroup) {
       const group = labelSettings.elements.find(el => el.id === selectedGroup);
       if (group && group.children) {
+        // Remove the group from elements
         const updatedElements = labelSettings.elements.filter(el => el.id !== selectedGroup);
+        
+        // Add children back to the main elements array
+        const finalElements = [...updatedElements, ...group.children];
+        
         actions.setLabelSettings({
-          elements: [...updatedElements, ...group.children],
+          elements: finalElements,
           nextElementId: labelSettings.nextElementId
         });
         setSelectedGroup(null);
@@ -461,7 +462,7 @@ const LabelDesign = () => {
         nextElementId: nextId
       });
     }
-  }, [labelSettings.elements.length, state.mappedColumns, actions]);
+  }, [labelSettings.elements.length, state.mappedColumns]);
 
   return (
     <div className="card">
