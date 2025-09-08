@@ -18,9 +18,8 @@ export const renderBarcode = (barcode, barcodeType, width, height, showText = tr
   canvas.width = width;
   canvas.height = height;
   
-  // Fill background
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, width, height);
+  // Fill background with transparent
+  ctx.clearRect(0, 0, width, height);
   
   try {
     // Generate barcode with height 100% and width proportional to height
@@ -84,9 +83,8 @@ export const renderText = (text, style, width, height) => {
   canvas.width = width;
   canvas.height = height;
   
-  // Fill background
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, width, height);
+  // Fill background with transparent
+  ctx.clearRect(0, 0, width, height);
   
   // Set text properties
   ctx.fillStyle = style.color || '#000000';
@@ -130,9 +128,8 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
   canvas.width = width;
   canvas.height = height;
   
-  // Fill background
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, width, height);
+  // Fill background with transparent
+  ctx.clearRect(0, 0, width, height);
   
   // If no elements defined, use default layout
   if (elements.length === 0) {

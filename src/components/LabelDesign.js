@@ -572,6 +572,7 @@ const LabelDesign = () => {
                   className="btn btn-outline btn-sm"
                   onClick={createGroupFromSelected}
                   disabled={selectedElements.length < 2}
+                  title={selectedElements.length < 2 ? "Select 2 or more elements by holding Shift and clicking" : "Group selected elements"}
                 >
                   <span className="btn-icon">📦</span>
                   Group Selected ({selectedElements.length})
@@ -580,10 +581,19 @@ const LabelDesign = () => {
                   className="btn btn-outline btn-sm"
                   onClick={ungroupSelected}
                   disabled={!selectedGroup}
+                  title={!selectedGroup ? "Select a group to ungroup" : "Ungroup selected group"}
                 >
                   <span className="btn-icon">📤</span>
                   Ungroup
                 </button>
+              </div>
+              <div className="grouping-help">
+                <p className="help-text">
+                  <strong>To group elements:</strong> Hold Shift and click multiple elements, then click "Group Selected"
+                </p>
+                <p className="help-text">
+                  <strong>To ungroup:</strong> Click on a group in the tree, then click "Ungroup"
+                </p>
               </div>
             </div>
 
