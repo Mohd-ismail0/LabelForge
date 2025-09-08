@@ -136,27 +136,36 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
       ctx.fillText(labelData.text, width / 2, textY);
     }
   } else {
-    // Render elements using flexbox layout with real-world dimensions
-    const padding = 10; // 10px padding
-    const gap = 10; // 10px gap between elements
+    // Get label container flexbox properties
+    const labelFlexbox = labelSettings.labelFlexbox || {
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: '0px',
+      padding: '0px',
+      margin: '0px'
+    };
     
-    // Calculate available space
-    const availableWidth = width - (padding * 2);
-    const availableHeight = height - (padding * 2);
+    const labelPadding = parseInt(labelFlexbox.padding?.replace('px', '') || '0');
+    const labelGap = parseInt(labelFlexbox.gap?.replace('px', '') || '0');
     
-    // Start rendering from top-left with padding
-    let currentY = padding;
+    // Calculate available space after label padding
+    const availableWidth = width - (labelPadding * 2);
+    const availableHeight = height - (labelPadding * 2);
+    
+    // Calculate total height needed for all elements
+    let totalHeight = 0;
+    const elementCanvases = [];
     
     elements.forEach(element => {
       if (element.type === 'group') {
-        // Render group elements
+        // Calculate group dimensions
         if (element.children && element.children.length > 0) {
-          // Calculate group dimensions
-          const groupPadding = parseInt(element.flexbox.padding) || 10;
-          const groupGap = parseInt(element.flexbox.gap) || 10;
+          const groupPadding = parseInt(element.flexbox?.padding?.replace('px', '') || '0');
+          const groupGap = parseInt(element.flexbox?.gap?.replace('px', '') || '0');
           
-          // Calculate total width needed for group
-          let totalGroupWidth = 0;
+          let groupWidth = 0;
+          let groupHeight = 0;
           const childCanvases = [];
           
           element.children.forEach(child => {
@@ -168,7 +177,8 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
                 40 * (dpi / 96)
               );
               childCanvases.push({ canvas: childCanvas, type: 'barcode' });
-              totalGroupWidth += childCanvas.width + groupGap;
+              groupWidth += childCanvas.width + groupGap;
+              groupHeight = Math.max(groupHeight, childCanvas.height);
             } else if (child.type === 'text') {
               // Get text content for this specific element
               let textContent = child.content;
@@ -189,31 +199,31 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
                 20 * (dpi / 96)
               );
               childCanvases.push({ canvas: childCanvas, type: 'text' });
-              totalGroupWidth += childCanvas.width + groupGap;
+              groupWidth += childCanvas.width + groupGap;
+              groupHeight = Math.max(groupHeight, childCanvas.height);
             }
           });
           
-          totalGroupWidth -= groupGap; // Remove last gap
-          
-          // Position group based on flexbox properties
-          let startX = padding;
-          if (element.flexbox.justifyContent === 'center') {
-            startX = (width - totalGroupWidth) / 2;
-          } else if (element.flexbox.justifyContent === 'flex-end') {
-            startX = width - padding - totalGroupWidth;
+          if (groupWidth > 0) {
+            groupWidth -= groupGap; // Remove last gap
+            groupWidth += groupPadding * 2; // Add group padding
+            groupHeight += groupPadding * 2; // Add group padding
           }
           
-          // Render group children
-          let currentX = startX;
-          childCanvases.forEach(({ canvas, type }) => {
-            ctx.drawImage(canvas, currentX, currentY);
-            currentX += canvas.width + groupGap;
+          elementCanvases.push({
+            type: 'group',
+            width: groupWidth,
+            height: groupHeight,
+            children: childCanvases,
+            flexbox: element.flexbox,
+            groupPadding,
+            groupGap
           });
           
-          currentY += Math.max(...childCanvases.map(c => c.canvas.height)) + gap;
+          totalHeight += groupHeight + labelGap;
         }
       } else {
-        // Render individual elements
+        // Calculate individual element dimensions
         if (element.type === 'barcode') {
           const elementCanvas = renderBarcode(
             labelData.barcode,
@@ -222,10 +232,14 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
             40 * (dpi / 96)
           );
           
-          // Center horizontally
-          const x = (width - elementCanvas.width) / 2;
-          ctx.drawImage(elementCanvas, x, currentY);
-          currentY += elementCanvas.height + gap;
+          elementCanvases.push({
+            type: 'barcode',
+            width: elementCanvas.width,
+            height: elementCanvas.height,
+            canvas: elementCanvas
+          });
+          
+          totalHeight += elementCanvas.height + labelGap;
         } else if (element.type === 'text') {
           // Get text content for this specific element
           let textContent = element.content;
@@ -242,15 +256,77 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
           const elementCanvas = renderText(
             textContent,
             element.style,
-            150 * (dpi / 96),
+            100 * (dpi / 96),
             20 * (dpi / 96)
           );
           
-          // Center horizontally
-          const x = (width - elementCanvas.width) / 2;
-          ctx.drawImage(elementCanvas, x, currentY);
-          currentY += elementCanvas.height + gap;
+          elementCanvases.push({
+            type: 'text',
+            width: elementCanvas.width,
+            height: elementCanvas.height,
+            canvas: elementCanvas
+          });
+          
+          totalHeight += elementCanvas.height + labelGap;
         }
+      }
+    });
+    
+    if (totalHeight > 0) {
+      totalHeight -= labelGap; // Remove last gap
+    }
+    
+    // Calculate starting position based on label flexbox properties
+    let startY = labelPadding;
+    if (labelFlexbox.justifyContent === 'center') {
+      startY = (height - totalHeight) / 2;
+    } else if (labelFlexbox.justifyContent === 'flex-end') {
+      startY = height - labelPadding - totalHeight;
+    } else if (labelFlexbox.justifyContent === 'space-between' && elementCanvases.length > 1) {
+      const spaceBetween = (availableHeight - totalHeight) / (elementCanvases.length - 1);
+      // Will be handled in the loop below
+    } else if (labelFlexbox.justifyContent === 'space-around' && elementCanvases.length > 0) {
+      const spaceAround = availableHeight / (elementCanvases.length * 2);
+      startY = labelPadding + spaceAround;
+    } else if (labelFlexbox.justifyContent === 'space-evenly' && elementCanvases.length > 0) {
+      const spaceEvenly = availableHeight / (elementCanvases.length + 1);
+      startY = spaceEvenly;
+    }
+    
+    // Render elements
+    let currentY = startY;
+    elementCanvases.forEach((elementCanvas, index) => {
+      if (elementCanvas.type === 'group') {
+        // Render group
+        const { children, flexbox, groupPadding, groupGap } = elementCanvas;
+        
+        // Calculate group position based on label flexbox alignment
+        let groupX = labelPadding;
+        if (labelFlexbox.alignItems === 'center') {
+          groupX = (width - elementCanvas.width) / 2;
+        } else if (labelFlexbox.alignItems === 'flex-end') {
+          groupX = width - labelPadding - elementCanvas.width;
+        }
+        
+        // Render group children
+        let childX = groupX + groupPadding;
+        children.forEach(({ canvas, type }) => {
+          ctx.drawImage(canvas, childX, currentY + groupPadding);
+          childX += canvas.width + groupGap;
+        });
+        
+        currentY += elementCanvas.height + labelGap;
+      } else {
+        // Render individual element
+        let elementX = labelPadding;
+        if (labelFlexbox.alignItems === 'center') {
+          elementX = (width - elementCanvas.width) / 2;
+        } else if (labelFlexbox.alignItems === 'flex-end') {
+          elementX = width - labelPadding - elementCanvas.width;
+        }
+        
+        ctx.drawImage(elementCanvas.canvas, elementX, currentY);
+        currentY += elementCanvas.height + labelGap;
       }
     });
   }

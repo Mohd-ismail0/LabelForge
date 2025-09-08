@@ -17,7 +17,15 @@ const initialState = {
     barcodeType: 'EAN13',
     elements: [],
     selectedElementId: null,
-    nextElementId: 1
+    nextElementId: 1,
+    labelFlexbox: {
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: '0px',
+      padding: '0px',
+      margin: '0px'
+    }
   },
   generatedLabels: [],
   quantitySettings: {

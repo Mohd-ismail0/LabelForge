@@ -364,7 +364,7 @@ const LabelDesign = () => {
       </div>
       <div className="card-body">
         <div className="flexbox-interface">
-          {/* Left Panel: Settings */}
+          {/* Left Panel: Element Tree */}
           <div className="left-panel">
             <div className="panel-section">
               <h4>Label Settings</h4>
@@ -480,6 +480,19 @@ const LabelDesign = () => {
             <div className="panel-section">
               <h4>Elements & Groups</h4>
               <div className="element-tree">
+                {/* Label Container */}
+                <div
+                  className={`tree-item label-container ${selectedElement === 'label' ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelectedElement('label');
+                    setSelectedGroup(null);
+                    setSelectedElements([]);
+                  }}
+                >
+                  <span className="tree-icon">📄</span>
+                  <span>Label Container</span>
+                </div>
+                
                 {labelSettings.elements.map((element) => (
                   <div key={element.id}>
                     <div
@@ -493,10 +506,10 @@ const LabelDesign = () => {
                       }}
                       draggable={element.type !== 'group'}
                       onDragStart={(e) => handleDragStart(e, element.id)}
-                    >
-                      <span className="tree-icon">
+                  >
+                    <span className="tree-icon">
                         {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : '📦'}
-                      </span>
+                    </span>
                       <span>
                         {element.type === 'group' 
                           ? element.name 
@@ -505,11 +518,11 @@ const LabelDesign = () => {
                             : `${element.type} ${element.id}`
                         }
                       </span>
-                      <button
-                        className="remove-element"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteElement(element.id);
+                    <button
+                      className="remove-element"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteElement(element.id);
                         }}
                       >
                         ×
@@ -541,13 +554,13 @@ const LabelDesign = () => {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 removeElementFromGroup(child.id, element.id);
-                              }}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
                     )}
                   </div>
                 ))}
@@ -566,23 +579,27 @@ const LabelDesign = () => {
             </div>
             <div className="canvas-container">
               <div
-                className="label-canvas flexbox-canvas"
+                className={`label-canvas flexbox-canvas ${selectedElement === 'label' ? 'selected' : ''}`}
                 style={{
-                  width: `${getCurrentSize().width * getCurrentSize().dpi}px`,
-                  height: `${getCurrentSize().height * getCurrentSize().dpi}px`,
+                  width: `${getCurrentSize().width * 96}px`, // Use 96 DPI for screen display
+                  height: `${getCurrentSize().height * 96}px`,
                   display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '10px',
-                  border: '2px dashed #ccc',
+                  flexDirection: labelSettings.labelFlexbox?.flexDirection || 'column',
+                  justifyContent: labelSettings.labelFlexbox?.justifyContent || 'center',
+                  alignItems: labelSettings.labelFlexbox?.alignItems || 'center',
+                  gap: labelSettings.labelFlexbox?.gap || '0px',
+                  padding: labelSettings.labelFlexbox?.padding || '0px',
+                  margin: labelSettings.labelFlexbox?.margin || '0px',
+                  border: selectedElement === 'label' ? '2px solid var(--color-primary)' : '2px dashed #ccc',
                   borderRadius: '8px',
-                  background: '#f9f9f9',
-                  transform: 'scale(0.3)',
-                  transformOrigin: 'top left',
-                  marginBottom: `${getCurrentSize().height * getCurrentSize().dpi * 0.3}px`,
-                  marginRight: `${getCurrentSize().width * getCurrentSize().dpi * 0.3}px`
+                  background: selectedElement === 'label' ? 'rgba(37, 99, 235, 0.1)' : '#f9f9f9',
+                  cursor: 'pointer',
+                  margin: '20px auto'
+                }}
+                onClick={() => {
+                  setSelectedElement('label');
+                  setSelectedGroup(null);
+                  setSelectedElements([]);
                 }}
               >
                 {labelSettings.elements.map((element) => (
@@ -599,6 +616,7 @@ const LabelDesign = () => {
                       minWidth: element.type === 'barcode' ? '100px' : '50px'
                     }}
                     onClick={(e) => {
+                      e.stopPropagation();
                       if (element.type === 'group') {
                         selectGroup(element.id);
                       } else {
@@ -617,7 +635,12 @@ const LabelDesign = () => {
           <div className="right-panel">
             <div className="panel-section">
               <h4>Properties</h4>
-              {selectedElement ? (
+              {selectedElement === 'label' ? (
+                <LabelContainerProperties
+                  labelSettings={labelSettings}
+                  onUpdate={(updates) => actions.setLabelSettings(updates)}
+                />
+              ) : selectedElement ? (
                 <ElementProperties
                   element={labelSettings.elements.find(el => el.id === selectedElement)}
                   onUpdate={(updates) => updateElement(selectedElement, updates)}
@@ -629,7 +652,7 @@ const LabelDesign = () => {
                 />
               ) : (
                 <div className="no-selection">
-                  <p>Select an element or group to edit its properties</p>
+                  <p>Select the label container or an element to edit its properties</p>
                 </div>
               )}
             </div>
@@ -788,16 +811,16 @@ const ElementProperties = ({ element, onUpdate }) => {
       </div>
       <div className="prop-row">
         <label htmlFor="gap">Gap (px):</label>
-        <input
-          type="number"
-          className="form-control"
+            <input
+              type="number"
+              className="form-control"
           id="gap"
           min="0"
           max="50"
           value={parseInt(element.flexbox.gap) || 0}
           onChange={(e) => handleFlexboxChange('gap', `${e.target.value}px`)}
-        />
-      </div>
+            />
+          </div>
       <div className="prop-row">
         <label htmlFor="padding">Padding (px):</label>
         <input
@@ -809,6 +832,113 @@ const ElementProperties = ({ element, onUpdate }) => {
           value={parseInt(element.flexbox.padding) || 0}
           onChange={(e) => handleFlexboxChange('padding', `${e.target.value}px`)}
         />
+      </div>
+    </div>
+  );
+};
+
+// Label Container Properties Component
+const LabelContainerProperties = ({ labelSettings, onUpdate }) => {
+  const handleFlexboxChange = (property, value) => {
+    onUpdate({
+      ...labelSettings,
+      labelFlexbox: {
+        ...labelSettings.labelFlexbox,
+        [property]: value
+      }
+    });
+  };
+
+  return (
+    <div className="properties-panel">
+      <div className="property-group">
+        <h5>Label Container</h5>
+        <p className="text-muted">Configure the main label container layout</p>
+      </div>
+
+      <div className="property-group">
+        <h5>Flexbox Layout</h5>
+        <div className="control-group">
+          <label htmlFor="label-direction">Direction</label>
+          <select
+            className="form-control"
+            id="label-direction"
+            value={labelSettings.labelFlexbox?.flexDirection || 'column'}
+            onChange={(e) => handleFlexboxChange('flexDirection', e.target.value)}
+          >
+            <option value="column">Column (Vertical)</option>
+            <option value="row">Row (Horizontal)</option>
+          </select>
+        </div>
+        
+        <div className="control-group">
+          <label htmlFor="label-justify">Justify Content</label>
+          <select
+            className="form-control"
+            id="label-justify"
+            value={labelSettings.labelFlexbox?.justifyContent || 'center'}
+            onChange={(e) => handleFlexboxChange('justifyContent', e.target.value)}
+          >
+            <option value="flex-start">Start</option>
+            <option value="center">Center</option>
+            <option value="flex-end">End</option>
+            <option value="space-between">Space Between</option>
+            <option value="space-around">Space Around</option>
+            <option value="space-evenly">Space Evenly</option>
+          </select>
+        </div>
+        
+        <div className="control-group">
+          <label htmlFor="label-align">Align Items</label>
+          <select
+            className="form-control"
+            id="label-align"
+            value={labelSettings.labelFlexbox?.alignItems || 'center'}
+            onChange={(e) => handleFlexboxChange('alignItems', e.target.value)}
+          >
+            <option value="stretch">Stretch</option>
+            <option value="flex-start">Start</option>
+            <option value="center">Center</option>
+            <option value="flex-end">End</option>
+            <option value="baseline">Baseline</option>
+          </select>
+        </div>
+        
+        <div className="control-group">
+          <label htmlFor="label-gap">Gap (px)</label>
+          <input
+            type="number"
+            className="form-control"
+            id="label-gap"
+            value={labelSettings.labelFlexbox?.gap?.replace('px', '') || '0'}
+            min="0"
+            onChange={(e) => handleFlexboxChange('gap', `${e.target.value}px`)}
+          />
+        </div>
+        
+        <div className="control-group">
+          <label htmlFor="label-padding">Padding (px)</label>
+          <input
+            type="number"
+            className="form-control"
+            id="label-padding"
+            value={labelSettings.labelFlexbox?.padding?.replace('px', '') || '0'}
+            min="0"
+            onChange={(e) => handleFlexboxChange('padding', `${e.target.value}px`)}
+          />
+        </div>
+        
+        <div className="control-group">
+          <label htmlFor="label-margin">Margin (px)</label>
+          <input
+            type="number"
+            className="form-control"
+            id="label-margin"
+            value={labelSettings.labelFlexbox?.margin?.replace('px', '') || '0'}
+            min="0"
+            onChange={(e) => handleFlexboxChange('margin', `${e.target.value}px`)}
+          />
+        </div>
       </div>
     </div>
   );
@@ -1022,45 +1152,45 @@ const TextElement = ({ element }) => {
   const { excelData, mappedColumns } = state;
 
   // Get text content - use static text if it's a static element, otherwise use Excel data
-  let textContent = element.content;
-  
+    let textContent = element.content;
+    
   if (!element.isStatic && element.columnName && excelData) {
     // Use specific column data for this element
     const colIndex = excelData.columnHeaders.indexOf(element.columnName);
     textContent = excelData.rows[0]?.[colIndex] || element.columnName;
   } else if (!element.isStatic && excelData && mappedColumns.text.length > 0) {
     // Fallback to all mapped text columns
-    const textValues = mappedColumns.text.map(col => {
-      const colIndex = excelData.columnHeaders.indexOf(col);
-      return excelData.rows[0]?.[colIndex] || '';
-    }).filter(val => val);
-    
-    if (textValues.length > 0) {
-      textContent = textValues.join(' - ');
+      const textValues = mappedColumns.text.map(col => {
+        const colIndex = excelData.columnHeaders.indexOf(col);
+        return excelData.rows[0]?.[colIndex] || '';
+      }).filter(val => val);
+      
+      if (textValues.length > 0) {
+        textContent = textValues.join(' - ');
+      }
     }
-  }
 
-  return (
-    <div
-      style={{
-        fontSize: `${element.style.fontSize}px`,
-        fontWeight: element.style.fontWeight,
-        color: element.style.color,
-        textAlign: element.style.textAlign,
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: element.style.textAlign === 'center' ? 'center' : 
-                      element.style.textAlign === 'right' ? 'flex-end' : 'flex-start',
-        padding: '2px',
-        wordWrap: 'break-word',
+    return (
+      <div
+        style={{
+          fontSize: `${element.style.fontSize}px`,
+          fontWeight: element.style.fontWeight,
+          color: element.style.color,
+          textAlign: element.style.textAlign,
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: element.style.textAlign === 'center' ? 'center' : 
+                        element.style.textAlign === 'right' ? 'flex-end' : 'flex-start',
+          padding: '2px',
+          wordWrap: 'break-word',
         overflow: 'hidden',
         whiteSpace: 'nowrap'
-      }}
-    >
+        }}
+      >
       {textContent}
-    </div>
+      </div>
   );
 };
 
