@@ -200,8 +200,10 @@ const LabelDesign = () => {
           ? prev.filter(id => id !== elementId)
           : [...prev, elementId]
       );
+      setSelectedElement(elementId);
+      setSelectedGroup(null);
     } else {
-      setSelectedElements([]); // Clear multi-selections first
+      setSelectedElements([elementId]); // Start with this element selected
       setSelectedElement(elementId);
       setSelectedGroup(null);
     }
@@ -593,6 +595,9 @@ const LabelDesign = () => {
                 </p>
                 <p className="help-text">
                   <strong>To ungroup:</strong> Click on a group in the tree, then click "Ungroup"
+                </p>
+                <p className="help-text">
+                  <strong>Current selection:</strong> {selectedElements.length} element(s) selected
                 </p>
               </div>
             </div>
