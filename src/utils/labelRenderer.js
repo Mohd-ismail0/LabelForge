@@ -138,66 +138,36 @@ export const renderLabel = async (labelData, labelSettings, elements = [], targe
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, width, height);
     
-  
-  // If no elements defined, use default layout
-  if (!elements || elements.length === 0) {
-    // Default: barcode centered, text below
-    const barcodeHeight = height * 0.6;
-    const barcodeCanvas = renderBarcode(
-      labelData.barcode,
-      labelSettings.barcodeType || 'EAN13',
-      width * 0.8,
-      barcodeHeight,
-      true
-    );
-    
-    const barcodeX = (width - barcodeCanvas.width) / 2;
-    const barcodeY = height * 0.1;
-    ctx.drawImage(barcodeCanvas, barcodeX, barcodeY);
-    
-    // Add text if available
-    if (labelData.text) {
-      ctx.fillStyle = 'black';
-      ctx.font = '16px Arial';
-      ctx.textAlign = 'center';
-      const textY = height * 0.8;
-      ctx.fillText(labelData.text, width / 2, textY);
+    // If no elements defined, use default layout
+    if (!elements || elements.length === 0) {
+      // Default: barcode centered, text below
+      const barcodeHeight = height * 0.6;
+      const barcodeCanvas = renderBarcode(
+        labelData.barcode,
+        labelSettings.barcodeType || 'EAN13',
+        width * 0.8,
+        barcodeHeight,
+        true
+      );
+      
+      const barcodeX = (width - barcodeCanvas.width) / 2;
+      const barcodeY = height * 0.1;
+      ctx.drawImage(barcodeCanvas, barcodeX, barcodeY);
+      
+      // Add text if available
+      if (labelData.text) {
+        ctx.fillStyle = 'black';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        const textY = height * 0.8;
+        ctx.fillText(labelData.text, width / 2, textY);
+      }
+    } else {
+      // Render elements using the same approach as Step 2
+      await renderElementsDirectly(ctx, elements, labelData, labelSettings, width, height, dpi);
     }
-  } else {
-    // Get label container flexbox properties
-    const labelFlexbox = labelSettings.labelFlexbox || {
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: '0px',
-      padding: '0px',
-      margin: '0px'
-    };
     
-    const labelPadding = parseInt(labelFlexbox.padding?.replace('px', '') || '0');
-    const labelGap = parseInt(labelFlexbox.gap?.replace('px', '') || '0');
-    
-    // Calculate available space after label padding - CONSTRAINED TO LABEL DIMENSIONS
-    const availableWidth = Math.max(0, width - (labelPadding * 2));
-    const availableHeight = Math.max(0, height - (labelPadding * 2));
-    
-    // Render elements with proper flexbox layout that respects label boundaries
-    await renderFlexboxLayout(ctx, elements, {
-      x: labelPadding,
-      y: labelPadding,
-      width: availableWidth,
-      height: availableHeight,
-      flexDirection: labelFlexbox.flexDirection || 'column',
-      justifyContent: labelFlexbox.justifyContent || 'center',
-      alignItems: labelFlexbox.alignItems || 'center',
-      gap: labelGap,
-      labelData,
-      labelSettings,
-      dpi
-    });
-  }
-  
-  return canvas;
+    return canvas;
   } catch (error) {
     console.error('Error in renderLabel:', error);
     // Return a fallback canvas with error message
@@ -213,6 +183,191 @@ export const renderLabel = async (labelData, labelSettings, elements = [], targe
     fallbackCtx.fillText('Error rendering label', 100, 50);
     return fallbackCanvas;
   }
+};
+
+// Render elements directly like Step 2 does
+const renderElementsDirectly = async (ctx, elements, labelData, labelSettings, canvasWidth, canvasHeight, dpi) => {
+  // Get label container flexbox properties
+  const labelFlexbox = labelSettings.labelFlexbox || {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '0px',
+    padding: '0px',
+    margin: '0px'
+  };
+  
+  const labelPadding = parseInt(labelFlexbox.padding?.replace('px', '') || '0');
+  const labelGap = parseInt(labelFlexbox.gap?.replace('px', '') || '0');
+  
+  // Calculate available space after label padding
+  const availableWidth = Math.max(0, canvasWidth - (labelPadding * 2));
+  const availableHeight = Math.max(0, canvasHeight - (labelPadding * 2));
+  
+  // Calculate total height needed for all elements
+  let totalHeight = 0;
+  const elementCanvases = [];
+  
+  // Process each element
+  for (const element of elements) {
+    if (element.type === 'group') {
+      const groupCanvas = await renderGroupDirectly(element, labelData, labelSettings, availableWidth, availableHeight, dpi);
+      if (groupCanvas) {
+        elementCanvases.push({
+          type: 'group',
+          width: groupCanvas.width,
+          height: groupCanvas.height,
+          canvas: groupCanvas
+        });
+        totalHeight += groupCanvas.height + labelGap;
+      }
+    } else {
+      const elementCanvas = await renderSingleElement(element, labelData, labelSettings, availableWidth, availableHeight, dpi);
+      if (elementCanvas) {
+        elementCanvases.push({
+          type: element.type,
+          width: elementCanvas.width,
+          height: elementCanvas.height,
+          canvas: elementCanvas
+        });
+        totalHeight += elementCanvas.height + labelGap;
+      }
+    }
+  }
+  
+  if (totalHeight > 0) {
+    totalHeight -= labelGap; // Remove last gap
+  }
+  
+  // Calculate starting position based on justifyContent
+  let startY = labelPadding;
+  if (labelFlexbox.justifyContent === 'center') {
+    startY = (canvasHeight - totalHeight) / 2;
+  } else if (labelFlexbox.justifyContent === 'flex-end') {
+    startY = canvasHeight - labelPadding - totalHeight;
+  }
+  
+  // Render elements
+  let currentY = startY;
+  for (const elementCanvas of elementCanvases) {
+    let elementX = labelPadding;
+    if (labelFlexbox.alignItems === 'center') {
+      elementX = (canvasWidth - elementCanvas.width) / 2;
+    } else if (labelFlexbox.alignItems === 'flex-end') {
+      elementX = canvasWidth - labelPadding - elementCanvas.width;
+    }
+    
+    ctx.drawImage(elementCanvas.canvas, elementX, currentY);
+    currentY += elementCanvas.height + labelGap;
+  }
+};
+
+// Render a single element (barcode, text, or image)
+const renderSingleElement = async (element, labelData, labelSettings, availableWidth, availableHeight, dpi) => {
+  const elementWidth = element.size?.width ? 
+    (availableWidth * element.size.width / 100) : 
+    (element.type === 'barcode' ? availableWidth * 0.8 : availableWidth);
+  const elementHeight = (element.size?.height || (element.type === 'barcode' ? 40 : 20)) * (dpi / 96);
+  
+  if (element.type === 'barcode') {
+    return renderBarcode(
+      labelData.barcode,
+      element.barcodeType || labelSettings.barcodeType || 'EAN13',
+      elementWidth,
+      elementHeight,
+      true
+    );
+  } else if (element.type === 'text') {
+    let textContent = element.content;
+    if (!element.isStatic && element.columnName) {
+      const colIndex = labelData.columnHeaders?.indexOf(element.columnName);
+      if (colIndex !== -1 && labelData.rowData) {
+        textContent = labelData.rowData[colIndex] || element.columnName;
+      }
+    } else if (!element.isStatic && labelData.text) {
+      textContent = labelData.text;
+    }
+    
+    return renderText(textContent, element.style, elementWidth, elementHeight);
+  } else if (element.type === 'image') {
+    if (element.imageData) {
+      return await renderImage(element.imageData, elementWidth, elementHeight, element.aspectRatio || 'auto');
+    }
+  }
+  
+  return null;
+};
+
+// Render a group directly
+const renderGroupDirectly = async (group, labelData, labelSettings, availableWidth, availableHeight, dpi) => {
+  if (!group.children || group.children.length === 0) {
+    return null;
+  }
+  
+  const groupPadding = parseInt(group.flexbox?.padding?.replace('px', '') || '0');
+  const groupGap = parseInt(group.flexbox?.gap?.replace('px', '') || '0');
+  const groupFlexDirection = group.flexbox?.flexDirection || 'row';
+  
+  // Calculate available space within group
+  const groupAvailableWidth = availableWidth - (groupPadding * 2);
+  const groupAvailableHeight = availableHeight - (groupPadding * 2);
+  
+  // Calculate child dimensions
+  const childCanvases = [];
+  let groupWidth = 0;
+  let groupHeight = 0;
+  
+  for (const child of group.children) {
+    let childCanvas;
+    if (child.type === 'group') {
+      // Recursively handle nested groups
+      childCanvas = await renderGroupDirectly(child, labelData, labelSettings, groupAvailableWidth, groupAvailableHeight, dpi);
+    } else {
+      childCanvas = await renderSingleElement(child, labelData, labelSettings, groupAvailableWidth, groupAvailableHeight, dpi);
+    }
+    
+    if (childCanvas) {
+      childCanvases.push(childCanvas);
+      if (groupFlexDirection === 'row') {
+        groupWidth += childCanvas.width + groupGap;
+        groupHeight = Math.max(groupHeight, childCanvas.height);
+      } else {
+        groupWidth = Math.max(groupWidth, childCanvas.width);
+        groupHeight += childCanvas.height + groupGap;
+      }
+    }
+  }
+  
+  if (groupWidth > 0) {
+    groupWidth -= groupGap; // Remove last gap
+    groupWidth += groupPadding * 2; // Add group padding
+    groupHeight += groupPadding * 2; // Add group padding
+  }
+  
+  // Create group canvas
+  const groupCanvas = document.createElement('canvas');
+  const groupCtx = groupCanvas.getContext('2d');
+  groupCanvas.width = groupWidth;
+  groupCanvas.height = groupHeight;
+  
+  // Clear background
+  groupCtx.clearRect(0, 0, groupWidth, groupHeight);
+  
+  // Render children
+  let childX = groupPadding;
+  let childY = groupPadding;
+  
+  for (const childCanvas of childCanvases) {
+    groupCtx.drawImage(childCanvas, childX, childY);
+    
+    if (groupFlexDirection === 'row') {
+      childX += childCanvas.width + groupGap;
+    } else {
+      childY += childCanvas.height + groupGap;
+    }
+  }
+  
+  return groupCanvas;
 };
 
 // Render an image element
