@@ -76,6 +76,26 @@
           <button data-size="medium" class="active">Medium 80×60 mm</button>
           <button data-size="large">Large 100×80 mm</button>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+          <div>
+            <label>Width (mm)</label>
+            <input id="labelWmm" type="number" min="20" max="200" step="1" />
+          </div>
+          <div>
+            <label>Height (mm)</label>
+            <input id="labelHmm" type="number" min="20" max="200" step="1" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+          <div>
+            <label>Page margin (mm)</label>
+            <input id="pageMarginInput" type="number" min="0" max="25" step="1" />
+          </div>
+          <div>
+            <label>Label spacing (mm)</label>
+            <input id="labelSpacingInput" type="number" min="0" max="10" step="1" />
+          </div>
+        </div>
 
         <label>Upload logo (PNG/JPG)</label>
         <input id="logoInput" type="file" accept="image/*" />
@@ -85,10 +105,57 @@
 
         <label>Static bilingual text (editable)</label>
         <textarea id="staticText" rows="6" style="width:100%"></textarea>
+        <hr style="margin:12px 0">
+        <label>Style & Layout</label>
+        <div class="cols-list" style="max-height:unset">
+          <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px">
+            <div>
+              <label>Padding (px)</label>
+              <input id="padPx" type="number" min="0" max="48" step="1" />
+            </div>
+            <div>
+              <label>Logo box (px)</label>
+              <input id="logoBoxPx" type="number" min="16" max="160" step="2" />
+            </div>
+            <div>
+              <label>Logo top (px)</label>
+              <input id="logoTopPx" type="number" min="0" max="120" step="1" />
+            </div>
+            <div>
+              <label>Logo right (px)</label>
+              <input id="logoRightPx" type="number" min="0" max="120" step="1" />
+            </div>
+            <div>
+              <label>Line 1 size (px)</label>
+              <input id="line1Px" type="number" min="8" max="28" step="1" />
+            </div>
+            <div>
+              <label>Line 2 size (px)</label>
+              <input id="line2Px" type="number" min="8" max="24" step="1" />
+            </div>
+            <div>
+              <label>Info text size (px)</label>
+              <input id="infoPx" type="number" min="8" max="20" step="1" />
+            </div>
+            <div>
+              <label>Dynamic text size (px)</label>
+              <input id="dynPx" type="number" min="8" max="22" step="1" />
+            </div>
+            <div>
+              <label>Barcode height (px)</label>
+              <input id="bcHeightPx" type="number" min="20" max="120" step="2" />
+            </div>
+            <div>
+              <label>Barcode font (px)</label>
+              <input id="bcFontPx" type="number" min="8" max="24" step="1" />
+            </div>
+          </div>
+        </div>
 
         <div style="margin-top:10px;display:flex;gap:8px">
           <button id="renderBtn">Render Preview</button>
           <button id="generatePdf" style="background:#059669">Generate A4 PDF</button>
+          <a id="downloadPdfLink" href="#" download="labels_a4.pdf" style="display:none;background:#10b981;color:#fff;padding:8px 10px;border-radius:8px;text-decoration:none">Download last PDF</a>
         </div>
       </div>
 
@@ -98,19 +165,19 @@
         <!-- Single-label DOM used for html2canvas rendering; will be rendered at high DPI -->
         <div id="labelRenderWrapper" style="display:flex;flex-direction:column;gap:8px">
           <div id="labelCanvasDOM" class="label-preview" style="width:300px">
-            <div style="position:relative;padding:10px;box-sizing:border-box;min-height:130px">
+            <div id="labelInner" style="position:relative;padding:10px;box-sizing:border-box;min-height:130px">
               <div id="logoContainer" class="logo-box" style="position:absolute;right:10px;top:10px;width:60px;height:60px;display:flex;align-items:center;justify-content:center;border-radius:4px;overflow:hidden">
                 <span style="color:#999;font-size:12px">logo</span>
               </div>
 
               <div id="labelContent" style="padding-right:80px">
-                <div id="staticLine1" style="font-weight:700;direction:rtl">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com</div>
-                <div id="staticLine2" style="font-size:12px">Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com</div>
+                <div id="staticLine1" contenteditable="true" style="font-weight:700;direction:rtl">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com</div>
+                <div id="staticLine2" contenteditable="true" style="font-size:12px">Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com</div>
                 <div id="dynamicPairs" style="margin-top:8px"></div>
                 <div id="barcodeArea" style="margin-top:8px"></div>
                 <div style="margin-top:8px;font-size:12px">
-                  <div id="staticLine3">info@advistaltd.com | بنغالور، الهند</div>
-                  <div id="staticLine4">info@advistaltd.com | Bangalore, India</div>
+                  <div id="staticLine3" contenteditable="true">info@advistaltd.com | بنغالور، الهند</div>
+                  <div id="staticLine4" contenteditable="true">info@advistaltd.com | Bangalore, India</div>
                 </div>
               </div>
             </div>
@@ -155,8 +222,8 @@ let currentLogoDataUrl = null;
 let labelSizeMM = {w:80, h:60}; // default medium
 let labelDPI = 300; // canvas DPI for export (high quality)
 const A4 = {w:210, h:297}; // mm
-const pageMarginMM = 10; // page margin in mm
-const labelSpacingMM = 4; // spacing between labels
+let pageMarginMM = 6; // page margin in mm (reduced to waste less space)
+let labelSpacingMM = 2; // spacing between labels (reduced)
 
 /* DOM refs */
 const fileInput = document.getElementById('fileInput');
@@ -173,6 +240,24 @@ const sizeButtons = document.getElementById('sizeButtons');
 const logoInput = document.getElementById('logoInput');
 const labelCanvasDOM = document.getElementById('labelCanvasDOM');
 const logoContainer = document.getElementById('logoContainer');
+const labelInner = document.getElementById('labelInner');
+const downloadPdfLink = document.getElementById('downloadPdfLink');
+
+// UI inputs for sizing/layout
+const labelWmmInput = document.getElementById('labelWmm');
+const labelHmmInput = document.getElementById('labelHmm');
+const pageMarginInput = document.getElementById('pageMarginInput');
+const labelSpacingInput = document.getElementById('labelSpacingInput');
+const padPxInput = document.getElementById('padPx');
+const logoBoxPxInput = document.getElementById('logoBoxPx');
+const logoTopPxInput = document.getElementById('logoTopPx');
+const logoRightPxInput = document.getElementById('logoRightPx');
+const line1PxInput = document.getElementById('line1Px');
+const line2PxInput = document.getElementById('line2Px');
+const infoPxInput = document.getElementById('infoPx');
+const dynPxInput = document.getElementById('dynPx');
+const bcHeightPxInput = document.getElementById('bcHeightPx');
+const bcFontPxInput = document.getElementById('bcFontPx');
 const renderBtn = document.getElementById('renderBtn');
 const generatePdfBtn = document.getElementById('generatePdf');
 const dynamicPairsEl = document.getElementById('dynamicPairs');
@@ -372,7 +457,9 @@ function renderBarcodePreview(){
   // create canvas for JsBarcode
   const canvas = document.createElement('canvas');
   try {
-    JsBarcode(canvas, val, {format:'ean13', displayValue:true, fontSize:12, height:40, margin:6});
+    const h = getIntValue(bcHeightPxInput, 40);
+    const f = getIntValue(bcFontPxInput, 12);
+    JsBarcode(canvas, val, {format:'ean13', displayValue:true, fontSize:f, height:h, margin:4});
     barcodeArea.appendChild(canvas);
   } catch(err){
     const msg = document.createElement('div'); msg.style.color='#b02a37'; msg.textContent = 'Barcode render error: ' + err.message;
@@ -464,26 +551,37 @@ generatePdfBtn.addEventListener('click', async ()=>{
     const line4 = staticLines[3] || '';
 
     // Build content
+    const padPx = getIntValue(padPxInput, 12);
+    const logoBoxPx = getIntValue(logoBoxPxInput, 60);
+    const logoTopPx = getIntValue(logoTopPxInput, 10);
+    const logoRightPx = getIntValue(logoRightPxInput, 10);
+    const line1Px = getIntValue(line1PxInput, 14);
+    const line2Px = getIntValue(line2PxInput, 12);
+    const infoPx = getIntValue(infoPxInput, 11);
+    const dynPx = getIntValue(dynPxInput, 12);
+    const bcHeightPx = getIntValue(bcHeightPxInput, 40);
+    const bcFontPx = getIntValue(bcFontPxInput, 12);
+
     wrapper.innerHTML = `
-      <div style="width:100%;height:100%;padding:12px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;color:#111;">
+      <div style="width:100%;height:100%;padding:${padPx}px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;color:#111;">
         <div style="position:relative;height:100%;">
-          <div style="position:absolute;right:10px;top:10px;width:calc(${Math.min( pxW*0.18,  (60 * labelDPI / 96) )}px);height:calc(${Math.min(pxH*0.18, (60 * labelDPI / 96))}px);overflow:hidden;display:flex;align-items:center;justify-content:center;">
-            ${ currentLogoDataUrl ? `<img src="${currentLogoDataUrl}" style="max-width:100%;max-height:100%;display:block" />` : `<div style="color:#888;font-size:${12 * labelDPI/96}px">logo</div>` }
+          <div style="position:absolute;right:${logoRightPx}px;top:${logoTopPx}px;width:${logoBoxPx}px;height:${logoBoxPx}px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+            ${ currentLogoDataUrl ? `<img src="${currentLogoDataUrl}" style="max-width:100%;max-height:100%;display:block" />` : `<div style=\"color:#888;font-size:${12}px\">logo</div>` }
           </div>
 
-          <div style="padding-right:calc((${Math.min( pxW*0.18,  (60 * labelDPI / 96) )}px) + 6px)">
-            <div style="font-weight:700;font-size:${14 * labelDPI/96}px;direction:rtl">${escapeHtml(line1)}</div>
-            <div style="font-size:${12 * labelDPI/96}px;margin-top:4px">${escapeHtml(line2)}</div>
+          <div style="padding-right:${logoBoxPx + 6}px">
+            <div style="font-weight:700;font-size:${line1Px}px;direction:rtl">${escapeHtml(line1)}</div>
+            <div style="font-size:${line2Px}px;margin-top:4px">${escapeHtml(line2)}</div>
 
-            <div id="dynContent" style="margin-top:8px;font-size:${12 * labelDPI/96}px;line-height:1.1">
+            <div id="dynContent" style="margin-top:8px;font-size:${dynPx}px;line-height:1.1">
               ${selectedCols.map(col => `<div><strong>${escapeHtml(col)}:</strong> ${escapeHtml(String(row[col] ?? ''))}</div>`).join('')}
             </div>
 
             <div id="barcodeHolder" style="margin-top:8px"></div>
 
-            <div style="position:absolute;bottom:12px;left:12px;right:12px;font-size:${11 * labelDPI/96}px">
+            <div style="position:absolute;bottom:${padPx}px;left:${padPx}px;right:${padPx}px;font-size:${infoPx}px">
               <div>${escapeHtml(line3)}</div>
-              <div style="font-size:${11 * labelDPI/96}px">${escapeHtml(line4)}</div>
+              <div style="font-size:${infoPx}px">${escapeHtml(line4)}</div>
             </div>
           </div>
         </div>
@@ -499,7 +597,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
       const bCan = document.createElement('canvas');
       // size settings tailored for label size
       try {
-        JsBarcode(bCan, bcVal, {format:'ean13', width:2, height:40 * labelDPI/96, displayValue:true, fontSize:12 * labelDPI/96, margin:4 * labelDPI/96});
+        JsBarcode(bCan, bcVal, {format:'ean13', width:2, height:bcHeightPx, displayValue:true, fontSize:bcFontPx, margin:4});
         barDiv.appendChild(bCan);
       } catch(e){
         // on error, show error text
@@ -511,7 +609,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
     // Now use html2canvas at scale = labelDPI / 96 approx.
     const scale = labelDPI / 96;
     const canvas = await html2canvas(wrapper, {width:pxW, height:pxH, scale:scale, backgroundColor:'#ffffff', useCORS:true});
-    const dataUrl = canvas.toDataURL('imagePNG', 1.0);
+    const dataUrl = canvas.toDataURL('image/png', 1.0);
     // cleanup
     wrapper.remove();
     return {dataUrl, pxW, pxH};
@@ -567,7 +665,15 @@ generatePdfBtn.addEventListener('click', async ()=>{
     pageIndex++;
   }
 
-  // finalize: download
+  // finalize: download and expose link
+  try{
+    const blob = pdf.output('blob');
+    const url = URL.createObjectURL(blob);
+    downloadPdfLink.href = url;
+    downloadPdfLink.style.display = 'inline-block';
+  }catch(e){
+    console.warn('Could not create blob URL for download link', e);
+  }
   pdf.save('labels_a4.pdf');
   alert('PDF generated and downloaded. Pages: ' + pageIndex);
 });
@@ -611,6 +717,96 @@ labelCanvasDOM.style.minHeight = '180px';
 /* when barcode col or row changes, rerender preview */
 rowSelect.addEventListener('change', renderMappingPreview);
 barcodeSelect.addEventListener('change', renderMappingPreview);
+
+/* ---------- New: style controls binding ---------- */
+function getIntValue(inputEl, fallback){
+  const n = parseInt(String(inputEl && inputEl.value || '').trim(), 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function applyStyleControlsToPreview(){
+  const padPx = getIntValue(padPxInput, 12);
+  const logoBoxPx = getIntValue(logoBoxPxInput, 60);
+  const logoTopPx = getIntValue(logoTopPxInput, 10);
+  const logoRightPx = getIntValue(logoRightPxInput, 10);
+  const line1Px = getIntValue(line1PxInput, 14);
+  const line2Px = getIntValue(line2PxInput, 12);
+  const infoPx = getIntValue(infoPxInput, 11);
+  const dynPx = getIntValue(dynPxInput, 12);
+
+  if(labelInner) labelInner.style.padding = padPx + 'px';
+  if(logoContainer){
+    logoContainer.style.top = logoTopPx + 'px';
+    logoContainer.style.right = logoRightPx + 'px';
+    logoContainer.style.width = logoBoxPx + 'px';
+    logoContainer.style.height = logoBoxPx + 'px';
+  }
+  const labelContentEl = document.getElementById('labelContent');
+  if(labelContentEl) labelContentEl.style.paddingRight = (getIntValue(logoBoxPxInput, 60) + 6) + 'px';
+  const staticLine1El = document.getElementById('staticLine1');
+  const staticLine2El = document.getElementById('staticLine2');
+  if(staticLine1El) staticLine1El.style.fontSize = line1Px + 'px';
+  if(staticLine2El) staticLine2El.style.fontSize = line2Px + 'px';
+  const dynEl = document.getElementById('dynamicPairs');
+  if(dynEl) dynEl.style.fontSize = dynPx + 'px';
+  // bottom info container font size set via inline style container; re-apply with mapping preview
+  renderBarcodePreview();
+}
+
+// initialize inputs with defaults and bind events
+labelWmmInput.value = String(labelSizeMM.w);
+labelHmmInput.value = String(labelSizeMM.h);
+pageMarginInput.value = String(pageMarginMM);
+labelSpacingInput.value = String(labelSpacingMM);
+padPxInput.value = '12';
+logoBoxPxInput.value = '60';
+logoTopPxInput.value = '10';
+logoRightPxInput.value = '10';
+line1PxInput.value = '14';
+line2PxInput.value = '12';
+infoPxInput.value = '11';
+dynPxInput.value = '12';
+bcHeightPxInput.value = '40';
+bcFontPxInput.value = '12';
+applyStyleControlsToPreview();
+
+labelWmmInput.addEventListener('change', ()=>{
+  const w = getIntValue(labelWmmInput, labelSizeMM.w);
+  labelSizeMM.w = Math.max(20, Math.min(200, w));
+  const pxW = Math.round(labelSizeMM.w * 3.78);
+  labelCanvasDOM.style.width = pxW + 'px';
+});
+labelHmmInput.addEventListener('change', ()=>{
+  const h = getIntValue(labelHmmInput, labelSizeMM.h);
+  labelSizeMM.h = Math.max(20, Math.min(200, h));
+});
+pageMarginInput.addEventListener('change', ()=>{
+  pageMarginMM = Math.max(0, Math.min(25, getIntValue(pageMarginInput, pageMarginMM)));
+});
+labelSpacingInput.addEventListener('change', ()=>{
+  labelSpacingMM = Math.max(0, Math.min(10, getIntValue(labelSpacingInput, labelSpacingMM)));
+});
+[padPxInput, logoBoxPxInput, logoTopPxInput, logoRightPxInput, line1PxInput, line2PxInput, infoPxInput, dynPxInput, bcHeightPxInput, bcFontPxInput].forEach(el=>{
+  el.addEventListener('change', applyStyleControlsToPreview);
+  el.addEventListener('input', applyStyleControlsToPreview);
+});
+
+// Sync contenteditable static lines with textarea and preview
+['staticLine1','staticLine2','staticLine3','staticLine4'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('input', ()=>{
+    const lines = ['staticLine1','staticLine2','staticLine3','staticLine4'].map(k=>{
+      const n = document.getElementById(k);
+      return n ? n.textContent.trim() : '';
+    });
+    staticTextArea.value = lines.filter(Boolean).join('\n');
+    renderMappingPreview();
+  });
+});
+staticTextArea.addEventListener('input', ()=>{
+  renderMappingPreview();
+});
 
 </script>
 </body>
