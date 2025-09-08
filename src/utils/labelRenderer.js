@@ -111,28 +111,38 @@ export const renderText = (text, style, width, height) => {
 };
 
 export const renderLabel = async (labelData, labelSettings, elements = [], targetDPI = null) => {
-  const currentSize = LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
-  const size = labelSettings.size === 'custom' 
-    ? { width: labelSettings.customWidth, height: labelSettings.customHeight }
-    : currentSize;
-  
-  // Use target DPI if provided, otherwise use the default from label size
-  const dpi = targetDPI || currentSize.dpi;
-  const width = size.width * dpi;
-  const height = size.height * dpi;
-  
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  
-  // Set canvas size
-  canvas.width = width;
-  canvas.height = height;
-  
-  // Fill background with transparent
-  ctx.clearRect(0, 0, width, height);
+  try {
+    const currentSize = LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
+    const size = labelSettings.size === 'custom' 
+      ? { width: labelSettings.customWidth, height: labelSettings.customHeight }
+      : currentSize;
+    
+    // Use target DPI if provided, otherwise use the default from label size
+    const dpi = targetDPI || currentSize.dpi;
+    const width = size.width * dpi;
+    const height = size.height * dpi;
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas size
+    canvas.width = width;
+    canvas.height = height;
+    
+    // Fill background with transparent
+    ctx.clearRect(0, 0, width, height);
+    
+    // Debug logging
+    console.log('renderLabel called with:', {
+      labelData,
+      elements: elements?.length || 0,
+      targetDPI,
+      width,
+      height
+    });
   
   // If no elements defined, use default layout
-  if (elements.length === 0) {
+  if (!elements || elements.length === 0) {
     // Default: barcode centered, text below
     const barcodeHeight = height * 0.6;
     const barcodeCanvas = renderBarcode(
@@ -174,6 +184,7 @@ export const renderLabel = async (labelData, labelSettings, elements = [], targe
     const availableHeight = Math.max(0, height - (labelPadding * 2));
     
     // Render elements with proper flexbox layout that respects label boundaries
+    console.log('Calling renderFlexboxLayout with elements:', elements.length);
     await renderFlexboxLayout(ctx, elements, {
       x: labelPadding,
       y: labelPadding,
@@ -190,6 +201,21 @@ export const renderLabel = async (labelData, labelSettings, elements = [], targe
   }
   
   return canvas;
+  } catch (error) {
+    console.error('Error in renderLabel:', error);
+    // Return a fallback canvas with error message
+    const fallbackCanvas = document.createElement('canvas');
+    const fallbackCtx = fallbackCanvas.getContext('2d');
+    fallbackCanvas.width = 200;
+    fallbackCanvas.height = 100;
+    fallbackCtx.fillStyle = '#ffebee';
+    fallbackCtx.fillRect(0, 0, 200, 100);
+    fallbackCtx.fillStyle = '#f44336';
+    fallbackCtx.font = '12px Arial';
+    fallbackCtx.textAlign = 'center';
+    fallbackCtx.fillText('Error rendering label', 100, 50);
+    return fallbackCanvas;
+  }
 };
 
 // Render an image element
@@ -307,6 +333,14 @@ const renderImage = (imageData, width, height, aspectRatio = 'auto') => {
 // Proper flexbox layout rendering that respects boundaries
 const renderFlexboxLayout = async (ctx, elements, container) => {
   const { x, y, width, height, flexDirection, justifyContent, alignItems, gap, labelData, labelSettings, dpi } = container;
+  
+  console.log('renderFlexboxLayout called with:', {
+    elementsCount: elements.length,
+    container: { x, y, width, height },
+    flexDirection,
+    justifyContent,
+    alignItems
+  });
   
   // Calculate element dimensions first
   const elementDimensions = await Promise.all(elements.map(async element => {
