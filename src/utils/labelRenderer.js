@@ -136,46 +136,81 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
       ctx.fillText(labelData.text, width / 2, textY);
     }
   } else {
-    // Render each element using flexbox layout
-    let currentY = 10; // Start with some margin
+    // Render elements using flexbox layout with real-world dimensions
+    const padding = 10; // 10px padding
+    const gap = 10; // 10px gap between elements
+    
+    // Calculate available space
+    const availableWidth = width - (padding * 2);
+    const availableHeight = height - (padding * 2);
+    
+    // Start rendering from top-left with padding
+    let currentY = padding;
     
     elements.forEach(element => {
       if (element.type === 'group') {
         // Render group elements
         if (element.children && element.children.length > 0) {
-          let currentX = 10; // Start with some margin
+          // Calculate group dimensions
+          const groupPadding = parseInt(element.flexbox.padding) || 10;
+          const groupGap = parseInt(element.flexbox.gap) || 10;
           
-          element.children.forEach((child, index) => {
+          // Calculate total width needed for group
+          let totalGroupWidth = 0;
+          const childCanvases = [];
+          
+          element.children.forEach(child => {
             if (child.type === 'barcode') {
-              const elementCanvas = renderBarcode(
+              const childCanvas = renderBarcode(
                 labelData.barcode,
                 child.barcodeType || labelSettings.barcodeType || 'EAN13',
-                120 * (dpi / 96), // Convert from display pixels to print pixels
+                120 * (dpi / 96),
                 40 * (dpi / 96)
               );
-              
-              ctx.drawImage(elementCanvas, currentX, currentY);
-              currentX += elementCanvas.width + 10; // Add spacing
+              childCanvases.push({ canvas: childCanvas, type: 'barcode' });
+              totalGroupWidth += childCanvas.width + groupGap;
             } else if (child.type === 'text') {
-              // Use static text or Excel data
+              // Get text content for this specific element
               let textContent = child.content;
-              if (!child.isStatic && labelData.text) {
+              if (!child.isStatic && child.columnName) {
+                // Use specific column data
+                const colIndex = labelData.columnHeaders?.indexOf(child.columnName);
+                if (colIndex !== -1 && labelData.rowData) {
+                  textContent = labelData.rowData[colIndex] || child.columnName;
+                }
+              } else if (!child.isStatic && labelData.text) {
                 textContent = labelData.text;
               }
               
-              const elementCanvas = renderText(
+              const childCanvas = renderText(
                 textContent,
                 child.style,
                 100 * (dpi / 96),
                 20 * (dpi / 96)
               );
-              
-              ctx.drawImage(elementCanvas, currentX, currentY);
-              currentX += elementCanvas.width + 10; // Add spacing
+              childCanvases.push({ canvas: childCanvas, type: 'text' });
+              totalGroupWidth += childCanvas.width + groupGap;
             }
           });
           
-          currentY += 50; // Move to next row
+          totalGroupWidth -= groupGap; // Remove last gap
+          
+          // Position group based on flexbox properties
+          let startX = padding;
+          if (element.flexbox.justifyContent === 'center') {
+            startX = (width - totalGroupWidth) / 2;
+          } else if (element.flexbox.justifyContent === 'flex-end') {
+            startX = width - padding - totalGroupWidth;
+          }
+          
+          // Render group children
+          let currentX = startX;
+          childCanvases.forEach(({ canvas, type }) => {
+            ctx.drawImage(canvas, currentX, currentY);
+            currentX += canvas.width + groupGap;
+          });
+          
+          currentY += Math.max(...childCanvases.map(c => c.canvas.height)) + gap;
         }
       } else {
         // Render individual elements
@@ -183,18 +218,24 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
           const elementCanvas = renderBarcode(
             labelData.barcode,
             element.barcodeType || labelSettings.barcodeType || 'EAN13',
-            120 * (dpi / 96), // Convert from display pixels to print pixels
+            120 * (dpi / 96),
             40 * (dpi / 96)
           );
           
-          const x = 10; // Center horizontally
-          const y = currentY;
-          ctx.drawImage(elementCanvas, x, y);
-          currentY += elementCanvas.height + 10; // Add spacing
+          // Center horizontally
+          const x = (width - elementCanvas.width) / 2;
+          ctx.drawImage(elementCanvas, x, currentY);
+          currentY += elementCanvas.height + gap;
         } else if (element.type === 'text') {
-          // Use static text or Excel data
+          // Get text content for this specific element
           let textContent = element.content;
-          if (!element.isStatic && labelData.text) {
+          if (!element.isStatic && element.columnName) {
+            // Use specific column data
+            const colIndex = labelData.columnHeaders?.indexOf(element.columnName);
+            if (colIndex !== -1 && labelData.rowData) {
+              textContent = labelData.rowData[colIndex] || element.columnName;
+            }
+          } else if (!element.isStatic && labelData.text) {
             textContent = labelData.text;
           }
           
@@ -205,10 +246,10 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
             20 * (dpi / 96)
           );
           
-          const x = 10; // Center horizontally
-          const y = currentY;
-          ctx.drawImage(elementCanvas, x, y);
-          currentY += elementCanvas.height + 10; // Add spacing
+          // Center horizontally
+          const x = (width - elementCanvas.width) / 2;
+          ctx.drawImage(elementCanvas, x, currentY);
+          currentY += elementCanvas.height + gap;
         }
       }
     });

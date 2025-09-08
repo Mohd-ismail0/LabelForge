@@ -109,6 +109,9 @@ const LabelDesign = () => {
     }
   };
 
+  const [draggedElement, setDraggedElement] = useState(null);
+  const [selectedElements, setSelectedElements] = useState([]);
+
   const moveElementToGroup = (elementId, groupId) => {
     const element = labelSettings.elements.find(el => el.id === elementId);
     const group = labelSettings.elements.find(el => el.id === groupId);
@@ -120,7 +123,7 @@ const LabelDesign = () => {
       // Add element to group
       const updatedGroup = {
         ...group,
-        children: [...group.children, element]
+        children: [...(group.children || []), element]
       };
       
       const finalElements = updatedElements.map(el => 
@@ -135,10 +138,10 @@ const LabelDesign = () => {
     const group = labelSettings.elements.find(el => el.id === groupId);
     
     if (group) {
-      const element = group.children.find(child => child.id === elementId);
+      const element = group.children?.find(child => child.id === elementId);
       const updatedGroup = {
         ...group,
-        children: group.children.filter(child => child.id !== elementId)
+        children: group.children?.filter(child => child.id !== elementId) || []
       };
       
       const updatedElements = labelSettings.elements.map(el => 
@@ -152,6 +155,84 @@ const LabelDesign = () => {
       
       actions.setLabelSettings({ elements: updatedElements });
     }
+  };
+
+  const handleElementSelect = (elementId, isShiftKey = false) => {
+    if (isShiftKey) {
+      setSelectedElements(prev => 
+        prev.includes(elementId) 
+          ? prev.filter(id => id !== elementId)
+          : [...prev, elementId]
+      );
+    } else {
+      setSelectedElements([elementId]);
+      setSelectedElement(elementId);
+      setSelectedGroup(null);
+    }
+  };
+
+  const createGroupFromSelected = () => {
+    if (selectedElements.length < 2) return;
+
+    const elementsToGroup = labelSettings.elements.filter(el => selectedElements.includes(el.id));
+    const remainingElements = labelSettings.elements.filter(el => !selectedElements.includes(el.id));
+    
+    const newGroup = {
+      id: labelSettings.nextElementId,
+      type: 'group',
+      name: `Group ${labelSettings.nextElementId}`,
+      children: elementsToGroup,
+      flexbox: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '10px',
+        margin: '5px',
+        border: '1px dashed #ccc',
+        borderRadius: '4px'
+      }
+    };
+
+    actions.setLabelSettings({
+      elements: [...remainingElements, newGroup],
+      nextElementId: labelSettings.nextElementId + 1
+    });
+    
+    setSelectedElements([]);
+    setSelectedElement(null);
+  };
+
+  const ungroupSelected = () => {
+    if (selectedGroup) {
+      const group = labelSettings.elements.find(el => el.id === selectedGroup);
+      if (group && group.children) {
+        const updatedElements = labelSettings.elements.filter(el => el.id !== selectedGroup);
+        actions.setLabelSettings({
+          elements: [...updatedElements, ...group.children],
+          nextElementId: labelSettings.nextElementId
+        });
+        setSelectedGroup(null);
+      }
+    }
+  };
+
+  const handleDragStart = (e, elementId) => {
+    setDraggedElement(elementId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, targetGroupId) => {
+    e.preventDefault();
+    if (draggedElement && targetGroupId) {
+      moveElementToGroup(draggedElement, targetGroupId);
+    }
+    setDraggedElement(null);
   };
 
   const getCurrentSize = () => {
@@ -181,59 +262,97 @@ const LabelDesign = () => {
     actions.setStep(4);
   };
 
-  // Add default elements if none exist
+  // Create elements based on mapped columns from step 2
   useEffect(() => {
-    if (labelSettings.elements.length === 0) {
-      // Add a default barcode element
-      const defaultBarcode = {
-        id: 1,
-        type: 'barcode',
-        content: '',
-        isStatic: false,
-        flexbox: {
-          flexDirection: 'row',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '5px',
-          padding: '5px',
-          margin: '0px'
-        },
-        style: {
-          fontSize: 12,
-          fontWeight: 'normal',
-          color: '#000000',
-          textAlign: 'center'
-        }
-      };
-      
-      // Add a default text element
-      const defaultText = {
-        id: 2,
-        type: 'text',
-        content: 'Static Text',
-        isStatic: true,
-        flexbox: {
-          flexDirection: 'row',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: '5px',
-          padding: '5px',
-          margin: '0px'
-        },
-        style: {
-          fontSize: 12,
-          fontWeight: 'normal',
-          color: '#000000',
-          textAlign: 'center'
-        }
-      };
+    if (labelSettings.elements.length === 0 && state.mappedColumns) {
+      const newElements = [];
+      let nextId = 1;
+
+      // Add barcode element if mapped
+      if (state.mappedColumns.barcode) {
+        const barcodeElement = {
+          id: nextId++,
+          type: 'barcode',
+          content: '',
+          isStatic: false,
+          columnName: state.mappedColumns.barcode,
+          flexbox: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '5px',
+            margin: '0px'
+          },
+          style: {
+            fontSize: 12,
+            fontWeight: 'normal',
+            color: '#000000',
+            textAlign: 'center'
+          }
+        };
+        newElements.push(barcodeElement);
+      }
+
+      // Add text elements for each mapped text column
+      if (state.mappedColumns.text && state.mappedColumns.text.length > 0) {
+        state.mappedColumns.text.forEach(columnName => {
+          const textElement = {
+            id: nextId++,
+            type: 'text',
+            content: '',
+            isStatic: false,
+            columnName: columnName,
+            flexbox: {
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '5px',
+              margin: '0px'
+            },
+            style: {
+              fontSize: 12,
+              fontWeight: 'normal',
+              color: '#000000',
+              textAlign: 'center'
+            }
+          };
+          newElements.push(textElement);
+        });
+      }
+
+      // If no elements were created, add a default barcode element
+      if (newElements.length === 0) {
+        const defaultBarcode = {
+          id: nextId++,
+          type: 'barcode',
+          content: '',
+          isStatic: false,
+          flexbox: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '5px',
+            margin: '0px'
+          },
+          style: {
+            fontSize: 12,
+            fontWeight: 'normal',
+            color: '#000000',
+            textAlign: 'center'
+          }
+        };
+        newElements.push(defaultBarcode);
+      }
 
       actions.setLabelSettings({
-        elements: [defaultBarcode, defaultText],
-        nextElementId: 3
+        elements: newElements,
+        nextElementId: nextId
       });
     }
-  }, [labelSettings.elements.length, actions]);
+  }, [labelSettings.elements.length, state.mappedColumns, actions]);
 
   return (
     <div className="card">
@@ -337,18 +456,55 @@ const LabelDesign = () => {
             </div>
 
             <div className="panel-section">
+              <h4>Grouping</h4>
+              <div className="grouping-buttons">
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={createGroupFromSelected}
+                  disabled={selectedElements.length < 2}
+                >
+                  <span className="btn-icon">📦</span>
+                  Group Selected ({selectedElements.length})
+                </button>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={ungroupSelected}
+                  disabled={!selectedGroup}
+                >
+                  <span className="btn-icon">📤</span>
+                  Ungroup
+                </button>
+              </div>
+            </div>
+
+            <div className="panel-section">
               <h4>Elements & Groups</h4>
               <div className="element-tree">
                 {labelSettings.elements.map((element) => (
                   <div key={element.id}>
                     <div
-                      className={`tree-item ${selectedElement === element.id || selectedGroup === element.id ? 'selected' : ''}`}
-                      onClick={() => element.type === 'group' ? selectGroup(element.id) : selectElement(element.id)}
+                      className={`tree-item ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''}`}
+                      onClick={(e) => {
+                        if (element.type === 'group') {
+                          selectGroup(element.id);
+                        } else {
+                          handleElementSelect(element.id, e.shiftKey);
+                        }
+                      }}
+                      draggable={element.type !== 'group'}
+                      onDragStart={(e) => handleDragStart(e, element.id)}
                     >
                       <span className="tree-icon">
                         {element.type === 'text' ? 'T' : element.type === 'barcode' ? '|||' : '📦'}
                       </span>
-                      <span>{element.type === 'group' ? element.name : `${element.type} ${element.id}`}</span>
+                      <span>
+                        {element.type === 'group' 
+                          ? element.name 
+                          : element.columnName 
+                            ? `${element.type}: ${element.columnName}` 
+                            : `${element.type} ${element.id}`
+                        }
+                      </span>
                       <button
                         className="remove-element"
                         onClick={(e) => {
@@ -360,17 +516,26 @@ const LabelDesign = () => {
                       </button>
                     </div>
                     {element.type === 'group' && element.children && element.children.length > 0 && (
-                      <div className="tree-children">
+                      <div 
+                        className="tree-children"
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, element.id)}
+                      >
                         {element.children.map((child) => (
                           <div
                             key={child.id}
-                            className={`tree-item child ${selectedElement === child.id ? 'selected' : ''}`}
-                            onClick={() => selectElement(child.id)}
+                            className={`tree-item child ${selectedElement === child.id || selectedElements.includes(child.id) ? 'selected' : ''}`}
+                            onClick={(e) => handleElementSelect(child.id, e.shiftKey)}
                           >
                             <span className="tree-icon">
                               {child.type === 'text' ? 'T' : '|||'}
                             </span>
-                            <span>{child.type} {child.id}</span>
+                            <span>
+                              {child.columnName 
+                                ? `${child.type}: ${child.columnName}` 
+                                : `${child.type} ${child.id}`
+                              }
+                            </span>
                             <button
                               className="remove-element"
                               onClick={(e) => {
@@ -394,13 +559,17 @@ const LabelDesign = () => {
           <div className="canvas-area">
             <div className="canvas-header">
               <h4>Label Canvas</h4>
+              <div className="canvas-info">
+                <span>Size: {getCurrentSize().width}" × {getCurrentSize().height}"</span>
+                <span>DPI: {getCurrentSize().dpi}</span>
+              </div>
             </div>
             <div className="canvas-container">
               <div
                 className="label-canvas flexbox-canvas"
                 style={{
-                  width: `${getCurrentSize().width * 96}px`,
-                  height: `${getCurrentSize().height * 96}px`,
+                  width: `${getCurrentSize().width * getCurrentSize().dpi}px`,
+                  height: `${getCurrentSize().height * getCurrentSize().dpi}px`,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',
@@ -409,23 +578,33 @@ const LabelDesign = () => {
                   padding: '10px',
                   border: '2px dashed #ccc',
                   borderRadius: '8px',
-                  background: '#f9f9f9'
+                  background: '#f9f9f9',
+                  transform: 'scale(0.3)',
+                  transformOrigin: 'top left',
+                  marginBottom: `${getCurrentSize().height * getCurrentSize().dpi * 0.3}px`,
+                  marginRight: `${getCurrentSize().width * getCurrentSize().dpi * 0.3}px`
                 }}
               >
                 {labelSettings.elements.map((element) => (
                   <div
                     key={element.id}
-                    className={`canvas-element ${element.type} ${selectedElement === element.id || selectedGroup === element.id ? 'selected' : ''}`}
+                    className={`canvas-element ${element.type} ${selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'selected' : ''}`}
                     style={{
                       ...element.flexbox,
-                      border: selectedElement === element.id || selectedGroup === element.id ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
-                      background: selectedElement === element.id || selectedGroup === element.id ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.8)',
+                      border: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? '2px solid var(--color-primary)' : '1px dashed var(--color-gray-300)',
+                      background: selectedElement === element.id || selectedGroup === element.id || selectedElements.includes(element.id) ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.8)',
                       cursor: 'pointer',
                       borderRadius: '4px',
                       minHeight: element.type === 'barcode' ? '40px' : '20px',
                       minWidth: element.type === 'barcode' ? '100px' : '50px'
                     }}
-                    onClick={() => element.type === 'group' ? selectGroup(element.id) : selectElement(element.id)}
+                    onClick={(e) => {
+                      if (element.type === 'group') {
+                        selectGroup(element.id);
+                      } else {
+                        handleElementSelect(element.id, e.shiftKey);
+                      }
+                    }}
                   >
                     {renderElement(element)}
                   </div>
@@ -845,7 +1024,12 @@ const TextElement = ({ element }) => {
   // Get text content - use static text if it's a static element, otherwise use Excel data
   let textContent = element.content;
   
-  if (!element.isStatic && excelData && mappedColumns.text.length > 0) {
+  if (!element.isStatic && element.columnName && excelData) {
+    // Use specific column data for this element
+    const colIndex = excelData.columnHeaders.indexOf(element.columnName);
+    textContent = excelData.rows[0]?.[colIndex] || element.columnName;
+  } else if (!element.isStatic && excelData && mappedColumns.text.length > 0) {
+    // Fallback to all mapped text columns
     const textValues = mappedColumns.text.map(col => {
       const colIndex = excelData.columnHeaders.indexOf(col);
       return excelData.rows[0]?.[colIndex] || '';

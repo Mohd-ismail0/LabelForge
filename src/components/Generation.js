@@ -99,7 +99,9 @@ const Generation = () => {
             barcode,
             text: textContent,
             productIndex: rowIndex,
-            labelIndex: i
+            labelIndex: i,
+            columnHeaders: excelData.columnHeaders,
+            rowData: row
           };
           labels.push(labelData);
         }
@@ -174,15 +176,21 @@ const Generation = () => {
         : currentSize;
       const pageSizeInfo = PAGE_SIZES[pageSize];
       
-      // Calculate labels per page
+      // Calculate labels per page with zero wastage
       const labelWidthMM = size.width * 25.4; // Convert inches to mm
       const labelHeightMM = size.height * 25.4;
-      const margin = 10; // 10mm margin
-      const spacing = 2; // 2mm spacing between labels
+      const margin = 5; // Minimal margin for cutting
       
-      const labelsPerRow = Math.floor((pageSizeInfo.width - 2 * margin + spacing) / (labelWidthMM + spacing));
-      const labelsPerColumn = Math.floor((pageSizeInfo.height - 2 * margin + spacing) / (labelHeightMM + spacing));
+      // Calculate maximum labels that fit with zero wastage
+      const labelsPerRow = Math.floor(pageSizeInfo.width / labelWidthMM);
+      const labelsPerColumn = Math.floor(pageSizeInfo.height / labelHeightMM);
       const labelsPerPage = labelsPerRow * labelsPerColumn;
+      
+      // Calculate actual spacing to center labels
+      const totalLabelWidth = labelsPerRow * labelWidthMM;
+      const totalLabelHeight = labelsPerColumn * labelHeightMM;
+      const horizontalSpacing = labelsPerRow > 1 ? (pageSizeInfo.width - totalLabelWidth) / (labelsPerRow - 1) : 0;
+      const verticalSpacing = labelsPerColumn > 1 ? (pageSizeInfo.height - totalLabelHeight) / (labelsPerColumn - 1) : 0;
 
       let currentPage = 0;
       let currentRow = 0;
@@ -198,9 +206,9 @@ const Generation = () => {
           currentCol = 0;
         }
 
-        // Calculate position with proper spacing
-        const x = margin + currentCol * (labelWidthMM + spacing);
-        const y = margin + currentRow * (labelHeightMM + spacing);
+        // Calculate position with zero wastage spacing
+        const x = currentCol * (labelWidthMM + horizontalSpacing);
+        const y = currentRow * (labelHeightMM + verticalSpacing);
 
         // Use shared rendering function for consistency with design
         const canvas = renderLabel(label, labelSettings, labelSettings.elements);
