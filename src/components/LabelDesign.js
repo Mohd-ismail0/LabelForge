@@ -30,7 +30,7 @@ const LabelDesign = () => {
       type,
       content: type === 'text' ? 'Sample Text' : '',
       position: { x: 10, y: 10 },
-      size: { width: 100, height: type === 'barcode' ? 50 : 20 },
+      size: { width: type === 'barcode' ? 150 : 100, height: type === 'barcode' ? 50 : 20 },
       style: {
         fontSize: 12,
         fontWeight: 'normal',
@@ -55,6 +55,27 @@ const LabelDesign = () => {
       el.id === elementId ? { ...el, ...updates } : el
     );
     actions.setLabelSettings({ elements: updatedElements });
+  };
+
+  const handleElementDrag = (elementId, e) => {
+    e.preventDefault();
+    const element = labelSettings.elements.find(el => el.id === elementId);
+    if (!element) return;
+
+    const canvas = e.currentTarget.parentElement;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Constrain to canvas bounds
+    const maxX = canvas.offsetWidth - element.size.width;
+    const maxY = canvas.offsetHeight - element.size.height;
+    const constrainedX = Math.max(0, Math.min(x, maxX));
+    const constrainedY = Math.max(0, Math.min(y, maxY));
+
+    updateElement(elementId, {
+      position: { x: constrainedX, y: constrainedY }
+    });
   };
 
   const deleteElement = (elementId) => {
@@ -90,6 +111,46 @@ const LabelDesign = () => {
   const handleNext = () => {
     actions.setStep(4);
   };
+
+  // Add default elements if none exist
+  useEffect(() => {
+    if (labelSettings.elements.length === 0) {
+      // Add a default barcode element
+      const defaultBarcode = {
+        id: 1,
+        type: 'barcode',
+        content: '',
+        position: { x: 20, y: 20 },
+        size: { width: 150, height: 50 },
+        style: {
+          fontSize: 12,
+          fontWeight: 'normal',
+          color: '#000000',
+          textAlign: 'center'
+        }
+      };
+      
+      // Add a default text element
+      const defaultText = {
+        id: 2,
+        type: 'text',
+        content: 'Sample Text',
+        position: { x: 20, y: 80 },
+        size: { width: 150, height: 20 },
+        style: {
+          fontSize: 12,
+          fontWeight: 'normal',
+          color: '#000000',
+          textAlign: 'center'
+        }
+      };
+
+      actions.setLabelSettings({
+        elements: [defaultBarcode, defaultText],
+        nextElementId: 3
+      });
+    }
+  }, [labelSettings.elements.length, actions]);
 
   return (
     <div className="card">
@@ -246,6 +307,7 @@ const LabelDesign = () => {
                       overflow: 'hidden'
                     }}
                     onClick={() => selectElement(element.id)}
+                    onMouseDown={(e) => handleElementDrag(element.id, e)}
                   >
                     {renderElement(element)}
                   </div>

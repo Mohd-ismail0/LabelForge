@@ -25,13 +25,15 @@ export const renderBarcode = (barcode, barcodeType, width, height, showText = tr
   try {
     // Generate barcode
     const barcodeCanvas = document.createElement('canvas');
-    JsBarcode(barcodeCanvas, barcode, {
+    JsBarcode(barcodeCanvas, barcode.toString(), {
       format: barcodeType,
       width: 2,
       height: height * 0.6,
       displayValue: showText,
       fontSize: Math.max(8, height * 0.15),
-      margin: 5
+      margin: 5,
+      background: 'white',
+      lineColor: 'black'
     });
     
     // Draw barcode centered
@@ -150,7 +152,7 @@ export const renderLabel = (labelData, labelSettings, elements = []) => {
       } else if (element.type === 'text') {
         // Replace placeholder text with actual data
         let textContent = element.content;
-        if (labelData.text && textContent.includes('Sample')) {
+        if (labelData.text && (textContent.includes('Sample') || textContent === 'Sample Text')) {
           textContent = labelData.text;
         }
         

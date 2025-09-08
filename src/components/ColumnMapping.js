@@ -59,16 +59,18 @@ const ColumnMapping = () => {
     if (!mappedColumns.barcode || !excelData) return;
 
     try {
-      const barcodeColumnIndex = columnHeaders.indexOf(mappedColumns.barcode);
+      const barcodeColumnIndex = excelData.columnHeaders.indexOf(mappedColumns.barcode);
       const sampleBarcode = excelData.rows[0]?.[barcodeColumnIndex];
 
       if (sampleBarcode) {
         const canvas = document.createElement('canvas');
-        JsBarcode(canvas, sampleBarcode, {
+        JsBarcode(canvas, sampleBarcode.toString(), {
           format: state.labelSettings.barcodeType,
           width: 2,
           height: 50,
-          displayValue: true
+          displayValue: true,
+          background: 'white',
+          lineColor: 'black'
         });
 
         const previewBarcode = document.getElementById('mapping-preview-barcode');
@@ -82,7 +84,7 @@ const ColumnMapping = () => {
       const previewText = document.getElementById('mapping-preview-text');
       if (previewText && mappedColumns.text.length > 0) {
         const textValues = mappedColumns.text.map(col => {
-          const colIndex = columnHeaders.indexOf(col);
+          const colIndex = excelData.columnHeaders.indexOf(col);
           return excelData.rows[0]?.[colIndex] || '';
         }).filter(val => val).join(' - ');
         

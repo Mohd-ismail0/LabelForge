@@ -76,10 +76,15 @@ const FileUpload = () => {
             return;
           }
 
+          if (jsonData.length < 2) {
+            actions.setError('The Excel file must have at least a header row and one data row');
+            return;
+          }
+
           const headers = jsonData[0];
           const rows = jsonData.slice(1);
 
-          actions.setExcelData({ headers, rows, fileName: file.name });
+          actions.setExcelData({ headers, rows, fileName: file.name, columnHeaders: headers });
           actions.setColumnHeaders(headers);
           actions.setStep(2);
         } catch (error) {

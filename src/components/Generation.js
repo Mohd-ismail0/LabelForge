@@ -56,7 +56,7 @@ const Generation = () => {
 
   const generateLabels = async () => {
     if (!excelData || !mappedColumns.barcode) {
-      actions.setError('Missing required data for label generation');
+      actions.setError('Missing required data for label generation. Please ensure you have uploaded an Excel file and mapped the barcode column.');
       return;
     }
 
@@ -77,7 +77,7 @@ const Generation = () => {
         const row = excelData.rows[rowIndex];
         const barcode = row[barcodeColumnIndex];
         
-        if (!barcode) continue;
+        if (!barcode || barcode.toString().trim() === '') continue;
 
         // Get quantity for this row
         let quantity = 1;
@@ -165,7 +165,7 @@ const Generation = () => {
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: pageSize
+        format: pageSize === 'a4' ? 'a4' : pageSize === 'letter' ? 'letter' : 'legal'
       });
 
       const currentSize = LABEL_SIZES[labelSettings.size] || LABEL_SIZES['2x1'];
