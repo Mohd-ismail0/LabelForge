@@ -537,14 +537,15 @@ generatePdfBtn.addEventListener('click', async ()=>{
   progressDiv.innerHTML = '<div>Generating PDF...</div><div id="pdfProgress">0%</div>';
   document.body.appendChild(progressDiv);
 
-  // Fast CSS-to-Canvas renderer with caching and batch processing
+  // Fast DOM-to-Canvas renderer with caching and batch processing
   const __renderCache = new Map();
+  const __barcodeCache = new Map();
   function rowCacheKey(row){
     try{ return JSON.stringify(row); }catch(_){ return String(Math.random()); }
   }
   
-  // Batch processing for better performance
-  async function processBatch(items, batchSize = 5) {
+  // Batch processing for better performance (parallel renders)
+  async function processBatch(items, batchSize = 6) {
     const results = [];
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize);
@@ -559,163 +560,103 @@ generatePdfBtn.addEventListener('click', async ()=>{
     }
     return results;
   }
+  
+  // Cache barcode rendering to avoid repeated JsBarcode work
+  async function getBarcodeDataUrl(value, height, fontSize){
+    const key = `${value}|${height}|${fontSize}`;
+    if(__barcodeCache.has(key)) return __barcodeCache.get(key);
+    const cvs = document.createElement('canvas');
+    JsBarcode(cvs, value, {format:'ean13', displayValue:true, fontSize, height, margin:4});
+    const url = cvs.toDataURL('image/png');
+    __barcodeCache.set(key, url);
+    return url;
+  }
   async function renderLabelToDataUrl(row, selectedCols){
     const key = rowCacheKey(row);
     if(__renderCache.has(key)) return __renderCache.get(key);
-    
-    // Use fast CSS-to-Canvas rendering that replicates the exact preview layout
-    return await renderLabelWithCssToCanvas(row, selectedCols, key);
+
+    // Render by cloning the live preview DOM and rasterizing with html2canvas
+    return await renderLabelWithHtml2Canvas(row, selectedCols, key);
   }
-  
-  // Fast CSS-to-Canvas rendering that replicates preview layout exactly
-  async function renderLabelWithCssToCanvas(row, selectedCols, key) {
-    const pxW = mmToPx(labelSizeMM.w, labelDPI);
-    const pxH = mmToPx(labelSizeMM.h, labelDPI);
-    const padPx = getIntValue(padPxInput, 12);
-    const logoBoxPx = getIntValue(logoBoxPxInput, 60);
-    const logoTopPx = getIntValue(logoTopPxInput, 10);
-    const logoRightPx = getIntValue(logoRightPxInput, 10);
-    const line1Px = getIntValue(line1PxInput, 13);
-    const line2Px = getIntValue(line2PxInput, 10);
-    const infoPx = getIntValue(infoPxInput, 11);
-    const dynPx = getIntValue(dynPxInput, 12);
-    const bcHeightPx = getIntValue(bcHeightPxInput, 40);
-    const bcFontPx = getIntValue(bcFontPxInput, 12);
 
-    const staticLines = staticTextArea.value.split('\n').map(s=>s.trim()).filter(Boolean);
-    const line1 = staticLines[0] || '';
-    const line2 = staticLines[1] || '';
-    const line3 = staticLines[2] || '';
-    const line4 = staticLines[3] || '';
+  // Exact DOM-to-canvas render using html2canvas so PDF matches preview
+  async function renderLabelWithHtml2Canvas(row, selectedCols, key){
+    // Create offscreen wrapper
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;background:white;';
 
-    const canvas = document.createElement('canvas');
-    canvas.width = pxW; 
-    canvas.height = pxH;
-    const ctx = canvas.getContext('2d');
-    
-    // White background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, pxW, pxH);
-    ctx.fillStyle = '#111';
+    // Clone the current preview label DOM so styles/layout are identical
+    const clone = labelCanvasDOM.cloneNode(true);
 
-    // Calculate layout exactly like the preview CSS
-    const contentRightPadding = logoRightPx + logoBoxPx + 12;
-    const contentLeft = padPx;
-    const contentRight = pxW - padPx - contentRightPadding;
-    const contentWidth = Math.max(20, contentRight - contentLeft);
-    const contentTop = padPx;
-    const contentBottom = pxH - padPx;
+    // Force physical size in CSS pixels (96dpi) to match preview proportions
+    const cssW = Math.round(labelSizeMM.w * 3.78);
+    const cssH = Math.round(labelSizeMM.h * 3.78);
+    clone.style.width = cssW + 'px';
+    clone.style.minHeight = cssH + 'px';
 
-    // Helper function for text wrapping with proper line height
-    function drawWrappedText(text, x, y, maxWidth, fontSize, lineHeight, align = 'left', direction = 'ltr') {
-      ctx.font = `${fontSize}px Arial`;
-      ctx.textAlign = align;
-      ctx.direction = direction;
-      
-      const words = String(text).split(/\s+/);
-      let line = '';
-      let currentY = y;
-      const maxLines = Math.floor((contentBottom - y) / lineHeight);
-      let linesDrawn = 0;
-      
-      for (let i = 0; i < words.length && linesDrawn < maxLines; i++) {
-        const testLine = line ? line + ' ' + words[i] : words[i];
-        const metrics = ctx.measureText(testLine);
-        
-        if (metrics.width > maxWidth && line) {
-          ctx.fillText(line, x, currentY);
-          line = words[i];
-          currentY += lineHeight;
-          linesDrawn++;
-        } else {
-          line = testLine;
-        }
-      }
-      
-      if (line && linesDrawn < maxLines) {
-        ctx.fillText(line, x, currentY);
-        linesDrawn++;
-      }
-      
-      return currentY + lineHeight;
-    }
-
-    let cursorY = contentTop;
-
-    // Top two lines (matching preview layout exactly)
-    // Line 1: RTL Arabic text
-    ctx.font = `bold ${line1Px}px Arial`;
-    cursorY = drawWrappedText(line1, contentLeft + contentWidth, cursorY + line1Px, contentWidth, line1Px, Math.round(line1Px * 1.25), 'right', 'rtl');
-    
-    // Line 2: LTR English text
-    cursorY = drawWrappedText(line2, contentLeft, cursorY + 4, contentWidth, line2Px, Math.round(line2Px * 1.25), 'left', 'ltr');
-
-    // Dynamic pairs (matching preview flex layout)
-    ctx.font = `${Math.max(10, dynPx)}px Arial`;
-    selectedCols.forEach(col => {
-      const text = `${col}: ${String(row[col] ?? '')}`;
-      cursorY = drawWrappedText(text, contentLeft, cursorY + 6, contentWidth, dynPx, Math.round(dynPx * 1.2), 'left', 'ltr');
+    // Apply current static lines from textarea
+    const staticLines = staticTextArea.value.split('\n').map(s=>s.trim());
+    const ids = ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'];
+    ids.forEach((id, i)=>{
+      const el = clone.querySelector(`#${id}`);
+      if(el) el.textContent = staticLines[i] || '';
     });
 
-    // Barcode (centered in content area, matching preview)
-    if (chosenBarcodeCol) {
-      const raw = String(row[chosenBarcodeCol] ?? '').replace(/\D/g, '');
-      if (raw && cursorY + bcHeightPx + bcFontPx + 20 < contentBottom) {
-        const bcCanvas = document.createElement('canvas');
-        bcCanvas.width = contentWidth;
-        bcCanvas.height = bcHeightPx + bcFontPx + 10;
-        
-        try {
-          JsBarcode(bcCanvas, raw, {
-            format: 'ean13',
-            displayValue: true,
-            fontSize: bcFontPx,
-            height: bcHeightPx,
-            margin: 4
-          });
-          
-          // Center barcode horizontally in content area
-          const bcX = contentLeft + (contentWidth - bcCanvas.width) / 2;
-          ctx.drawImage(bcCanvas, bcX, cursorY + 8);
-          cursorY += 8 + bcCanvas.height;
-        } catch (e) {
-          // Ignore barcode errors
-        }
+    // Rebuild dynamic pairs exactly like preview (space-around row)
+    const dynContainer = clone.querySelector('#dynamicPairs');
+    if(dynContainer){
+      dynContainer.innerHTML = '';
+      selectedCols.forEach(col=>{
+        const d = document.createElement('div');
+        d.style.marginBottom = '6px';
+        d.innerHTML = `<strong>${col}:</strong> <span>${row[col] ?? ''}</span>`;
+        dynContainer.appendChild(d);
+      });
+    }
+
+    // Render barcode inside the clone
+    const bcEl = clone.querySelector('#barcodeArea');
+    if(bcEl){
+      bcEl.innerHTML = '';
+      const chosenBarcodeColVal = chosenBarcodeCol ? String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'') : '';
+      if(chosenBarcodeColVal){
+        const canvas = document.createElement('canvas');
+        const h = getIntValue(bcHeightPxInput, 40);
+        const f = getIntValue(bcFontPxInput, 12);
+        try{
+          JsBarcode(canvas, chosenBarcodeColVal, {format:'ean13', displayValue:true, fontSize:f, height:h, margin:4});
+          bcEl.appendChild(canvas);
+        }catch{ /* ignore barcode errors for this row */ }
       }
     }
 
-    // Bottom info lines (centered, matching preview)
-    ctx.font = `${infoPx}px Arial`;
-    ctx.textAlign = 'center';
-    const bottomBlockH = Math.round(infoPx * 1.2) * 2 + 4;
-    const baseY = contentBottom - bottomBlockH + Math.round(infoPx * 1.2);
-    const centerX = contentLeft + contentWidth / 2;
-    
-    ctx.fillText(line3, centerX, baseY);
-    ctx.fillText(line4, centerX, baseY + Math.round(infoPx * 1.2));
-
-    // Logo (top-right corner, matching preview positioning)
-    if (currentLogoDataUrl) {
-      await new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => {
-          // Position exactly like preview: top-right with padding
-          const logoX = pxW - logoRightPx - logoBoxPx;
-          const logoY = logoTopPx;
-          ctx.drawImage(img, logoX, logoY, logoBoxPx, logoBoxPx);
-          resolve();
-        };
-        img.onerror = resolve;
+    // Ensure logo is present in the clone when uploaded
+    const cloneLogoContainer = clone.querySelector('#logoContainer');
+    if(cloneLogoContainer && currentLogoDataUrl){
+      // Replace placeholder with image if missing
+      if(!cloneLogoContainer.querySelector('img')){
+        cloneLogoContainer.innerHTML = '';
+        const img = document.createElement('img');
         img.src = currentLogoDataUrl;
-      });
-    } else {
-      // Draw logo placeholder
-      const logoX = pxW - logoRightPx - logoBoxPx;
-      const logoY = logoTopPx;
-      ctx.strokeStyle = '#ddd';
-      ctx.strokeRect(logoX, logoY, logoBoxPx, logoBoxPx);
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.style.display = 'block';
+        cloneLogoContainer.appendChild(img);
+      }
     }
 
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    // High-DPI render so size in PDF is crisp and matches mm
+    const scale = labelDPI / 96; // 96 CSS px per inch baseline
+    const canvas = await html2canvas(clone, {backgroundColor:'#ffffff', scale});
+
+    // Cleanup
+    document.body.removeChild(wrapper);
+
+    const pxW = canvas.width; // already scaled
+    const pxH = canvas.height;
     const dataUrl = canvas.toDataURL('image/png', 0.92);
     const result = { dataUrl, pxW, pxH };
     __renderCache.set(key, result);
@@ -745,7 +686,9 @@ generatePdfBtn.addEventListener('click', async ()=>{
   }
 
   // Pre-render all labels in batches for better performance
-  const renderedLabels = await processBatch(items, 5);
+  const cores = (navigator && navigator.hardwareConcurrency) ? navigator.hardwareConcurrency : 4;
+  const batchSizeOpt = Math.min(8, Math.max(4, cores * 2));
+  const renderedLabels = await processBatch(items, batchSizeOpt);
   
   // Now compose PDF pages with pre-rendered labels
   let pageIndex = 0;
