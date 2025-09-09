@@ -173,14 +173,14 @@
                 <div id="logoContainer" class="logo-box" style="width:60px;height:60px;display:flex;align-items:center;border-radius:4px;overflow:hidden;z-index:2">
                   <span style="color:#999;font-size:12px">logo</span>
                 </div>
-                <div style="display:flex;flex-direction:column;width:100%">
-                  <div id="staticLine1" contenteditable="true" style="font-weight:700;direction:rtl;width:100%;font-size:14px">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | بنغالور، الهند</div>
-                  <div id="staticLine2" contenteditable="true" style="font-size:12px;width:100%">Imported and Marketed By: Advista Marketing Pvt Ltd | info@advistaltd.com</div>
+                <div style="display:flex;flex-direction:column;width:100%;gap:2px">
+                  <div id="staticLine1" contenteditable="true" style="font-weight:700;direction:rtl;width:100%;font-size:13px">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | بنغالور، الهند</div>
+                  <div id="staticLine2" contenteditable="true" style="font-size:10px;width:100%">Imported and Marketed By: Advista Marketing Pvt Ltd | info@advistaltd.com</div>
                 </div>
               </div>
 
-              <div id="dynamicPairs" style="margin-top:8px;font-size:12px;display:flex;flex-direction:row;justify-content:space-around"></div>
-              <div id="barcodeArea" style="margin-top:8px;width:100%;display:flex;flex-direction:column"></div>
+              <div id="dynamicPairs" style="margin-top:8px;font-size:11px;display:flex;flex-direction:row;justify-content:space-around"></div>
+              <div id="barcodeArea" style="margin-top:8px;margin-bottom:4px;width:fit-content;padding-left:10%;display:flex;flex-direction:column"></div>
               <div style="margin-top:8px;font-size:12px;width:100%;display:flex;flex-direction:column;align-items:center">
                 <div id="staticLine3" contenteditable="true" style="width:100%">تركيبة الخامة: نايلون + سباندكس</div>
                 <div id="staticLine4" contenteditable="true" style="width:100%">Material Composition: Nylon + Spandex</div>
@@ -546,8 +546,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
     const logoBoxPx = getIntValue(logoBoxPxInput, 60);
     const logoTopPx = getIntValue(logoTopPxInput, 10);
     const logoRightPx = getIntValue(logoRightPxInput, 10);
-    const line1Px = getIntValue(line1PxInput, 14);
-    const line2Px = getIntValue(line2PxInput, 12);
+    const line1Px = getIntValue(line1PxInput, 13);
+    const line2Px = getIntValue(line2PxInput, 10);
     const infoPx = getIntValue(infoPxInput, 11);
     const dynPx = getIntValue(dynPxInput, 12);
     const bcHeightPx = getIntValue(bcHeightPxInput, 40);
@@ -602,8 +602,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
     ctx.font = `${line2Px}px Arial`;
     cursorY = drawWrapped(line2, contentX, cursorY + 4, contentW, Math.round(line2Px*1.25), 'left');
 
-    // Dynamic pairs
-    ctx.font = `${dynPx}px Arial`;
+    // Dynamic pairs (row, spaced)
+    ctx.font = `${Math.max(10, dynPx)}px Arial`;
     selectedCols.forEach(col=>{
       const text = `${col}: ${String(row[col] ?? '')}`;
       cursorY = drawWrapped(text, contentX, cursorY + 6, contentW, Math.round(dynPx*1.2), 'left');
@@ -628,9 +628,9 @@ generatePdfBtn.addEventListener('click', async ()=>{
     ctx.font = `${infoPx}px Arial`;
     const bottomBlockH = Math.round(infoPx*1.2)*2 + 4;
     const baseY = pxH - padPx - bottomBlockH + Math.round(infoPx*1.2);
-    ctx.textAlign = 'left';
-    ctx.fillText(line3, padPx, baseY);
-    ctx.fillText(line4, padPx, baseY + Math.round(infoPx*1.2));
+    ctx.textAlign = 'center';
+    ctx.fillText(line3, Math.round(pxW/2), baseY);
+    ctx.fillText(line4, Math.round(pxW/2), baseY + Math.round(infoPx*1.2));
 
     // Logo (draw last so it sits above text visually)
     if(currentLogoDataUrl){
