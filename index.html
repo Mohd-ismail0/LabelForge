@@ -506,13 +506,11 @@ generatePdfBtn.addEventListener('click', async ()=>{
   // Build flat array of items (each item corresponds to one label instance)
   const items = [];
   parsedData.forEach((row, rowIndex)=>{
-    // Skip when quantity column exists and value is null/empty/zero
+    // Quantity
+    let qty = 1;
     if(qtyCol){
-      const rawQty = String(row[qtyCol] ?? '').trim();
-      const qtyNum = parseInt(rawQty, 10);
-      if(!Number.isFinite(qtyNum) || qtyNum <= 0){
-        return; // ignore this row
-      }
+      qty = parsePositiveQuantity(row[qtyCol]);
+      if(qty <= 0){ return; }
     }
 
     // Skip when barcode column exists and value is null/0
@@ -524,12 +522,6 @@ generatePdfBtn.addEventListener('click', async ()=>{
       }
     }
 
-    let qty = 1;
-    if(qtyCol){
-      const raw = String(row[qtyCol] ?? '').trim();
-      const n = parseInt(raw,10);
-      qty = Number.isFinite(n) && n>0 ? n : 1;
-    }
     for(let i=0;i<qty;i++) items.push({rowIndex, row});
   });
 
@@ -546,7 +538,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
 
   // Show quick information
   const pagesNeeded = Math.ceil(items.length / perPage);
-  if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}).\n\nUsing fast CSS-to-Canvas rendering for optimal performance. Proceed?`)) return;
+  const totalRequestedQty = items.length;
+  if(!confirm(`Generating ${totalRequestedQty} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
   
   // Add progress indicator
   const progressDiv = document.createElement('div');
@@ -763,20 +756,120 @@ generatePdfBtn.addEventListener('click', async ()=>{
   pdf.save('labels_a4.pdf');
   alert('PDF generated and downloaded. Pages: ' + pageIndex);
 });
+/* ---------- Shared renderer used by ZIP and PDF (global scope) ---------- */
+const __globalRenderCache = new Map();
+const __globalBarcodeCache = new Map();
+async function renderLabelToDataUrl(row, selectedCols){
+  // Build cache key from row + important knobs
+  let key;
+  try{
+    key = JSON.stringify({row, selectedCols, size:labelSizeMM, dpi:labelDPI, staticText:staticTextArea.value, hasLogo:!!currentLogoDataUrl});
+  }catch(_){ key = String(Math.random()); }
+  if(__globalRenderCache.has(key)) return __globalRenderCache.get(key);
+
+  // Offscreen container and clone of preview
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;z-index:-1;';
+  const clone = labelCanvasDOM.cloneNode(true);
+
+  // Force CSS size to match preview aspect (96dpi css pixels)
+  const cssW = Math.round(labelSizeMM.w * 3.78);
+  const cssH = Math.round(labelSizeMM.h * 3.78);
+  clone.style.width = cssW + 'px';
+  clone.style.minHeight = cssH + 'px';
+
+  // Apply static lines from textarea
+  const staticLines = staticTextArea.value.split('\n').map(s=>s.trim());
+  ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'].forEach((id,i)=>{
+    const el = clone.querySelector('#'+id);
+    if(el) el.textContent = staticLines[i] || '';
+  });
+
+  // Dynamic pairs
+  const dyn = clone.querySelector('#dynamicPairs');
+  if(dyn){
+    dyn.innerHTML = '';
+    selectedCols.forEach(col=>{
+      const d = document.createElement('div');
+      d.style.marginBottom = '6px';
+      d.innerHTML = `<strong>${col}:</strong> <span>${row[col] ?? ''}</span>`;
+      dyn.appendChild(d);
+    });
+  }
+
+  // Barcode inside clone if column chosen
+  const bcEl = clone.querySelector('#barcodeArea');
+  if(bcEl){
+    bcEl.innerHTML = '';
+    const col = barcodeSelect.value;
+    const raw = col ? String(row[col] ?? '').replace(/\D/g,'') : '';
+    if(raw){
+      const h = getIntValue(bcHeightPxInput, 40);
+      const f = getIntValue(bcFontPxInput, 12);
+      const bKey = `${raw}|${h}|${f}`;
+      if(__globalBarcodeCache.has(bKey)){
+        const img = new Image(); img.src = __globalBarcodeCache.get(bKey); bcEl.appendChild(img);
+      } else {
+        const cvs = document.createElement('canvas');
+        try{ cvs.getContext('2d', {willReadFrequently:true}); }catch(_){ }
+        try{
+          JsBarcode(cvs, raw, {format:'ean13', displayValue:true, fontSize:f, height:h, margin:4});
+          const url = cvs.toDataURL('image/png');
+          __globalBarcodeCache.set(bKey, url);
+          const img = new Image(); img.src = url; bcEl.appendChild(img);
+        }catch(_){ /* ignore */ }
+      }
+    }
+  }
+
+  // Ensure logo present
+  const cloneLogo = clone.querySelector('#logoContainer');
+  if(cloneLogo && currentLogoDataUrl){
+    if(!cloneLogo.querySelector('img')){
+      cloneLogo.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = currentLogoDataUrl;
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = '100%';
+      img.style.display = 'block';
+      cloneLogo.appendChild(img);
+    }
+  }
+
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  const scale = labelDPI / 96;
+  const canvas = await html2canvas(clone, {backgroundColor:'#ffffff', scale});
+  document.body.removeChild(wrapper);
+
+  const result = { dataUrl: canvas.toDataURL('image/png', 0.92), pxW: canvas.width, pxH: canvas.height };
+  __globalRenderCache.set(key, result);
+  return result;
+}
 /* ---------- ZIP (PNG) download ---------- */
 downloadZipBtn.addEventListener('click', async ()=>{
   if(!parsedData || parsedData.length===0){ alert('Load a sheet first'); return; }
   const qtyCol = quantitySelect.value;
   const selectedCols = Array.from(colsList.querySelectorAll('input[type=checkbox]:checked')).map(cb=>cb.dataset.col);
-  const items = [];
-  parsedData.forEach((row)=>{
-    // Skip when quantity column exists and value is null/empty/zero
+  
+  // Build one entry per row (no duplication by quantity). File name encodes selected columns and qty
+  const rowsForZip = [];
+  const usedNameCounts = new Map();
+  function sanitizeName(s){
+    return String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,60) || 'na';
+  }
+  function uniqueBase(base){
+    const n = usedNameCounts.get(base) || 0;
+    usedNameCounts.set(base, n+1);
+    return n === 0 ? base : `${base}-${n+1}`;
+  }
+  parsedData.forEach((row, idx)=>{
+    // Quantity
+    let qty = 1;
     if(qtyCol){
-      const rawQty = String(row[qtyCol] ?? '').trim();
-      const qtyNum = parseInt(rawQty, 10);
-      if(!Number.isFinite(qtyNum) || qtyNum <= 0){
-        return; // ignore this row
-      }
+      qty = parsePositiveQuantity(row[qtyCol]);
+      if(qty <= 0){ return; }
     }
     // Skip when barcode column exists and value is null/0
     const chosenBarcodeCol = barcodeSelect.value;
@@ -787,25 +880,22 @@ downloadZipBtn.addEventListener('click', async ()=>{
         return; // ignore this row
       }
     }
-    let qty = 1;
-    if(qtyCol){
-      const raw = String(row[qtyCol] ?? '').trim();
-      const n = parseInt(raw,10);
-      qty = Number.isFinite(n) && n>0 ? n : 1;
-    }
-    for(let i=0;i<qty;i++) items.push({row});
+    const parts = selectedCols.map(col=>`${sanitizeName(col)}-${sanitizeName(row[col])}`);
+    const base = parts.length ? parts.join('_') : `row-${idx+1}`;
+    const fileBase = uniqueBase(`${base}_qty-${qty}`);
+    rowsForZip.push({row, fileBase});
   });
-  if(items.length === 0){ alert('No labels to generate (0 items).'); return; }
+  if(rowsForZip.length === 0){ alert('No labels to generate (0 items).'); return; }
 
   const zip = new JSZip();
-  for(let i=0;i<items.length;i++){
-    const r = await renderLabelToDataUrl(items[i].row, selectedCols);
+  for(let i=0;i<rowsForZip.length;i++){
+    const r = await renderLabelToDataUrl(rowsForZip[i].row, selectedCols);
     if(r && r.dataUrl) {
       // convert dataURL to blob
       const resp = await fetch(r.dataUrl);
       const blob = await resp.blob();
-      const idx = (i+1).toString().padStart(4,'0');
-      zip.file(`label_${idx}.png`, blob);
+      const safeName = rowsForZip[i].fileBase || `label_${(i+1).toString().padStart(4,'0')}`;
+      zip.file(`${safeName}.png`, blob);
     }
   }
   const zipBlob = await zip.generateAsync({type:'blob'});
@@ -822,6 +912,20 @@ function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function mmToPxRounded(mm, dpi=300){ return Math.round(mm * dpi / 25.4); }
+
+// Robust quantity parser: returns integer >= 0
+function parsePositiveQuantity(raw){
+  if(raw == null) return 0;
+  const str = String(raw).trim();
+  if(str === '') return 0;
+  // extract first signed/unsigned number segment
+  const m = str.match(/-?\d+(?:[\.,]\d+)?/);
+  if(!m) return 0;
+  const n = Number(m[0].replace(',', '.'));
+  if(!Number.isFinite(n)) return 0;
+  const q = Math.floor(n);
+  return q > 0 ? q : 0;
+}
 
 /* Keep preview synced when quantity column selection or checkboxes change */
 quantitySelect.addEventListener('change', ()=>{/* nothing for preview */});
