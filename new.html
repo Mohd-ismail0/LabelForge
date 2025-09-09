@@ -56,28 +56,25 @@
   <h1>Editable Label Maker — Drag/Resize — EAN-13 → A4 PDF</h1>
   <p class="small-muted">Upload Excel/CSV/Google Sheets, select barcode column (EAN-13), pick columns to render, set a quantity column, then visually position/resize elements on the label. Adjust page margins/spacing and generate a tightly-packed A4 PDF. All local.</p>
 
-  <!-- Brand Configuration Section -->
+  <!-- Text & Layout Configuration Section -->
   <div class="card" style="margin-bottom:12px">
-    <h3 style="margin:0 0 8px">Brand Configuration</h3>
+    <h3 style="margin:0 0 8px">Text & Layout Configuration</h3>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div>
-        <label>Select Brand Template</label>
-        <select id="brandTemplate" style="width:100%">
-          <option value="advista">Advista Marketing (Current)</option>
-          <option value="generic">Generic Brand Template</option>
-          <option value="fashion">Fashion/Clothing Brand</option>
-          <option value="food">Food & Beverage</option>
-          <option value="electronics">Electronics</option>
-          <option value="cosmetics">Cosmetics/Beauty</option>
-          <option value="custom">Custom Brand</option>
-        </select>
+        <label>Static Text Editor</label>
+        <textarea id="staticTextEditor" rows="4" style="width:100%;font-size:12px" placeholder="Enter your static text here, one line per text element..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button id="applyStaticText" style="background:#059669">Apply to Label</button>
+          <button id="resetStaticText" style="background:#6b7280">Reset to Default</button>
+        </div>
       </div>
       <div>
-        <label>Brand Actions</label>
-        <div style="display:flex;gap:8px">
-          <button id="applyTemplate" style="background:#059669">Apply Template</button>
-          <button id="saveBrand" style="background:#7c3aed">Save Current as Brand</button>
-          <button id="loadBrand" style="background:#dc2626">Load Saved Brand</button>
+        <label>Layout Actions</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="createFlexGroup" style="background:#7c3aed">Create Flex Group</button>
+          <button id="ungroupElements" style="background:#dc2626">Ungroup Selected</button>
+          <button id="saveLayout" style="background:#059669">Save Layout</button>
+          <button id="loadLayout" style="background:#6b7280">Load Layout</button>
         </div>
       </div>
     </div>
@@ -216,8 +213,21 @@
             <input id="fontSizeInput" type="number" value="14" min="6" style="width:80px" />
           </div>
           <div>
-            <label class="small-muted">Align</label>
+            <label class="small-muted">Font Weight</label>
+            <select id="fontWeightSelect">
+              <option value="normal">Normal</option>
+              <option value="bold">Bold</option>
+              <option value="lighter">Lighter</option>
+              <option value="bolder">Bolder</option>
+            </select>
+          </div>
+          <div>
+            <label class="small-muted">Text Align</label>
             <select id="alignSelect"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+          </div>
+          <div>
+            <label class="small-muted">Text Color</label>
+            <input id="textColorInput" type="color" value="#000000" style="width:60px" />
           </div>
           <div>
             <label class="small-muted">Z order</label>
@@ -235,83 +245,8 @@
 
 <script>
 /* =============================
-   Brand Configuration System
+   Text & Layout Configuration System
    ============================= */
-const brandTemplates = {
-  advista: {
-    name: "Advista Marketing",
-    staticText: `مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com
-Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com
-
-info@advistaltd.com | بنغالور، الهند
-info@advistaltd.com | Bangalore, India
-
-رقم ضريبة القيمة المضافة (VAT): 313061260900003
-
-تركيبة الخامة: نايلون + سباندكس
-Material Composition: Nylon + Spandex`,
-    description: "Current Advista Marketing template with Arabic/English bilingual text"
-  },
-  generic: {
-    name: "Generic Brand",
-    staticText: `Imported and Distributed By: [Your Company Name] | [Your Website]
-Distributed By: [Your Company Name] | [Your Email]
-
-Material: [Material Type]
-Composition: [Material Details]
-
-VAT Number: [Your VAT Number]`,
-    description: "Generic template for any brand - customize the bracketed fields"
-  },
-  fashion: {
-    name: "Fashion Brand",
-    staticText: `Designed and Manufactured By: [Brand Name] | [Website]
-Made in: [Country] | [Contact Email]
-
-Fabric: [Fabric Type]
-Care Instructions: [Care Details]
-
-Size: [Size Information]
-Style: [Style Code]`,
-    description: "Template optimized for fashion and clothing brands"
-  },
-  food: {
-    name: "Food & Beverage",
-    staticText: `Manufactured By: [Company Name] | [Address]
-Distributed By: [Distributor] | [Contact]
-
-Ingredients: [Ingredient List]
-Allergens: [Allergen Information]
-
-Best Before: [Date Format]
-Batch Number: [Batch Code]`,
-    description: "Template for food and beverage products with regulatory compliance"
-  },
-  electronics: {
-    name: "Electronics",
-    staticText: `Manufactured By: [Company Name] | [Country]
-Model: [Model Number] | Serial: [Serial Number]
-
-Power: [Power Specifications]
-Compliance: [Certification Marks]
-
-Warranty: [Warranty Terms]
-Support: [Support Contact]`,
-    description: "Template for electronic devices with technical specifications"
-  },
-  cosmetics: {
-    name: "Cosmetics/Beauty",
-    staticText: `Manufactured By: [Brand Name] | [Country]
-Distributed By: [Distributor] | [Website]
-
-Ingredients: [Ingredient List]
-Volume/Weight: [Product Size]
-
-Batch Code: [Batch Number]
-Expiry Date: [Expiry Information]`,
-    description: "Template for cosmetics and beauty products"
-  }
-};
 
 /* =============================
    Utils & state
@@ -365,14 +300,29 @@ const bringForwardBtn = document.getElementById('bringForward');
 const sendBackBtn = document.getElementById('sendBack');
 const resetLayoutBtn = document.getElementById('resetLayout');
 
-// Brand configuration DOM refs
-const brandTemplateSelect = document.getElementById('brandTemplate');
-const applyTemplateBtn = document.getElementById('applyTemplate');
-const saveBrandBtn = document.getElementById('saveBrand');
-const loadBrandBtn = document.getElementById('loadBrand');
+// Text & Layout configuration DOM refs
+const staticTextEditor = document.getElementById('staticTextEditor');
+const applyStaticTextBtn = document.getElementById('applyStaticText');
+const resetStaticTextBtn = document.getElementById('resetStaticText');
+const createFlexGroupBtn = document.getElementById('createFlexGroup');
+const ungroupElementsBtn = document.getElementById('ungroupElements');
+const saveLayoutBtn = document.getElementById('saveLayout');
+const loadLayoutBtn = document.getElementById('loadLayout');
+const fontWeightSelect = document.getElementById('fontWeightSelect');
+const textColorInput = document.getElementById('textColorInput');
 
 /* set textarea default static */
-const presetStatic = brandTemplates.advista.staticText;
+const presetStatic = `مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com
+Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com
+
+info@advistaltd.com | بنغالور، الهند
+info@advistaltd.com | Bangalore, India
+
+رقم ضريبة القيمة المضافة (VAT): 313061260900003
+
+تركيبة الخامة: نايلون + سباندكس
+Material Composition: Nylon + Spandex`;
+
 staticTextArea.value = presetStatic;
 
 /* =============================
@@ -912,120 +862,157 @@ labelCanvas.addEventListener('focusin', (e)=>{
 updatePreviewFromRow(0);
 
 /* =============================
-   Brand Configuration Functions
+   Text & Layout Configuration Functions
    ============================= */
-function applyBrandTemplate(templateKey) {
-  const template = brandTemplates[templateKey];
-  if (!template) {
-    alert('Template not found: ' + templateKey);
+function applyStaticTextFromEditor() {
+  const editorText = staticTextEditor.value.trim();
+  if (!editorText) {
+    alert('Please enter some text in the editor first.');
     return;
   }
   
-  staticTextArea.value = template.staticText;
-  // Apply to canvas elements
+  staticTextArea.value = editorText;
   applyStaticBtn.click();
-  
-  // Show template description
-  const description = template.description || 'Template applied successfully';
-  alert(`Applied ${template.name} template:\n\n${description}`);
+  alert('Static text applied to label successfully!');
 }
 
-function saveCurrentBrand() {
-  const brandName = prompt('Enter a name for your brand configuration:');
-  if (!brandName) return;
+function resetStaticTextToDefault() {
+  staticTextEditor.value = presetStatic;
+  staticTextArea.value = presetStatic;
+  applyStaticBtn.click();
+  alert('Static text reset to default.');
+}
+
+function createFlexGroup() {
+  const selectedElements = getSelectedElements();
+  if (selectedElements.length < 2) {
+    alert('Please select at least 2 elements to group. Click on elements to select them.');
+    return;
+  }
   
-  const currentConfig = {
-    name: brandName,
+  // Create a new flex container
+  const flexContainer = document.createElement('div');
+  flexContainer.className = 'flex-container';
+  flexContainer.style.display = 'flex';
+  flexContainer.style.gap = '8px';
+  flexContainer.dataset.flexGroup = 'true';
+  
+  // Get the parent of the first selected element
+  const parent = selectedElements[0].parentNode;
+  
+  // Insert the flex container before the first selected element
+  parent.insertBefore(flexContainer, selectedElements[0]);
+  
+  // Move all selected elements into the flex container
+  selectedElements.forEach(el => {
+    flexContainer.appendChild(el);
+  });
+  
+  alert(`Created flex group with ${selectedElements.length} elements.`);
+}
+
+function ungroupElements() {
+  const selectedElements = getSelectedElements();
+  const flexContainers = selectedElements.filter(el => el.dataset.flexGroup === 'true');
+  
+  if (flexContainers.length === 0) {
+    alert('Please select a flex group to ungroup.');
+    return;
+  }
+  
+  flexContainers.forEach(container => {
+    const parent = container.parentNode;
+    const children = Array.from(container.children);
+    
+    // Move children back to parent
+    children.forEach(child => {
+      parent.insertBefore(child, container);
+    });
+    
+    // Remove the flex container
+    parent.removeChild(container);
+  });
+  
+  alert(`Ungrouped ${flexContainers.length} flex container(s).`);
+}
+
+function getSelectedElements() {
+  // Return all draggable elements for now - in a real implementation, you'd track selection
+  return Array.from(document.querySelectorAll('.draggable'));
+}
+
+function saveLayout() {
+  const layoutName = prompt('Enter a name for your layout configuration:');
+  if (!layoutName) return;
+  
+  const layoutConfig = {
+    name: layoutName,
     staticText: staticTextArea.value,
-    timestamp: new Date().toISOString(),
-    description: `Custom brand configuration saved by user`
+    timestamp: new Date().toISOString()
   };
   
   // Save to localStorage
-  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
-  savedBrands[brandName.toLowerCase().replace(/\s+/g, '_')] = currentConfig;
-  localStorage.setItem('savedBrands', JSON.stringify(savedBrands));
+  const savedLayouts = JSON.parse(localStorage.getItem('savedLayouts') || '{}');
+  savedLayouts[layoutName.toLowerCase().replace(/\s+/g, '_')] = layoutConfig;
+  localStorage.setItem('savedLayouts', JSON.stringify(savedLayouts));
   
-  alert(`Brand configuration "${brandName}" saved successfully!`);
+  alert(`Layout configuration "${layoutName}" saved successfully!`);
 }
 
-function loadSavedBrand() {
-  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
-  const brandNames = Object.keys(savedBrands);
+function loadLayout() {
+  const savedLayouts = JSON.parse(localStorage.getItem('savedLayouts') || '{}');
+  const layoutNames = Object.keys(savedLayouts);
   
-  if (brandNames.length === 0) {
-    alert('No saved brand configurations found. Save a configuration first using "Save Current as Brand".');
+  if (layoutNames.length === 0) {
+    alert('No saved layout configurations found. Save a layout first using "Save Layout".');
     return;
   }
   
-  const brandList = brandNames.map((key, index) => `${index + 1}. ${savedBrands[key].name}`).join('\n');
-  const choice = prompt(`Select a brand to load (enter number):\n\n${brandList}`);
+  const layoutList = layoutNames.map((key, index) => `${index + 1}. ${savedLayouts[key].name}`).join('\n');
+  const choice = prompt(`Select a layout to load (enter number):\n\n${layoutList}`);
   
   if (!choice) return;
   
   const index = parseInt(choice) - 1;
-  if (index < 0 || index >= brandNames.length) {
+  if (index < 0 || index >= layoutNames.length) {
     alert('Invalid selection');
     return;
   }
   
-  const selectedKey = brandNames[index];
-  const selectedBrand = savedBrands[selectedKey];
+  const selectedKey = layoutNames[index];
+  const selectedLayout = savedLayouts[selectedKey];
   
-  staticTextArea.value = selectedBrand.staticText;
+  // Apply layout settings
+  staticTextArea.value = selectedLayout.staticText;
+  staticTextEditor.value = selectedLayout.staticText;
   applyStaticBtn.click();
   
-  alert(`Loaded brand configuration: ${selectedBrand.name}`);
+  alert(`Loaded layout configuration: ${selectedLayout.name}`);
 }
 
-function addCustomBrandToSelect() {
-  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
-  const brandNames = Object.keys(savedBrands);
-  
-  // Clear existing custom options
-  const existingCustom = brandTemplateSelect.querySelectorAll('option[data-custom="true"]');
-  existingCustom.forEach(opt => opt.remove());
-  
-  // Add saved brands as options
-  brandNames.forEach(key => {
-    const brand = savedBrands[key];
-    const option = document.createElement('option');
-    option.value = `custom_${key}`;
-    option.textContent = `📁 ${brand.name} (Saved)`;
-    option.dataset.custom = 'true';
-    brandTemplateSelect.appendChild(option);
-  });
-}
+// Event handlers for new controls
+applyStaticTextBtn.addEventListener('click', applyStaticTextFromEditor);
+resetStaticTextBtn.addEventListener('click', resetStaticTextToDefault);
+createFlexGroupBtn.addEventListener('click', createFlexGroup);
+ungroupElementsBtn.addEventListener('click', ungroupElements);
+saveLayoutBtn.addEventListener('click', saveLayout);
+loadLayoutBtn.addEventListener('click', loadLayout);
 
-// Brand configuration event handlers
-applyTemplateBtn.addEventListener('click', () => {
-  const selectedTemplate = brandTemplateSelect.value;
-  if (selectedTemplate.startsWith('custom_')) {
-    const customKey = selectedTemplate.replace('custom_', '');
-    const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
-    const customBrand = savedBrands[customKey];
-    if (customBrand) {
-      staticTextArea.value = customBrand.staticText;
-      applyStaticBtn.click();
-      alert(`Loaded custom brand: ${customBrand.name}`);
-    }
-  } else {
-    applyBrandTemplate(selectedTemplate);
-  }
+// Enhanced styling controls
+fontWeightSelect.addEventListener('change', ()=>{
+  if(!selectedElement) return;
+  const txt = selectedElement.querySelector('[contenteditable]');
+  if(txt) txt.style.fontWeight = fontWeightSelect.value;
 });
 
-saveBrandBtn.addEventListener('click', saveCurrentBrand);
-loadBrandBtn.addEventListener('click', loadSavedBrand);
-
-// Initialize custom brands in select
-addCustomBrandToSelect();
-
-// Update custom brands when template is applied
-brandTemplateSelect.addEventListener('change', () => {
-  if (brandTemplateSelect.value === 'custom') {
-    addCustomBrandToSelect();
-  }
+textColorInput.addEventListener('change', ()=>{
+  if(!selectedElement) return;
+  const txt = selectedElement.querySelector('[contenteditable]');
+  if(txt) txt.style.color = textColorInput.value;
 });
+
+// Initialize static text editor with current value
+staticTextEditor.value = staticTextArea.value;
 
 </script>
 </body>

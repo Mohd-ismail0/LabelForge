@@ -42,28 +42,25 @@
     <h1>Label Maker — EAN13 + A4 PDF (Excel/CSV/Google Sheets)</h1>
     <p class="help">Upload sheet, choose barcode column (EAN13), choose dynamic columns, pick a quantity column to multiply labels, select label size, upload logo (will be rendered top-right with 10px padding), then "Generate A4 PDF".</p>
     
-    <!-- Brand Configuration Section -->
+    <!-- Text & Layout Configuration Section -->
     <div class="card" style="margin-bottom:12px">
-      <h3 style="margin:0 0 8px">Brand Configuration</h3>
+      <h3 style="margin:0 0 8px">Text & Layout Configuration</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div>
-          <label>Select Brand Template</label>
-          <select id="brandTemplate" style="width:100%">
-            <option value="advista">Advista Marketing (Current)</option>
-            <option value="generic">Generic Brand Template</option>
-            <option value="fashion">Fashion/Clothing Brand</option>
-            <option value="food">Food & Beverage</option>
-            <option value="electronics">Electronics</option>
-            <option value="cosmetics">Cosmetics/Beauty</option>
-            <option value="custom">Custom Brand</option>
-          </select>
+          <label>Static Text Editor</label>
+          <textarea id="staticTextEditor" rows="4" style="width:100%;font-size:12px" placeholder="Enter your static text here, one line per text element..."></textarea>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button id="applyStaticText" style="background:#059669">Apply to Label</button>
+            <button id="resetStaticText" style="background:#6b7280">Reset to Default</button>
+          </div>
         </div>
         <div>
-          <label>Brand Actions</label>
-          <div style="display:flex;gap:8px">
-            <button id="applyTemplate" style="background:#059669">Apply Template</button>
-            <button id="saveBrand" style="background:#7c3aed">Save Current as Brand</button>
-            <button id="loadBrand" style="background:#dc2626">Load Saved Brand</button>
+          <label>Layout Actions</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="createFlexGroup" style="background:#7c3aed">Create Flex Group</button>
+            <button id="ungroupElements" style="background:#dc2626">Ungroup Selected</button>
+            <button id="saveLayout" style="background:#059669">Save Layout</button>
+            <button id="loadLayout" style="background:#6b7280">Load Layout</button>
           </div>
         </div>
       </div>
@@ -136,7 +133,7 @@
         <label>Static bilingual text (editable)</label>
         <textarea id="staticText" rows="6" style="width:100%"></textarea>
         <hr style="margin:12px 0">
-        <label>Style & Layout</label>
+        <label>Style & Layout Controls</label>
         <div class="cols-list" style="max-height:unset">
           <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px">
             <div>
@@ -180,6 +177,85 @@
               <input id="bcFontPx" type="number" min="8" max="24" step="1" />
             </div>
           </div>
+          
+          <hr style="margin:12px 0">
+          <label>Flex Container Controls</label>
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px">
+            <div>
+              <label>Flex Direction</label>
+              <select id="flexDirection">
+                <option value="row">Row (horizontal)</option>
+                <option value="column">Column (vertical)</option>
+                <option value="row-reverse">Row Reverse</option>
+                <option value="column-reverse">Column Reverse</option>
+              </select>
+            </div>
+            <div>
+              <label>Justify Content</label>
+              <select id="justifyContent">
+                <option value="flex-start">Flex Start</option>
+                <option value="center">Center</option>
+                <option value="flex-end">Flex End</option>
+                <option value="space-between">Space Between</option>
+                <option value="space-around">Space Around</option>
+                <option value="space-evenly">Space Evenly</option>
+              </select>
+            </div>
+            <div>
+              <label>Align Items</label>
+              <select id="alignItems">
+                <option value="stretch">Stretch</option>
+                <option value="flex-start">Flex Start</option>
+                <option value="center">Center</option>
+                <option value="flex-end">Flex End</option>
+                <option value="baseline">Baseline</option>
+              </select>
+            </div>
+            <div>
+              <label>Gap (px)</label>
+              <input id="flexGap" type="number" min="0" max="50" step="1" value="8" />
+            </div>
+          </div>
+          
+          <hr style="margin:12px 0">
+          <label>Text Styling Controls</label>
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px">
+            <div>
+              <label>Font Weight</label>
+              <select id="fontWeight">
+                <option value="normal">Normal</option>
+                <option value="bold">Bold</option>
+                <option value="lighter">Lighter</option>
+                <option value="bolder">Bolder</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="300">300</option>
+                <option value="400">400</option>
+                <option value="500">500</option>
+                <option value="600">600</option>
+                <option value="700">700</option>
+                <option value="800">800</option>
+                <option value="900">900</option>
+              </select>
+            </div>
+            <div>
+              <label>Text Align</label>
+              <select id="textAlign">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+                <option value="justify">Justify</option>
+              </select>
+            </div>
+            <div>
+              <label>Text Color</label>
+              <input id="textColor" type="color" value="#000000" />
+            </div>
+            <div>
+              <label>Background Color</label>
+              <input id="backgroundColor" type="color" value="#ffffff" />
+            </div>
+          </div>
         </div>
 
         <div style="margin-top:10px;display:flex;gap:8px">
@@ -197,23 +273,24 @@
         <div id="labelRenderWrapper" style="display:flex;flex-direction:column;gap:8px">
           <div id="labelCanvasDOM" class="label-preview" style="width:300px; min-height:180px">
             <div id="labelInner" style="position:relative;padding:12px;box-sizing:border-box;min-height:130px">
-              <div id="labelContent" style="width:100%;display:flex;flex-direction:row;justify-content:space-between;align-items:center;gap:8px">
+              <!-- Main content container with flex controls -->
+              <div id="labelContent" class="flex-container" style="width:100%;display:flex;flex-direction:row;justify-content:space-between;align-items:center;gap:8px">
                 <div id="logoContainer" class="logo-box" style="width:60px;height:60px;display:flex;align-items:center;border-radius:4px;overflow:hidden;z-index:2">
                   <span style="color:#999;font-size:12px">logo</span>
                 </div>
-                <div style="display:flex;flex-direction:column;width:100%;gap:2px">
-                  <div id="staticLine1" contenteditable="true" style="font-weight:700;direction:rtl;width:100%;font-size:13px">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | بنغالور، الهند</div>
-                  <div id="staticLine2" contenteditable="true" style="font-size:10px;width:100%">Imported and Marketed By: Advista Marketing Pvt Ltd | info@advistaltd.com</div>
+                <div class="flex-container" style="display:flex;flex-direction:column;width:100%;gap:2px">
+                  <div id="staticLine1" class="text-element" contenteditable="true" style="font-weight:700;direction:rtl;width:100%;font-size:13px">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | بنغالور، الهند</div>
+                  <div id="staticLine2" class="text-element" contenteditable="true" style="font-size:10px;width:100%">Imported and Marketed By: Advista Marketing Pvt Ltd | info@advistaltd.com</div>
                 </div>
               </div>
 
-              <div id="dynamicPairs" style="margin-top:8px;font-size:11px;display:flex;flex-direction:row;justify-content:space-around"></div>
-              <div id="barcodeArea" style="margin-top:8px;margin-bottom:4px;width:fit-content;padding-left:10%;display:flex;flex-direction:column"></div>
-              <div style="margin-top:8px;font-size:12px;width:100%;display:flex;flex-direction:column;align-items:center">
-                <div id="staticLine3" contenteditable="true" style="width:100%">تركيبة الخامة: نايلون + سباندكس</div>
-                <div id="staticLine4" contenteditable="true" style="width:100%">Material Composition: Nylon + Spandex</div>
-                <div id="staticLine5" contenteditable="true" style="width:100%">رقم ضريبة القيمة المضافة (VAT): 313061260900003</div>
-                <div id="staticLine6" contenteditable="true" style="width:100%"></div>
+              <div id="dynamicPairs" class="flex-container" style="margin-top:8px;font-size:11px;display:flex;flex-direction:row;justify-content:space-around"></div>
+              <div id="barcodeArea" class="flex-container" style="margin-top:8px;margin-bottom:4px;width:fit-content;padding-left:10%;display:flex;flex-direction:column"></div>
+              <div class="flex-container" style="margin-top:8px;font-size:12px;width:100%;display:flex;flex-direction:column;align-items:center">
+                <div id="staticLine3" class="text-element" contenteditable="true" style="width:100%">تركيبة الخامة: نايلون + سباندكس</div>
+                <div id="staticLine4" class="text-element" contenteditable="true" style="width:100%">Material Composition: Nylon + Spandex</div>
+                <div id="staticLine5" class="text-element" contenteditable="true" style="width:100%">رقم ضريبة القيمة المضافة (VAT): 313061260900003</div>
+                <div id="staticLine6" class="text-element" contenteditable="true" style="width:100%"></div>
               </div>
             </div>
           </div>
@@ -235,82 +312,15 @@
 const mmToPt = mm => (mm * 72 / 25.4); // not used but handy
 const mmToPx = (mm, dpi=300) => Math.round(mm * dpi / 25.4); // convert mm to px at a DPI (for high-res canvas)
 
-/* ---------- Brand Configuration System ---------- */
-const brandTemplates = {
-  advista: {
-    name: "Advista Marketing",
-    staticText: `مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | بنغالور، الهند
+/* ---------- Defaults & state ---------- */
+const presetStatic = `مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | بنغالور، الهند
 Imported and Marketed By: Advista Marketing Pvt Ltd | info@advistaltd.com 
 
 تركيبة الخامة: نايلون + سباندكس
 Material Composition: Nylon + Spandex
 
-رقم ضريبة القيمة المضافة (VAT): 313061260900003`,
-    description: "Current Advista Marketing template with Arabic/English bilingual text"
-  },
-  generic: {
-    name: "Generic Brand",
-    staticText: `Imported and Distributed By: [Your Company Name] | [Your Website]
-Distributed By: [Your Company Name] | [Your Email]
+رقم ضريبة القيمة المضافة (VAT): 313061260900003`;
 
-Material: [Material Type]
-Composition: [Material Details]
-
-VAT Number: [Your VAT Number]`,
-    description: "Generic template for any brand - customize the bracketed fields"
-  },
-  fashion: {
-    name: "Fashion Brand",
-    staticText: `Designed and Manufactured By: [Brand Name] | [Website]
-Made in: [Country] | [Contact Email]
-
-Fabric: [Fabric Type]
-Care Instructions: [Care Details]
-
-Size: [Size Information]
-Style: [Style Code]`,
-    description: "Template optimized for fashion and clothing brands"
-  },
-  food: {
-    name: "Food & Beverage",
-    staticText: `Manufactured By: [Company Name] | [Address]
-Distributed By: [Distributor] | [Contact]
-
-Ingredients: [Ingredient List]
-Allergens: [Allergen Information]
-
-Best Before: [Date Format]
-Batch Number: [Batch Code]`,
-    description: "Template for food and beverage products with regulatory compliance"
-  },
-  electronics: {
-    name: "Electronics",
-    staticText: `Manufactured By: [Company Name] | [Country]
-Model: [Model Number] | Serial: [Serial Number]
-
-Power: [Power Specifications]
-Compliance: [Certification Marks]
-
-Warranty: [Warranty Terms]
-Support: [Support Contact]`,
-    description: "Template for electronic devices with technical specifications"
-  },
-  cosmetics: {
-    name: "Cosmetics/Beauty",
-    staticText: `Manufactured By: [Brand Name] | [Country]
-Distributed By: [Distributor] | [Website]
-
-Ingredients: [Ingredient List]
-Volume/Weight: [Product Size]
-
-Batch Code: [Batch Number]
-Expiry Date: [Expiry Information]`,
-    description: "Template for cosmetics and beauty products"
-  }
-};
-
-/* ---------- Defaults & state ---------- */
-const presetStatic = brandTemplates.advista.staticText;
 document.getElementById('staticText').value = presetStatic;
 
 let parsedData = []; // array of objects
@@ -363,11 +373,24 @@ const mappingPreviewBox = document.getElementById('mappingPreview');
 const staticTextArea = document.getElementById('staticText');
 const downloadZipBtn = document.getElementById('downloadZip');
 
-// Brand configuration DOM refs
-const brandTemplateSelect = document.getElementById('brandTemplate');
-const applyTemplateBtn = document.getElementById('applyTemplate');
-const saveBrandBtn = document.getElementById('saveBrand');
-const loadBrandBtn = document.getElementById('loadBrand');
+// Text & Layout configuration DOM refs
+const staticTextEditor = document.getElementById('staticTextEditor');
+const applyStaticTextBtn = document.getElementById('applyStaticText');
+const resetStaticTextBtn = document.getElementById('resetStaticText');
+const createFlexGroupBtn = document.getElementById('createFlexGroup');
+const ungroupElementsBtn = document.getElementById('ungroupElements');
+const saveLayoutBtn = document.getElementById('saveLayout');
+const loadLayoutBtn = document.getElementById('loadLayout');
+
+// Flex and styling controls
+const flexDirectionSelect = document.getElementById('flexDirection');
+const justifyContentSelect = document.getElementById('justifyContent');
+const alignItemsSelect = document.getElementById('alignItems');
+const flexGapInput = document.getElementById('flexGap');
+const fontWeightSelect = document.getElementById('fontWeight');
+const textAlignSelect = document.getElementById('textAlign');
+const textColorInput = document.getElementById('textColor');
+const backgroundColorInput = document.getElementById('backgroundColor');
 
 /* ---------- File parse (Excel/CSV) ---------- */
 fileInput.addEventListener('change', async (e)=>{
@@ -1044,118 +1067,208 @@ staticTextArea.addEventListener('input', ()=>{
   renderMappingPreview();
 });
 
-/* ---------- Brand Configuration Functions ---------- */
-function applyBrandTemplate(templateKey) {
-  const template = brandTemplates[templateKey];
-  if (!template) {
-    alert('Template not found: ' + templateKey);
+/* ---------- Text & Layout Configuration Functions ---------- */
+function applyStaticTextFromEditor() {
+  const editorText = staticTextEditor.value.trim();
+  if (!editorText) {
+    alert('Please enter some text in the editor first.');
     return;
   }
   
-  staticTextArea.value = template.staticText;
+  staticTextArea.value = editorText;
   renderMappingPreview();
-  
-  // Show template description
-  const description = template.description || 'Template applied successfully';
-  alert(`Applied ${template.name} template:\n\n${description}`);
+  alert('Static text applied to label successfully!');
 }
 
-function saveCurrentBrand() {
-  const brandName = prompt('Enter a name for your brand configuration:');
-  if (!brandName) return;
+function resetStaticTextToDefault() {
+  staticTextEditor.value = presetStatic;
+  staticTextArea.value = presetStatic;
+  renderMappingPreview();
+  alert('Static text reset to default.');
+}
+
+function createFlexGroup() {
+  const selectedElements = getSelectedElements();
+  if (selectedElements.length < 2) {
+    alert('Please select at least 2 elements to group. Click on elements to select them.');
+    return;
+  }
   
-  const currentConfig = {
-    name: brandName,
+  // Create a new flex container
+  const flexContainer = document.createElement('div');
+  flexContainer.className = 'flex-container';
+  flexContainer.style.display = 'flex';
+  flexContainer.style.gap = '8px';
+  flexContainer.dataset.flexGroup = 'true';
+  
+  // Get the parent of the first selected element
+  const parent = selectedElements[0].parentNode;
+  
+  // Insert the flex container before the first selected element
+  parent.insertBefore(flexContainer, selectedElements[0]);
+  
+  // Move all selected elements into the flex container
+  selectedElements.forEach(el => {
+    flexContainer.appendChild(el);
+  });
+  
+  // Apply current flex settings
+  applyFlexSettings(flexContainer);
+  
+  alert(`Created flex group with ${selectedElements.length} elements.`);
+}
+
+function ungroupElements() {
+  const selectedElements = getSelectedElements();
+  const flexContainers = selectedElements.filter(el => el.dataset.flexGroup === 'true');
+  
+  if (flexContainers.length === 0) {
+    alert('Please select a flex group to ungroup.');
+    return;
+  }
+  
+  flexContainers.forEach(container => {
+    const parent = container.parentNode;
+    const children = Array.from(container.children);
+    
+    // Move children back to parent
+    children.forEach(child => {
+      parent.insertBefore(child, container);
+    });
+    
+    // Remove the flex container
+    parent.removeChild(container);
+  });
+  
+  alert(`Ungrouped ${flexContainers.length} flex container(s).`);
+}
+
+function getSelectedElements() {
+  // For now, return all text elements - in a real implementation, you'd track selection
+  return Array.from(document.querySelectorAll('.text-element'));
+}
+
+function applyFlexSettings(container) {
+  if (!container || !container.classList.contains('flex-container')) return;
+  
+  container.style.flexDirection = flexDirectionSelect.value;
+  container.style.justifyContent = justifyContentSelect.value;
+  container.style.alignItems = alignItemsSelect.value;
+  container.style.gap = flexGapInput.value + 'px';
+}
+
+function applyTextStyling() {
+  const selectedElements = getSelectedElements();
+  selectedElements.forEach(el => {
+    el.style.fontWeight = fontWeightSelect.value;
+    el.style.textAlign = textAlignSelect.value;
+    el.style.color = textColorInput.value;
+    el.style.backgroundColor = backgroundColorInput.value;
+  });
+  
+  if (selectedElements.length > 0) {
+    alert(`Applied styling to ${selectedElements.length} text elements.`);
+  }
+}
+
+function saveLayout() {
+  const layoutName = prompt('Enter a name for your layout configuration:');
+  if (!layoutName) return;
+  
+  const layoutConfig = {
+    name: layoutName,
     staticText: staticTextArea.value,
-    timestamp: new Date().toISOString(),
-    description: `Custom brand configuration saved by user`
+    flexSettings: {
+      direction: flexDirectionSelect.value,
+      justifyContent: justifyContentSelect.value,
+      alignItems: alignItemsSelect.value,
+      gap: flexGapInput.value
+    },
+    textStyling: {
+      fontWeight: fontWeightSelect.value,
+      textAlign: textAlignSelect.value,
+      textColor: textColorInput.value,
+      backgroundColor: backgroundColorInput.value
+    },
+    timestamp: new Date().toISOString()
   };
   
   // Save to localStorage
-  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
-  savedBrands[brandName.toLowerCase().replace(/\s+/g, '_')] = currentConfig;
-  localStorage.setItem('savedBrands', JSON.stringify(savedBrands));
+  const savedLayouts = JSON.parse(localStorage.getItem('savedLayouts') || '{}');
+  savedLayouts[layoutName.toLowerCase().replace(/\s+/g, '_')] = layoutConfig;
+  localStorage.setItem('savedLayouts', JSON.stringify(savedLayouts));
   
-  alert(`Brand configuration "${brandName}" saved successfully!`);
+  alert(`Layout configuration "${layoutName}" saved successfully!`);
 }
 
-function loadSavedBrand() {
-  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
-  const brandNames = Object.keys(savedBrands);
+function loadLayout() {
+  const savedLayouts = JSON.parse(localStorage.getItem('savedLayouts') || '{}');
+  const layoutNames = Object.keys(savedLayouts);
   
-  if (brandNames.length === 0) {
-    alert('No saved brand configurations found. Save a configuration first using "Save Current as Brand".');
+  if (layoutNames.length === 0) {
+    alert('No saved layout configurations found. Save a layout first using "Save Layout".');
     return;
   }
   
-  const brandList = brandNames.map((key, index) => `${index + 1}. ${savedBrands[key].name}`).join('\n');
-  const choice = prompt(`Select a brand to load (enter number):\n\n${brandList}`);
+  const layoutList = layoutNames.map((key, index) => `${index + 1}. ${savedLayouts[key].name}`).join('\n');
+  const choice = prompt(`Select a layout to load (enter number):\n\n${layoutList}`);
   
   if (!choice) return;
   
   const index = parseInt(choice) - 1;
-  if (index < 0 || index >= brandNames.length) {
+  if (index < 0 || index >= layoutNames.length) {
     alert('Invalid selection');
     return;
   }
   
-  const selectedKey = brandNames[index];
-  const selectedBrand = savedBrands[selectedKey];
+  const selectedKey = layoutNames[index];
+  const selectedLayout = savedLayouts[selectedKey];
   
-  staticTextArea.value = selectedBrand.staticText;
+  // Apply layout settings
+  staticTextArea.value = selectedLayout.staticText;
+  staticTextEditor.value = selectedLayout.staticText;
+  
+  if (selectedLayout.flexSettings) {
+    flexDirectionSelect.value = selectedLayout.flexSettings.direction;
+    justifyContentSelect.value = selectedLayout.flexSettings.justifyContent;
+    alignItemsSelect.value = selectedLayout.flexSettings.alignItems;
+    flexGapInput.value = selectedLayout.flexSettings.gap;
+  }
+  
+  if (selectedLayout.textStyling) {
+    fontWeightSelect.value = selectedLayout.textStyling.fontWeight;
+    textAlignSelect.value = selectedLayout.textStyling.textAlign;
+    textColorInput.value = selectedLayout.textStyling.textColor;
+    backgroundColorInput.value = selectedLayout.textStyling.backgroundColor;
+  }
+  
   renderMappingPreview();
-  
-  alert(`Loaded brand configuration: ${selectedBrand.name}`);
+  alert(`Loaded layout configuration: ${selectedLayout.name}`);
 }
 
-function addCustomBrandToSelect() {
-  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
-  const brandNames = Object.keys(savedBrands);
-  
-  // Clear existing custom options
-  const existingCustom = brandTemplateSelect.querySelectorAll('option[data-custom="true"]');
-  existingCustom.forEach(opt => opt.remove());
-  
-  // Add saved brands as options
-  brandNames.forEach(key => {
-    const brand = savedBrands[key];
-    const option = document.createElement('option');
-    option.value = `custom_${key}`;
-    option.textContent = `📁 ${brand.name} (Saved)`;
-    option.dataset.custom = 'true';
-    brandTemplateSelect.appendChild(option);
+// Event handlers for new controls
+applyStaticTextBtn.addEventListener('click', applyStaticTextFromEditor);
+resetStaticTextBtn.addEventListener('click', resetStaticTextToDefault);
+createFlexGroupBtn.addEventListener('click', createFlexGroup);
+ungroupElementsBtn.addEventListener('click', ungroupElements);
+saveLayoutBtn.addEventListener('click', saveLayout);
+loadLayoutBtn.addEventListener('click', loadLayout);
+
+// Flex controls event handlers
+[flexDirectionSelect, justifyContentSelect, alignItemsSelect, flexGapInput].forEach(control => {
+  control.addEventListener('change', () => {
+    const flexContainers = document.querySelectorAll('.flex-container');
+    flexContainers.forEach(container => applyFlexSettings(container));
   });
-}
-
-// Brand configuration event handlers
-applyTemplateBtn.addEventListener('click', () => {
-  const selectedTemplate = brandTemplateSelect.value;
-  if (selectedTemplate.startsWith('custom_')) {
-    const customKey = selectedTemplate.replace('custom_', '');
-    const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
-    const customBrand = savedBrands[customKey];
-    if (customBrand) {
-      staticTextArea.value = customBrand.staticText;
-      renderMappingPreview();
-      alert(`Loaded custom brand: ${customBrand.name}`);
-    }
-  } else {
-    applyBrandTemplate(selectedTemplate);
-  }
 });
 
-saveBrandBtn.addEventListener('click', saveCurrentBrand);
-loadBrandBtn.addEventListener('click', loadSavedBrand);
-
-// Initialize custom brands in select
-addCustomBrandToSelect();
-
-// Update custom brands when template is applied
-brandTemplateSelect.addEventListener('change', () => {
-  if (brandTemplateSelect.value === 'custom') {
-    addCustomBrandToSelect();
-  }
+// Text styling controls event handlers
+[fontWeightSelect, textAlignSelect, textColorInput, backgroundColorInput].forEach(control => {
+  control.addEventListener('change', applyTextStyling);
 });
+
+// Initialize static text editor with current value
+staticTextEditor.value = staticTextArea.value;
 
 </script>
 </body>
