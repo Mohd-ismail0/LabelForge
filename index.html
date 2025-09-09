@@ -167,23 +167,25 @@
 
         <!-- Single-label DOM used for html2canvas rendering; will be rendered at high DPI -->
         <div id="labelRenderWrapper" style="display:flex;flex-direction:column;gap:8px">
-          <div id="labelCanvasDOM" class="label-preview" style="width:300px">
-            <div id="labelInner" style="position:relative;padding:10px;box-sizing:border-box;min-height:130px">
-              <div id="logoContainer" class="logo-box" style="position:absolute;right:10px;top:10px;width:60px;height:60px;display:flex;align-items:center;justify-content:center;border-radius:4px;overflow:hidden;z-index:2">
-                <span style="color:#999;font-size:12px">logo</span>
+          <div id="labelCanvasDOM" class="label-preview" style="width:300px; min-height:180px">
+            <div id="labelInner" style="position:relative;padding:12px;box-sizing:border-box;min-height:130px">
+              <div id="labelContent" style="width:100%;display:flex;flex-direction:row;justify-content:space-between;align-items:center;gap:8px">
+                <div id="logoContainer" class="logo-box" style="width:60px;height:60px;display:flex;align-items:center;border-radius:4px;overflow:hidden;z-index:2">
+                  <span style="color:#999;font-size:12px">logo</span>
+                </div>
+                <div style="display:flex;flex-direction:column;width:100%">
+                  <div id="staticLine1" contenteditable="true" style="font-weight:700;direction:rtl;width:100%;font-size:14px">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | بنغالور، الهند</div>
+                  <div id="staticLine2" contenteditable="true" style="font-size:12px;width:100%">Imported and Marketed By: Advista Marketing Pvt Ltd | info@advistaltd.com</div>
+                </div>
               </div>
 
-              <div id="labelContent" style="padding-right:80px;width:100%">
-                <div id="staticLine1" contenteditable="true" style="font-weight:700;direction:rtl;width:100%">مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com</div>
-                <div id="staticLine2" contenteditable="true" style="font-size:12px;width:100%">Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com</div>
-                <div id="dynamicPairs" style="margin-top:8px"></div>
-                <div id="barcodeArea" style="margin-top:8px"></div>
-                <div style="margin-top:8px;font-size:12px;width:100%">
-                  <div id="staticLine3" contenteditable="true" style="width:100%">info@advistaltd.com | بنغالور، الهند</div>
-                  <div id="staticLine4" contenteditable="true" style="width:100%">info@advistaltd.com | Bangalore, India</div>
-                  <div id="staticLine5" contenteditable="true" style="width:100%"></div>
-                  <div id="staticLine6" contenteditable="true" style="width:100%"></div>
-                </div>
+              <div id="dynamicPairs" style="margin-top:8px;font-size:12px;display:flex;flex-direction:row;justify-content:space-around"></div>
+              <div id="barcodeArea" style="margin-top:8px;width:100%;display:flex;flex-direction:column"></div>
+              <div style="margin-top:8px;font-size:12px;width:100%;display:flex;flex-direction:column;align-items:center">
+                <div id="staticLine3" contenteditable="true" style="width:100%">تركيبة الخامة: نايلون + سباندكس</div>
+                <div id="staticLine4" contenteditable="true" style="width:100%">Material Composition: Nylon + Spandex</div>
+                <div id="staticLine5" contenteditable="true" style="width:100%">رقم ضريبة القيمة المضافة (VAT): 313061260900003</div>
+                <div id="staticLine6" contenteditable="true" style="width:100%"></div>
               </div>
             </div>
           </div>
@@ -530,7 +532,14 @@ generatePdfBtn.addEventListener('click', async ()=>{
   if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
 
   // Fast canvas renderer (no html2canvas) — draws text, barcode and logo directly
+  // memoize renders per unique row key (speeds up duplicates)
+  const __renderCache = new Map();
+  function rowCacheKey(row){
+    try{ return JSON.stringify(row); }catch(_){ return String(Math.random()); }
+  }
   async function renderLabelToDataUrl(row, selectedCols){
+    const key = rowCacheKey(row);
+    if(__renderCache.has(key)) return __renderCache.get(key);
     const pxW = mmToPx(labelSizeMM.w, labelDPI);
     const pxH = mmToPx(labelSizeMM.h, labelDPI);
     const padPx = getIntValue(padPxInput, 12);
@@ -635,7 +644,9 @@ generatePdfBtn.addEventListener('click', async ()=>{
     }
 
     const dataUrl = canvas.toDataURL('image/png', 0.92);
-    return {dataUrl, pxW, pxH};
+    const result = {dataUrl, pxW, pxH};
+    __renderCache.set(key, result);
+    return result;
   }
 
   // Compose pages using jsPDF
