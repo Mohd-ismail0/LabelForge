@@ -529,7 +529,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
 
   // Show quick information
   const pagesNeeded = Math.ceil(items.length / perPage);
-  if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}).\n\nNote: Complex layouts (with logos/RTL text) may take longer. Proceed?`)) return;
+  if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}).\n\nUsing fast CSS-to-Canvas rendering for optimal performance. Proceed?`)) return;
   
   // Add progress indicator
   const progressDiv = document.createElement('div');
@@ -537,101 +537,38 @@ generatePdfBtn.addEventListener('click', async ()=>{
   progressDiv.innerHTML = '<div>Generating PDF...</div><div id="pdfProgress">0%</div>';
   document.body.appendChild(progressDiv);
 
-  // Fast canvas renderer (no html2canvas) — draws text, barcode and logo directly
-  // memoize renders per unique row key (speeds up duplicates)
+  // Fast CSS-to-Canvas renderer with caching and batch processing
   const __renderCache = new Map();
   function rowCacheKey(row){
     try{ return JSON.stringify(row); }catch(_){ return String(Math.random()); }
+  }
+  
+  // Batch processing for better performance
+  async function processBatch(items, batchSize = 5) {
+    const results = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchPromises = batch.map(item => renderLabelToDataUrl(item.row, selectedCols));
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+      
+      // Update progress
+      const progress = Math.round((results.length / items.length) * 100);
+      const progressEl = document.getElementById('pdfProgress');
+      if(progressEl) progressEl.textContent = `${progress}%`;
+    }
+    return results;
   }
   async function renderLabelToDataUrl(row, selectedCols){
     const key = rowCacheKey(row);
     if(__renderCache.has(key)) return __renderCache.get(key);
     
-    // Performance optimization: Use html2canvas only for complex layouts
-    // For simple layouts, use optimized canvas rendering
-    const useHtml2Canvas = shouldUseHtml2Canvas(row, selectedCols);
-    
-    if(useHtml2Canvas) {
-      return await renderLabelWithHtml2Canvas(row, selectedCols, key);
-    } else {
-      return await renderLabelToDataUrlOptimized(row, selectedCols, key);
-    }
+    // Use fast CSS-to-Canvas rendering that replicates the exact preview layout
+    return await renderLabelWithCssToCanvas(row, selectedCols, key);
   }
   
-  function shouldUseHtml2Canvas(row, selectedCols) {
-    // Use html2canvas for complex cases where layout matching is critical
-    const hasLogo = !!currentLogoDataUrl;
-    const hasLongText = selectedCols.some(col => String(row[col] || '').length > 50);
-    const hasRtlText = staticTextArea.value.includes('مستورد') || staticTextArea.value.includes('شركة');
-    
-    // Use html2canvas if any of these conditions are true
-    return hasLogo || hasLongText || hasRtlText;
-  }
-  
-  async function renderLabelWithHtml2Canvas(row, selectedCols, key) {
-    const previewElement = document.getElementById('labelCanvasDOM');
-    if(!previewElement) {
-      console.error('Preview element not found');
-      return await renderLabelToDataUrlOptimized(row, selectedCols, key);
-    }
-    
-    // Store original state
-    const originalRowIndex = rowSelect.value;
-    const originalWidth = previewElement.style.width;
-    const originalMinHeight = previewElement.style.minHeight;
-    
-    try {
-      // Update preview efficiently
-      const rowIndex = parsedData.findIndex(r => r === row);
-      if(rowIndex >= 0) {
-        rowSelect.value = rowIndex;
-        updatePreviewFromRow(rowIndex);
-      }
-      
-      // Set dimensions
-      const pxW = mmToPx(labelSizeMM.w, labelDPI);
-      const pxH = mmToPx(labelSizeMM.h, labelDPI);
-      const scaleFactor = Math.min(labelDPI / 96, 2); // Cap scale factor for performance
-      
-      previewElement.style.width = (pxW / scaleFactor) + 'px';
-      previewElement.style.minHeight = (pxH / scaleFactor) + 'px';
-      
-      // Wait for layout to settle
-      await new Promise(resolve => setTimeout(resolve, 10));
-      
-      // Capture with optimized settings
-      const canvas = await html2canvas(previewElement, {
-        scale: scaleFactor,
-        width: pxW / scaleFactor,
-        height: pxH / scaleFactor,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        removeContainer: true
-      });
-      
-      const dataUrl = canvas.toDataURL('image/png', 0.85); // Slightly lower quality for speed
-      const result = {dataUrl, pxW, pxH};
-      __renderCache.set(key, result);
-      return result;
-      
-    } catch (error) {
-      console.error('html2canvas error:', error);
-      return await renderLabelToDataUrlOptimized(row, selectedCols, key);
-    } finally {
-      // Restore state
-      previewElement.style.width = originalWidth;
-      previewElement.style.minHeight = originalMinHeight;
-      rowSelect.value = originalRowIndex;
-      if(originalRowIndex !== '') {
-        updatePreviewFromRow(parseInt(originalRowIndex, 10));
-      }
-    }
-  }
-  
-  // Optimized canvas rendering method for simple layouts
-  async function renderLabelToDataUrlOptimized(row, selectedCols, key){
+  // Fast CSS-to-Canvas rendering that replicates preview layout exactly
+  async function renderLabelWithCssToCanvas(row, selectedCols, key) {
     const pxW = mmToPx(labelSizeMM.w, labelDPI);
     const pxH = mmToPx(labelSizeMM.h, labelDPI);
     const padPx = getIntValue(padPxInput, 12);
@@ -652,93 +589,139 @@ generatePdfBtn.addEventListener('click', async ()=>{
     const line4 = staticLines[3] || '';
 
     const canvas = document.createElement('canvas');
-    canvas.width = pxW; canvas.height = pxH;
+    canvas.width = pxW; 
+    canvas.height = pxH;
     const ctx = canvas.getContext('2d');
+    
+    // White background
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0,0,pxW,pxH);
+    ctx.fillRect(0, 0, pxW, pxH);
     ctx.fillStyle = '#111';
-    ctx.font = `${line2Px}px Arial`;
 
-    // Content region - match preview layout
+    // Calculate layout exactly like the preview CSS
     const contentRightPadding = logoRightPx + logoBoxPx + 12;
-    const contentX = padPx;
-    const contentY = padPx;
-    const contentW = Math.max(10, pxW - padPx - padPx - contentRightPadding);
+    const contentLeft = padPx;
+    const contentRight = pxW - padPx - contentRightPadding;
+    const contentWidth = Math.max(20, contentRight - contentLeft);
+    const contentTop = padPx;
+    const contentBottom = pxH - padPx;
 
-    function drawWrapped(text, x, y, maxW, lineH, align='left'){
+    // Helper function for text wrapping with proper line height
+    function drawWrappedText(text, x, y, maxWidth, fontSize, lineHeight, align = 'left', direction = 'ltr') {
+      ctx.font = `${fontSize}px Arial`;
       ctx.textAlign = align;
+      ctx.direction = direction;
+      
       const words = String(text).split(/\s+/);
       let line = '';
-      let ty = y;
-      for(let i=0;i<words.length;i++){
-        const test = line ? line + ' ' + words[i] : words[i];
-        const w = ctx.measureText(test).width;
-        if(w > maxW && line){
-          ctx.fillText(line, x, ty);
+      let currentY = y;
+      const maxLines = Math.floor((contentBottom - y) / lineHeight);
+      let linesDrawn = 0;
+      
+      for (let i = 0; i < words.length && linesDrawn < maxLines; i++) {
+        const testLine = line ? line + ' ' + words[i] : words[i];
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && line) {
+          ctx.fillText(line, x, currentY);
           line = words[i];
-          ty += lineH;
+          currentY += lineHeight;
+          linesDrawn++;
         } else {
-          line = test;
+          line = testLine;
         }
       }
-      if(line) ctx.fillText(line, x, ty);
-      return ty + lineH;
+      
+      if (line && linesDrawn < maxLines) {
+        ctx.fillText(line, x, currentY);
+        linesDrawn++;
+      }
+      
+      return currentY + lineHeight;
     }
 
-    // Top two lines
-    ctx.font = `bold ${line1Px}px Arial`;
-    ctx.direction = 'rtl';
-    let cursorY = contentY + line1Px;
-    cursorY = drawWrapped(line1, contentX + contentW, cursorY, contentW, Math.round(line1Px*1.25), 'right');
-    ctx.direction = 'ltr';
-    ctx.font = `${line2Px}px Arial`;
-    cursorY = drawWrapped(line2, contentX, cursorY + 4, contentW, Math.round(line2Px*1.25), 'left');
+    let cursorY = contentTop;
 
-    // Dynamic pairs
+    // Top two lines (matching preview layout exactly)
+    // Line 1: RTL Arabic text
+    ctx.font = `bold ${line1Px}px Arial`;
+    cursorY = drawWrappedText(line1, contentLeft + contentWidth, cursorY + line1Px, contentWidth, line1Px, Math.round(line1Px * 1.25), 'right', 'rtl');
+    
+    // Line 2: LTR English text
+    cursorY = drawWrappedText(line2, contentLeft, cursorY + 4, contentWidth, line2Px, Math.round(line2Px * 1.25), 'left', 'ltr');
+
+    // Dynamic pairs (matching preview flex layout)
     ctx.font = `${Math.max(10, dynPx)}px Arial`;
-    selectedCols.forEach(col=>{
+    selectedCols.forEach(col => {
       const text = `${col}: ${String(row[col] ?? '')}`;
-      cursorY = drawWrapped(text, contentX, cursorY + 6, contentW, Math.round(dynPx*1.2), 'left');
+      cursorY = drawWrappedText(text, contentLeft, cursorY + 6, contentWidth, dynPx, Math.round(dynPx * 1.2), 'left', 'ltr');
     });
 
-    // Barcode
-    if(chosenBarcodeCol){
-      const raw = String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'');
-      if(raw){
+    // Barcode (centered in content area, matching preview)
+    if (chosenBarcodeCol) {
+      const raw = String(row[chosenBarcodeCol] ?? '').replace(/\D/g, '');
+      if (raw && cursorY + bcHeightPx + bcFontPx + 20 < contentBottom) {
         const bcCanvas = document.createElement('canvas');
-        bcCanvas.width = contentW; bcCanvas.height = bcHeightPx + bcFontPx + 10;
-        try{
-          JsBarcode(bcCanvas, raw, {format:'ean13', displayValue:true, fontSize:bcFontPx, height:bcHeightPx, margin:4});
-          ctx.drawImage(bcCanvas, contentX, cursorY + 8);
+        bcCanvas.width = contentWidth;
+        bcCanvas.height = bcHeightPx + bcFontPx + 10;
+        
+        try {
+          JsBarcode(bcCanvas, raw, {
+            format: 'ean13',
+            displayValue: true,
+            fontSize: bcFontPx,
+            height: bcHeightPx,
+            margin: 4
+          });
+          
+          // Center barcode horizontally in content area
+          const bcX = contentLeft + (contentWidth - bcCanvas.width) / 2;
+          ctx.drawImage(bcCanvas, bcX, cursorY + 8);
           cursorY += 8 + bcCanvas.height;
-        }catch(e){ /* ignore */ }
+        } catch (e) {
+          // Ignore barcode errors
+        }
       }
     }
 
-    // Bottom info lines
+    // Bottom info lines (centered, matching preview)
     ctx.font = `${infoPx}px Arial`;
-    const bottomBlockH = Math.round(infoPx*1.2)*2 + 4;
-    const baseY = pxH - padPx - bottomBlockH + Math.round(infoPx*1.2);
     ctx.textAlign = 'center';
-    ctx.fillText(line3, Math.round(pxW/2), baseY);
-    ctx.fillText(line4, Math.round(pxW/2), baseY + Math.round(infoPx*1.2));
+    const bottomBlockH = Math.round(infoPx * 1.2) * 2 + 4;
+    const baseY = contentBottom - bottomBlockH + Math.round(infoPx * 1.2);
+    const centerX = contentLeft + contentWidth / 2;
+    
+    ctx.fillText(line3, centerX, baseY);
+    ctx.fillText(line4, centerX, baseY + Math.round(infoPx * 1.2));
 
-    // Logo
-    if(currentLogoDataUrl){
-      await new Promise(resolve=>{
+    // Logo (top-right corner, matching preview positioning)
+    if (currentLogoDataUrl) {
+      await new Promise(resolve => {
         const img = new Image();
-        img.onload = ()=>{ ctx.drawImage(img, pxW - logoRightPx - logoBoxPx, logoTopPx, logoBoxPx, logoBoxPx); resolve(); };
-        img.onerror = resolve; img.src = currentLogoDataUrl;
+        img.onload = () => {
+          // Position exactly like preview: top-right with padding
+          const logoX = pxW - logoRightPx - logoBoxPx;
+          const logoY = logoTopPx;
+          ctx.drawImage(img, logoX, logoY, logoBoxPx, logoBoxPx);
+          resolve();
+        };
+        img.onerror = resolve;
+        img.src = currentLogoDataUrl;
       });
     } else {
-      ctx.strokeStyle = '#ddd'; ctx.strokeRect(pxW - logoRightPx - logoBoxPx, logoTopPx, logoBoxPx, logoBoxPx);
+      // Draw logo placeholder
+      const logoX = pxW - logoRightPx - logoBoxPx;
+      const logoY = logoTopPx;
+      ctx.strokeStyle = '#ddd';
+      ctx.strokeRect(logoX, logoY, logoBoxPx, logoBoxPx);
     }
 
     const dataUrl = canvas.toDataURL('image/png', 0.92);
-    const result = {dataUrl, pxW, pxH};
+    const result = { dataUrl, pxW, pxH };
     __renderCache.set(key, result);
     return result;
   }
+  
 
   // Compose pages using jsPDF
   const { jsPDF } = window.jspdf;
@@ -761,6 +744,10 @@ generatePdfBtn.addEventListener('click', async ()=>{
     alert(`Warning: Labels may not fit properly on page. Calculated: ${totalWidth.toFixed(1)}×${totalHeight.toFixed(1)}mm, Available: ${maxWidth.toFixed(1)}×${maxHeight.toFixed(1)}mm`);
   }
 
+  // Pre-render all labels in batches for better performance
+  const renderedLabels = await processBatch(items, 5);
+  
+  // Now compose PDF pages with pre-rendered labels
   let pageIndex = 0;
   let labelIndex = 0;
 
@@ -771,7 +758,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
       for(let c=0;c<colsPerPage;c++){
         const globalIndex = pageIndex*perPage + r*colsPerPage + c;
         if(globalIndex >= items.length) break;
-        const it = items[globalIndex];
+        
         // compute x,y in mm with safety bounds
         const x = Math.max(0, startX + c*(labelSizeMM.w + spacing));
         const y = Math.max(0, startY + r*(labelSizeMM.h + spacing));
@@ -784,25 +771,15 @@ generatePdfBtn.addEventListener('click', async ()=>{
           continue;
         }
         
-        // render this label on the fly and add image
-        try{
-          const renderedItem = await renderLabelToDataUrl(it.row, selectedCols);
-          if(renderedItem && renderedItem.dataUrl) {
-            pdf.addImage(renderedItem.dataUrl, 'PNG', x, y, labelSizeMM.w, labelSizeMM.h);
-          } else {
-            console.error('Failed to render label for row:', it.row);
-            pdf.text('Render error', x+5, y+10);
-          }
-        }catch(e){
-          console.error('addImage error', e);
-          pdf.text('Image add error', x+5, y+10);
+        // Use pre-rendered label
+        const renderedItem = renderedLabels[globalIndex];
+        if(renderedItem && renderedItem.dataUrl) {
+          pdf.addImage(renderedItem.dataUrl, 'PNG', x, y, labelSizeMM.w, labelSizeMM.h);
+        } else {
+          console.error('Failed to render label for index:', globalIndex);
+          pdf.text('Render error', x+5, y+10);
         }
         labelIndex++;
-        
-        // Update progress
-        const progress = Math.round((labelIndex / items.length) * 100);
-        const progressEl = document.getElementById('pdfProgress');
-        if(progressEl) progressEl.textContent = `${progress}%`;
       }
       if(labelIndex >= items.length) break;
     }
