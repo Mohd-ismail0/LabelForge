@@ -56,6 +56,33 @@
   <h1>Editable Label Maker — Drag/Resize — EAN-13 → A4 PDF</h1>
   <p class="small-muted">Upload Excel/CSV/Google Sheets, select barcode column (EAN-13), pick columns to render, set a quantity column, then visually position/resize elements on the label. Adjust page margins/spacing and generate a tightly-packed A4 PDF. All local.</p>
 
+  <!-- Brand Configuration Section -->
+  <div class="card" style="margin-bottom:12px">
+    <h3 style="margin:0 0 8px">Brand Configuration</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <label>Select Brand Template</label>
+        <select id="brandTemplate" style="width:100%">
+          <option value="advista">Advista Marketing (Current)</option>
+          <option value="generic">Generic Brand Template</option>
+          <option value="fashion">Fashion/Clothing Brand</option>
+          <option value="food">Food & Beverage</option>
+          <option value="electronics">Electronics</option>
+          <option value="cosmetics">Cosmetics/Beauty</option>
+          <option value="custom">Custom Brand</option>
+        </select>
+      </div>
+      <div>
+        <label>Brand Actions</label>
+        <div style="display:flex;gap:8px">
+          <button id="applyTemplate" style="background:#059669">Apply Template</button>
+          <button id="saveBrand" style="background:#7c3aed">Save Current as Brand</button>
+          <button id="loadBrand" style="background:#dc2626">Load Saved Brand</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="container">
     <!-- LEFT: controls -->
     <div class="card">
@@ -208,6 +235,85 @@
 
 <script>
 /* =============================
+   Brand Configuration System
+   ============================= */
+const brandTemplates = {
+  advista: {
+    name: "Advista Marketing",
+    staticText: `مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com
+Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com
+
+info@advistaltd.com | بنغالور، الهند
+info@advistaltd.com | Bangalore, India
+
+رقم ضريبة القيمة المضافة (VAT): 313061260900003
+
+تركيبة الخامة: نايلون + سباندكس
+Material Composition: Nylon + Spandex`,
+    description: "Current Advista Marketing template with Arabic/English bilingual text"
+  },
+  generic: {
+    name: "Generic Brand",
+    staticText: `Imported and Distributed By: [Your Company Name] | [Your Website]
+Distributed By: [Your Company Name] | [Your Email]
+
+Material: [Material Type]
+Composition: [Material Details]
+
+VAT Number: [Your VAT Number]`,
+    description: "Generic template for any brand - customize the bracketed fields"
+  },
+  fashion: {
+    name: "Fashion Brand",
+    staticText: `Designed and Manufactured By: [Brand Name] | [Website]
+Made in: [Country] | [Contact Email]
+
+Fabric: [Fabric Type]
+Care Instructions: [Care Details]
+
+Size: [Size Information]
+Style: [Style Code]`,
+    description: "Template optimized for fashion and clothing brands"
+  },
+  food: {
+    name: "Food & Beverage",
+    staticText: `Manufactured By: [Company Name] | [Address]
+Distributed By: [Distributor] | [Contact]
+
+Ingredients: [Ingredient List]
+Allergens: [Allergen Information]
+
+Best Before: [Date Format]
+Batch Number: [Batch Code]`,
+    description: "Template for food and beverage products with regulatory compliance"
+  },
+  electronics: {
+    name: "Electronics",
+    staticText: `Manufactured By: [Company Name] | [Country]
+Model: [Model Number] | Serial: [Serial Number]
+
+Power: [Power Specifications]
+Compliance: [Certification Marks]
+
+Warranty: [Warranty Terms]
+Support: [Support Contact]`,
+    description: "Template for electronic devices with technical specifications"
+  },
+  cosmetics: {
+    name: "Cosmetics/Beauty",
+    staticText: `Manufactured By: [Brand Name] | [Country]
+Distributed By: [Distributor] | [Website]
+
+Ingredients: [Ingredient List]
+Volume/Weight: [Product Size]
+
+Batch Code: [Batch Number]
+Expiry Date: [Expiry Information]`,
+    description: "Template for cosmetics and beauty products"
+  }
+};
+
+/* =============================
    Utils & state
    ============================= */
 const screenDpi = window.devicePixelRatio * 96; // screen px per CSS inch approx
@@ -259,18 +365,14 @@ const bringForwardBtn = document.getElementById('bringForward');
 const sendBackBtn = document.getElementById('sendBack');
 const resetLayoutBtn = document.getElementById('resetLayout');
 
+// Brand configuration DOM refs
+const brandTemplateSelect = document.getElementById('brandTemplate');
+const applyTemplateBtn = document.getElementById('applyTemplate');
+const saveBrandBtn = document.getElementById('saveBrand');
+const loadBrandBtn = document.getElementById('loadBrand');
+
 /* set textarea default static */
-const presetStatic = `مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة | advistaltd.com
-Imported and Marketed By: Advista Marketing Pvt Ltd | advistaltd.com
-
-info@advistaltd.com | بنغالور، الهند
-info@advistaltd.com | Bangalore, India
-
-رقم ضريبة القيمة المضافة (VAT): 313061260900003
-
-تركيبة الخامة: نايلون + سباندكس
-Material Composition: Nylon + Spandex`.trim();
-
+const presetStatic = brandTemplates.advista.staticText;
 staticTextArea.value = presetStatic;
 
 /* =============================
@@ -808,6 +910,122 @@ labelCanvas.addEventListener('focusin', (e)=>{
 
 /* initialize minimal UI state */
 updatePreviewFromRow(0);
+
+/* =============================
+   Brand Configuration Functions
+   ============================= */
+function applyBrandTemplate(templateKey) {
+  const template = brandTemplates[templateKey];
+  if (!template) {
+    alert('Template not found: ' + templateKey);
+    return;
+  }
+  
+  staticTextArea.value = template.staticText;
+  // Apply to canvas elements
+  applyStaticBtn.click();
+  
+  // Show template description
+  const description = template.description || 'Template applied successfully';
+  alert(`Applied ${template.name} template:\n\n${description}`);
+}
+
+function saveCurrentBrand() {
+  const brandName = prompt('Enter a name for your brand configuration:');
+  if (!brandName) return;
+  
+  const currentConfig = {
+    name: brandName,
+    staticText: staticTextArea.value,
+    timestamp: new Date().toISOString(),
+    description: `Custom brand configuration saved by user`
+  };
+  
+  // Save to localStorage
+  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
+  savedBrands[brandName.toLowerCase().replace(/\s+/g, '_')] = currentConfig;
+  localStorage.setItem('savedBrands', JSON.stringify(savedBrands));
+  
+  alert(`Brand configuration "${brandName}" saved successfully!`);
+}
+
+function loadSavedBrand() {
+  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
+  const brandNames = Object.keys(savedBrands);
+  
+  if (brandNames.length === 0) {
+    alert('No saved brand configurations found. Save a configuration first using "Save Current as Brand".');
+    return;
+  }
+  
+  const brandList = brandNames.map((key, index) => `${index + 1}. ${savedBrands[key].name}`).join('\n');
+  const choice = prompt(`Select a brand to load (enter number):\n\n${brandList}`);
+  
+  if (!choice) return;
+  
+  const index = parseInt(choice) - 1;
+  if (index < 0 || index >= brandNames.length) {
+    alert('Invalid selection');
+    return;
+  }
+  
+  const selectedKey = brandNames[index];
+  const selectedBrand = savedBrands[selectedKey];
+  
+  staticTextArea.value = selectedBrand.staticText;
+  applyStaticBtn.click();
+  
+  alert(`Loaded brand configuration: ${selectedBrand.name}`);
+}
+
+function addCustomBrandToSelect() {
+  const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
+  const brandNames = Object.keys(savedBrands);
+  
+  // Clear existing custom options
+  const existingCustom = brandTemplateSelect.querySelectorAll('option[data-custom="true"]');
+  existingCustom.forEach(opt => opt.remove());
+  
+  // Add saved brands as options
+  brandNames.forEach(key => {
+    const brand = savedBrands[key];
+    const option = document.createElement('option');
+    option.value = `custom_${key}`;
+    option.textContent = `📁 ${brand.name} (Saved)`;
+    option.dataset.custom = 'true';
+    brandTemplateSelect.appendChild(option);
+  });
+}
+
+// Brand configuration event handlers
+applyTemplateBtn.addEventListener('click', () => {
+  const selectedTemplate = brandTemplateSelect.value;
+  if (selectedTemplate.startsWith('custom_')) {
+    const customKey = selectedTemplate.replace('custom_', '');
+    const savedBrands = JSON.parse(localStorage.getItem('savedBrands') || '{}');
+    const customBrand = savedBrands[customKey];
+    if (customBrand) {
+      staticTextArea.value = customBrand.staticText;
+      applyStaticBtn.click();
+      alert(`Loaded custom brand: ${customBrand.name}`);
+    }
+  } else {
+    applyBrandTemplate(selectedTemplate);
+  }
+});
+
+saveBrandBtn.addEventListener('click', saveCurrentBrand);
+loadBrandBtn.addEventListener('click', loadSavedBrand);
+
+// Initialize custom brands in select
+addCustomBrandToSelect();
+
+// Update custom brands when template is applied
+brandTemplateSelect.addEventListener('change', () => {
+  if (brandTemplateSelect.value === 'custom') {
+    addCustomBrandToSelect();
+  }
+});
 
 </script>
 </body>
