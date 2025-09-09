@@ -529,17 +529,46 @@ generatePdfBtn.addEventListener('click', async ()=>{
 
   // Show quick information
   const pagesNeeded = Math.ceil(items.length / perPage);
-  if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
+  if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}).\n\nUsing fast CSS-to-Canvas rendering for optimal performance. Proceed?`)) return;
+  
+  // Add progress indicator
+  const progressDiv = document.createElement('div');
+  progressDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:10000;text-align:center;';
+  progressDiv.innerHTML = '<div>Generating PDF...</div><div id="pdfProgress">0%</div>';
+  document.body.appendChild(progressDiv);
 
-  // Fast canvas renderer (no html2canvas) — draws text, barcode and logo directly
-  // memoize renders per unique row key (speeds up duplicates)
+  // Fast CSS-to-Canvas renderer with caching and batch processing
   const __renderCache = new Map();
   function rowCacheKey(row){
     try{ return JSON.stringify(row); }catch(_){ return String(Math.random()); }
   }
+  
+  // Batch processing for better performance
+  async function processBatch(items, batchSize = 5) {
+    const results = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      const batchPromises = batch.map(item => renderLabelToDataUrl(item.row, selectedCols));
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+      
+      // Update progress
+      const progress = Math.round((results.length / items.length) * 100);
+      const progressEl = document.getElementById('pdfProgress');
+      if(progressEl) progressEl.textContent = `${progress}%`;
+    }
+    return results;
+  }
   async function renderLabelToDataUrl(row, selectedCols){
     const key = rowCacheKey(row);
     if(__renderCache.has(key)) return __renderCache.get(key);
+    
+    // Use fast CSS-to-Canvas rendering that replicates the exact preview layout
+    return await renderLabelWithCssToCanvas(row, selectedCols, key);
+  }
+  
+  // Fast CSS-to-Canvas rendering that replicates preview layout exactly
+  async function renderLabelWithCssToCanvas(row, selectedCols, key) {
     const pxW = mmToPx(labelSizeMM.w, labelDPI);
     const pxH = mmToPx(labelSizeMM.h, labelDPI);
     const padPx = getIntValue(padPxInput, 12);
@@ -560,106 +589,165 @@ generatePdfBtn.addEventListener('click', async ()=>{
     const line4 = staticLines[3] || '';
 
     const canvas = document.createElement('canvas');
-    canvas.width = pxW; canvas.height = pxH;
+    canvas.width = pxW; 
+    canvas.height = pxH;
     const ctx = canvas.getContext('2d');
+    
+    // White background
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0,0,pxW,pxH);
+    ctx.fillRect(0, 0, pxW, pxH);
     ctx.fillStyle = '#111';
-    ctx.font = `${line2Px}px Arial`;
 
-    // Content region
+    // Calculate layout exactly like the preview CSS
     const contentRightPadding = logoRightPx + logoBoxPx + 12;
-    const contentX = padPx;
-    const contentY = padPx;
-    const contentW = Math.max(10, pxW - padPx - padPx - contentRightPadding);
+    const contentLeft = padPx;
+    const contentRight = pxW - padPx - contentRightPadding;
+    const contentWidth = Math.max(20, contentRight - contentLeft);
+    const contentTop = padPx;
+    const contentBottom = pxH - padPx;
 
-    function drawWrapped(text, x, y, maxW, lineH, align='left'){
+    // Helper function for text wrapping with proper line height
+    function drawWrappedText(text, x, y, maxWidth, fontSize, lineHeight, align = 'left', direction = 'ltr') {
+      ctx.font = `${fontSize}px Arial`;
       ctx.textAlign = align;
+      ctx.direction = direction;
+      
       const words = String(text).split(/\s+/);
       let line = '';
-      let ty = y;
-      for(let i=0;i<words.length;i++){
-        const test = line ? line + ' ' + words[i] : words[i];
-        const w = ctx.measureText(test).width;
-        if(w > maxW && line){
-          ctx.fillText(line, x, ty);
+      let currentY = y;
+      const maxLines = Math.floor((contentBottom - y) / lineHeight);
+      let linesDrawn = 0;
+      
+      for (let i = 0; i < words.length && linesDrawn < maxLines; i++) {
+        const testLine = line ? line + ' ' + words[i] : words[i];
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && line) {
+          ctx.fillText(line, x, currentY);
           line = words[i];
-          ty += lineH;
+          currentY += lineHeight;
+          linesDrawn++;
         } else {
-          line = test;
+          line = testLine;
         }
       }
-      if(line) ctx.fillText(line, x, ty);
-      return ty + lineH; // next baseline
+      
+      if (line && linesDrawn < maxLines) {
+        ctx.fillText(line, x, currentY);
+        linesDrawn++;
+      }
+      
+      return currentY + lineHeight;
     }
 
-    // Top two lines
-    ctx.font = `bold ${line1Px}px Arial`;
-    ctx.direction = 'rtl';
-    let cursorY = contentY + line1Px;
-    cursorY = drawWrapped(line1, contentX + contentW, cursorY, contentW, Math.round(line1Px*1.25), 'right');
-    ctx.direction = 'ltr';
-    ctx.font = `${line2Px}px Arial`;
-    cursorY = drawWrapped(line2, contentX, cursorY + 4, contentW, Math.round(line2Px*1.25), 'left');
+    let cursorY = contentTop;
 
-    // Dynamic pairs (row, spaced)
+    // Top two lines (matching preview layout exactly)
+    // Line 1: RTL Arabic text
+    ctx.font = `bold ${line1Px}px Arial`;
+    cursorY = drawWrappedText(line1, contentLeft + contentWidth, cursorY + line1Px, contentWidth, line1Px, Math.round(line1Px * 1.25), 'right', 'rtl');
+    
+    // Line 2: LTR English text
+    cursorY = drawWrappedText(line2, contentLeft, cursorY + 4, contentWidth, line2Px, Math.round(line2Px * 1.25), 'left', 'ltr');
+
+    // Dynamic pairs (matching preview flex layout)
     ctx.font = `${Math.max(10, dynPx)}px Arial`;
-    selectedCols.forEach(col=>{
+    selectedCols.forEach(col => {
       const text = `${col}: ${String(row[col] ?? '')}`;
-      cursorY = drawWrapped(text, contentX, cursorY + 6, contentW, Math.round(dynPx*1.2), 'left');
+      cursorY = drawWrappedText(text, contentLeft, cursorY + 6, contentWidth, dynPx, Math.round(dynPx * 1.2), 'left', 'ltr');
     });
 
-    // Barcode
-    if(chosenBarcodeCol){
-      const raw = String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'');
-      if(raw){
+    // Barcode (centered in content area, matching preview)
+    if (chosenBarcodeCol) {
+      const raw = String(row[chosenBarcodeCol] ?? '').replace(/\D/g, '');
+      if (raw && cursorY + bcHeightPx + bcFontPx + 20 < contentBottom) {
         const bcCanvas = document.createElement('canvas');
-        // approximate width: contentW
-        bcCanvas.width = contentW; bcCanvas.height = bcHeightPx + bcFontPx + 10;
-        try{
-          JsBarcode(bcCanvas, raw, {format:'ean13', displayValue:true, fontSize:bcFontPx, height:bcHeightPx, margin:4});
-          ctx.drawImage(bcCanvas, contentX, cursorY + 8);
+        bcCanvas.width = contentWidth;
+        bcCanvas.height = bcHeightPx + bcFontPx + 10;
+        
+        try {
+          JsBarcode(bcCanvas, raw, {
+            format: 'ean13',
+            displayValue: true,
+            fontSize: bcFontPx,
+            height: bcHeightPx,
+            margin: 4
+          });
+          
+          // Center barcode horizontally in content area
+          const bcX = contentLeft + (contentWidth - bcCanvas.width) / 2;
+          ctx.drawImage(bcCanvas, bcX, cursorY + 8);
           cursorY += 8 + bcCanvas.height;
-        }catch(e){ /* ignore */ }
+        } catch (e) {
+          // Ignore barcode errors
+        }
       }
     }
 
-    // Bottom info lines
+    // Bottom info lines (centered, matching preview)
     ctx.font = `${infoPx}px Arial`;
-    const bottomBlockH = Math.round(infoPx*1.2)*2 + 4;
-    const baseY = pxH - padPx - bottomBlockH + Math.round(infoPx*1.2);
     ctx.textAlign = 'center';
-    ctx.fillText(line3, Math.round(pxW/2), baseY);
-    ctx.fillText(line4, Math.round(pxW/2), baseY + Math.round(infoPx*1.2));
+    const bottomBlockH = Math.round(infoPx * 1.2) * 2 + 4;
+    const baseY = contentBottom - bottomBlockH + Math.round(infoPx * 1.2);
+    const centerX = contentLeft + contentWidth / 2;
+    
+    ctx.fillText(line3, centerX, baseY);
+    ctx.fillText(line4, centerX, baseY + Math.round(infoPx * 1.2));
 
-    // Logo (draw last so it sits above text visually)
-    if(currentLogoDataUrl){
-      await new Promise(resolve=>{
+    // Logo (top-right corner, matching preview positioning)
+    if (currentLogoDataUrl) {
+      await new Promise(resolve => {
         const img = new Image();
-        img.onload = ()=>{ ctx.drawImage(img, pxW - logoRightPx - logoBoxPx, logoTopPx, logoBoxPx, logoBoxPx); resolve(); };
-        img.onerror = resolve; img.src = currentLogoDataUrl;
+        img.onload = () => {
+          // Position exactly like preview: top-right with padding
+          const logoX = pxW - logoRightPx - logoBoxPx;
+          const logoY = logoTopPx;
+          ctx.drawImage(img, logoX, logoY, logoBoxPx, logoBoxPx);
+          resolve();
+        };
+        img.onerror = resolve;
+        img.src = currentLogoDataUrl;
       });
     } else {
-      ctx.strokeStyle = '#ddd'; ctx.strokeRect(pxW - logoRightPx - logoBoxPx, logoTopPx, logoBoxPx, logoBoxPx);
+      // Draw logo placeholder
+      const logoX = pxW - logoRightPx - logoBoxPx;
+      const logoY = logoTopPx;
+      ctx.strokeStyle = '#ddd';
+      ctx.strokeRect(logoX, logoY, logoBoxPx, logoBoxPx);
     }
 
     const dataUrl = canvas.toDataURL('image/png', 0.92);
-    const result = {dataUrl, pxW, pxH};
+    const result = { dataUrl, pxW, pxH };
     __renderCache.set(key, result);
     return result;
   }
+  
 
   // Compose pages using jsPDF
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({unit:'mm', format:'a4', compress:true});
 
-  // compute positions
+  // compute positions with safety checks
   const colsPerPage = cols;
   const rowsPerPage = rows;
   const spacing = labelSpacingMM;
   const startX = pageMarginMM;
   const startY = pageMarginMM;
+  
+  // Verify that labels fit within page boundaries
+  const totalWidth = colsPerPage * labelSizeMM.w + (colsPerPage - 1) * spacing;
+  const totalHeight = rowsPerPage * labelSizeMM.h + (rowsPerPage - 1) * spacing;
+  const maxWidth = A4.w - 2 * pageMarginMM;
+  const maxHeight = A4.h - 2 * pageMarginMM;
+  
+  if(totalWidth > maxWidth || totalHeight > maxHeight) {
+    alert(`Warning: Labels may not fit properly on page. Calculated: ${totalWidth.toFixed(1)}×${totalHeight.toFixed(1)}mm, Available: ${maxWidth.toFixed(1)}×${maxHeight.toFixed(1)}mm`);
+  }
 
+  // Pre-render all labels in batches for better performance
+  const renderedLabels = await processBatch(items, 5);
+  
+  // Now compose PDF pages with pre-rendered labels
   let pageIndex = 0;
   let labelIndex = 0;
 
@@ -670,17 +758,26 @@ generatePdfBtn.addEventListener('click', async ()=>{
       for(let c=0;c<colsPerPage;c++){
         const globalIndex = pageIndex*perPage + r*colsPerPage + c;
         if(globalIndex >= items.length) break;
-        const it = items[globalIndex];
-        // compute x,y in mm
-        const x = startX + c*(labelSizeMM.w + spacing);
-        const y = startY + r*(labelSizeMM.h + spacing);
-        // render this label on the fly and add image
-        try{
-          const renderedItem = await renderLabelToDataUrl(it.row, selectedCols);
+        
+        // compute x,y in mm with safety bounds
+        const x = Math.max(0, startX + c*(labelSizeMM.w + spacing));
+        const y = Math.max(0, startY + r*(labelSizeMM.h + spacing));
+        
+        // Ensure label doesn't exceed page boundaries
+        const labelRight = x + labelSizeMM.w;
+        const labelBottom = y + labelSizeMM.h;
+        if(labelRight > A4.w || labelBottom > A4.h) {
+          console.warn(`Label at (${x}, ${y}) exceeds page boundaries. Skipping.`);
+          continue;
+        }
+        
+        // Use pre-rendered label
+        const renderedItem = renderedLabels[globalIndex];
+        if(renderedItem && renderedItem.dataUrl) {
           pdf.addImage(renderedItem.dataUrl, 'PNG', x, y, labelSizeMM.w, labelSizeMM.h);
-        }catch(e){
-          console.error('addImage error', e);
-          pdf.text('Image add error', x+5, y+10);
+        } else {
+          console.error('Failed to render label for index:', globalIndex);
+          pdf.text('Render error', x+5, y+10);
         }
         labelIndex++;
       }
@@ -689,6 +786,11 @@ generatePdfBtn.addEventListener('click', async ()=>{
     pageIndex++;
   }
 
+  // Clean up progress indicator
+  if(progressDiv && progressDiv.parentNode) {
+    progressDiv.parentNode.removeChild(progressDiv);
+  }
+  
   // finalize: download and expose link
   try{
     const blob = pdf.output('blob');
@@ -721,11 +823,13 @@ downloadZipBtn.addEventListener('click', async ()=>{
   const zip = new JSZip();
   for(let i=0;i<items.length;i++){
     const r = await renderLabelToDataUrl(items[i].row, selectedCols);
-    // convert dataURL to blob
-    const resp = await fetch(r.dataUrl);
-    const blob = await resp.blob();
-    const idx = (i+1).toString().padStart(4,'0');
-    zip.file(`label_${idx}.png`, blob);
+    if(r && r.dataUrl) {
+      // convert dataURL to blob
+      const resp = await fetch(r.dataUrl);
+      const blob = await resp.blob();
+      const idx = (i+1).toString().padStart(4,'0');
+      zip.file(`label_${idx}.png`, blob);
+    }
   }
   const zipBlob = await zip.generateAsync({type:'blob'});
   const url = URL.createObjectURL(zipBlob);
