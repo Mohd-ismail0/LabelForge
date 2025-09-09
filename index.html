@@ -529,7 +529,13 @@ generatePdfBtn.addEventListener('click', async ()=>{
 
   // Show quick information
   const pagesNeeded = Math.ceil(items.length / perPage);
-  if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
+  if(!confirm(`Generating ${items.length} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}).\n\nNote: Complex layouts (with logos/RTL text) may take longer. Proceed?`)) return;
+  
+  // Add progress indicator
+  const progressDiv = document.createElement('div');
+  progressDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:10000;text-align:center;';
+  progressDiv.innerHTML = '<div>Generating PDF...</div><div id="pdfProgress">0%</div>';
+  document.body.appendChild(progressDiv);
 
   // Fast canvas renderer (no html2canvas) — draws text, barcode and logo directly
   // memoize renders per unique row key (speeds up duplicates)
@@ -541,59 +547,80 @@ generatePdfBtn.addEventListener('click', async ()=>{
     const key = rowCacheKey(row);
     if(__renderCache.has(key)) return __renderCache.get(key);
     
-    // Use html2canvas to render the preview DOM exactly as it appears
-    // This ensures PDF matches preview perfectly
+    // Performance optimization: Use html2canvas only for complex layouts
+    // For simple layouts, use optimized canvas rendering
+    const useHtml2Canvas = shouldUseHtml2Canvas(row, selectedCols);
+    
+    if(useHtml2Canvas) {
+      return await renderLabelWithHtml2Canvas(row, selectedCols, key);
+    } else {
+      return await renderLabelToDataUrlOptimized(row, selectedCols, key);
+    }
+  }
+  
+  function shouldUseHtml2Canvas(row, selectedCols) {
+    // Use html2canvas for complex cases where layout matching is critical
+    const hasLogo = !!currentLogoDataUrl;
+    const hasLongText = selectedCols.some(col => String(row[col] || '').length > 50);
+    const hasRtlText = staticTextArea.value.includes('مستورد') || staticTextArea.value.includes('شركة');
+    
+    // Use html2canvas if any of these conditions are true
+    return hasLogo || hasLongText || hasRtlText;
+  }
+  
+  async function renderLabelWithHtml2Canvas(row, selectedCols, key) {
     const previewElement = document.getElementById('labelCanvasDOM');
     if(!previewElement) {
       console.error('Preview element not found');
-      return null;
+      return await renderLabelToDataUrlOptimized(row, selectedCols, key);
     }
     
-    // Temporarily update the preview with current row data
+    // Store original state
     const originalRowIndex = rowSelect.value;
-    const originalBarcodeCol = barcodeSelect.value;
-    const originalSelectedCols = Array.from(colsList.querySelectorAll('input[type=checkbox]:checked')).map(cb=>cb.dataset.col);
-    
-    // Update preview to match current row
-    const rowIndex = parsedData.findIndex(r => r === row);
-    if(rowIndex >= 0) {
-      rowSelect.value = rowIndex;
-      updatePreviewFromRow(rowIndex);
-    }
-    
-    // Set preview size to match label dimensions
-    const pxW = mmToPx(labelSizeMM.w, labelDPI);
-    const pxH = mmToPx(labelSizeMM.h, labelDPI);
-    const scaleFactor = labelDPI / 96; // Convert from 96dpi preview to target DPI
-    
-    // Temporarily resize preview to match PDF dimensions
     const originalWidth = previewElement.style.width;
     const originalMinHeight = previewElement.style.minHeight;
-    previewElement.style.width = (pxW / scaleFactor) + 'px';
-    previewElement.style.minHeight = (pxH / scaleFactor) + 'px';
     
     try {
-      // Use html2canvas to capture the preview exactly as it appears
+      // Update preview efficiently
+      const rowIndex = parsedData.findIndex(r => r === row);
+      if(rowIndex >= 0) {
+        rowSelect.value = rowIndex;
+        updatePreviewFromRow(rowIndex);
+      }
+      
+      // Set dimensions
+      const pxW = mmToPx(labelSizeMM.w, labelDPI);
+      const pxH = mmToPx(labelSizeMM.h, labelDPI);
+      const scaleFactor = Math.min(labelDPI / 96, 2); // Cap scale factor for performance
+      
+      previewElement.style.width = (pxW / scaleFactor) + 'px';
+      previewElement.style.minHeight = (pxH / scaleFactor) + 'px';
+      
+      // Wait for layout to settle
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      // Capture with optimized settings
       const canvas = await html2canvas(previewElement, {
         scale: scaleFactor,
         width: pxW / scaleFactor,
         height: pxH / scaleFactor,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        logging: false,
+        removeContainer: true
       });
       
-      const dataUrl = canvas.toDataURL('image/png', 0.92);
+      const dataUrl = canvas.toDataURL('image/png', 0.85); // Slightly lower quality for speed
       const result = {dataUrl, pxW, pxH};
       __renderCache.set(key, result);
       return result;
       
     } catch (error) {
       console.error('html2canvas error:', error);
-      // Fallback to original canvas rendering if html2canvas fails
-      return await renderLabelToDataUrlFallback(row, selectedCols);
+      return await renderLabelToDataUrlOptimized(row, selectedCols, key);
     } finally {
-      // Restore original preview state
+      // Restore state
       previewElement.style.width = originalWidth;
       previewElement.style.minHeight = originalMinHeight;
       rowSelect.value = originalRowIndex;
@@ -603,8 +630,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
     }
   }
   
-  // Fallback canvas rendering method (original implementation)
-  async function renderLabelToDataUrlFallback(row, selectedCols){
+  // Optimized canvas rendering method for simple layouts
+  async function renderLabelToDataUrlOptimized(row, selectedCols, key){
     const pxW = mmToPx(labelSizeMM.w, labelDPI);
     const pxH = mmToPx(labelSizeMM.h, labelDPI);
     const padPx = getIntValue(padPxInput, 12);
@@ -708,7 +735,9 @@ generatePdfBtn.addEventListener('click', async ()=>{
     }
 
     const dataUrl = canvas.toDataURL('image/png', 0.92);
-    return {dataUrl, pxW, pxH};
+    const result = {dataUrl, pxW, pxH};
+    __renderCache.set(key, result);
+    return result;
   }
 
   // Compose pages using jsPDF
@@ -769,12 +798,22 @@ generatePdfBtn.addEventListener('click', async ()=>{
           pdf.text('Image add error', x+5, y+10);
         }
         labelIndex++;
+        
+        // Update progress
+        const progress = Math.round((labelIndex / items.length) * 100);
+        const progressEl = document.getElementById('pdfProgress');
+        if(progressEl) progressEl.textContent = `${progress}%`;
       }
       if(labelIndex >= items.length) break;
     }
     pageIndex++;
   }
 
+  // Clean up progress indicator
+  if(progressDiv && progressDiv.parentNode) {
+    progressDiv.parentNode.removeChild(progressDiv);
+  }
+  
   // finalize: download and expose link
   try{
     const blob = pdf.output('blob');
