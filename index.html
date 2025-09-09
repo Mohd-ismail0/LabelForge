@@ -505,15 +505,31 @@ generatePdfBtn.addEventListener('click', async ()=>{
   // Build flat array of items (each item corresponds to one label instance)
   const items = [];
   parsedData.forEach((row, rowIndex)=>{
+    // Skip when quantity column exists and value is null/empty/zero
+    if(qtyCol){
+      const rawQty = String(row[qtyCol] ?? '').trim();
+      const qtyNum = parseInt(rawQty, 10);
+      if(!Number.isFinite(qtyNum) || qtyNum <= 0){
+        return; // ignore this row
+      }
+    }
+
+    // Skip when barcode column exists and value is null/0
+    if(chosenBarcodeCol){
+      const rawBc = String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'').trim();
+      const isEmptyOrZero = !rawBc || /^0+$/.test(rawBc);
+      if(isEmptyOrZero){
+        return; // ignore this row
+      }
+    }
+
     let qty = 1;
     if(qtyCol){
       const raw = String(row[qtyCol] ?? '').trim();
       const n = parseInt(raw,10);
       qty = Number.isFinite(n) && n>0 ? n : 1;
     }
-    for(let i=0;i<qty;i++){
-      items.push({rowIndex, row});
-    }
+    for(let i=0;i<qty;i++) items.push({rowIndex, row});
   });
 
   if(items.length === 0){ alert('No labels to generate (0 items).'); return; }
@@ -753,6 +769,23 @@ downloadZipBtn.addEventListener('click', async ()=>{
   const selectedCols = Array.from(colsList.querySelectorAll('input[type=checkbox]:checked')).map(cb=>cb.dataset.col);
   const items = [];
   parsedData.forEach((row)=>{
+    // Skip when quantity column exists and value is null/empty/zero
+    if(qtyCol){
+      const rawQty = String(row[qtyCol] ?? '').trim();
+      const qtyNum = parseInt(rawQty, 10);
+      if(!Number.isFinite(qtyNum) || qtyNum <= 0){
+        return; // ignore this row
+      }
+    }
+    // Skip when barcode column exists and value is null/0
+    const chosenBarcodeCol = barcodeSelect.value;
+    if(chosenBarcodeCol){
+      const rawBc = String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'').trim();
+      const isEmptyOrZero = !rawBc || /^0+$/.test(rawBc);
+      if(isEmptyOrZero){
+        return; // ignore this row
+      }
+    }
     let qty = 1;
     if(qtyCol){
       const raw = String(row[qtyCol] ?? '').trim();
