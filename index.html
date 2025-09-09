@@ -567,80 +567,118 @@ generatePdfBtn.addEventListener('click', async ()=>{
     ctx.fillStyle = '#111';
     ctx.font = `${line2Px}px Arial`;
 
-    // Content region
-    const contentRightPadding = logoRightPx + logoBoxPx + 12;
-    const contentX = padPx;
-    const contentY = padPx;
-    const contentW = Math.max(10, pxW - padPx - padPx - contentRightPadding);
+    // Define safe content boundaries - ensure everything stays within label bounds
+    const safeLeft = padPx;
+    const safeRight = pxW - padPx;
+    const safeTop = padPx;
+    const safeBottom = pxH - padPx;
+    
+    // Logo area (top-right corner)
+    const logoLeft = safeRight - logoBoxPx - logoRightPx;
+    const logoTop = safeTop + logoTopPx;
+    const logoRight = logoLeft + logoBoxPx;
+    const logoBottom = logoTop + logoBoxPx;
+    
+    // Content area (left side, avoiding logo)
+    const contentLeft = safeLeft;
+    const contentRight = Math.min(logoLeft - 8, safeRight); // 8px gap from logo
+    const contentWidth = Math.max(20, contentRight - contentLeft);
+    const contentTop = safeTop;
+    const contentBottom = safeBottom;
 
     function drawWrapped(text, x, y, maxW, lineH, align='left'){
       ctx.textAlign = align;
       const words = String(text).split(/\s+/);
       let line = '';
       let ty = y;
+      let linesDrawn = 0;
+      const maxLines = Math.floor((contentBottom - y) / lineH);
+      
       for(let i=0;i<words.length;i++){
         const test = line ? line + ' ' + words[i] : words[i];
         const w = ctx.measureText(test).width;
         if(w > maxW && line){
+          if(linesDrawn >= maxLines) break; // Don't exceed label height
           ctx.fillText(line, x, ty);
           line = words[i];
           ty += lineH;
+          linesDrawn++;
         } else {
           line = test;
         }
       }
-      if(line) ctx.fillText(line, x, ty);
+      if(line && linesDrawn < maxLines) {
+        ctx.fillText(line, x, ty);
+        linesDrawn++;
+      }
       return ty + lineH; // next baseline
     }
 
-    // Top two lines
+    // Top two lines (constrained to content area)
     ctx.font = `bold ${line1Px}px Arial`;
     ctx.direction = 'rtl';
-    let cursorY = contentY + line1Px;
-    cursorY = drawWrapped(line1, contentX + contentW, cursorY, contentW, Math.round(line1Px*1.25), 'right');
+    let cursorY = contentTop + line1Px;
+    cursorY = drawWrapped(line1, contentLeft + contentWidth, cursorY, contentWidth, Math.round(line1Px*1.25), 'right');
+    
     ctx.direction = 'ltr';
     ctx.font = `${line2Px}px Arial`;
-    cursorY = drawWrapped(line2, contentX, cursorY + 4, contentW, Math.round(line2Px*1.25), 'left');
+    cursorY = drawWrapped(line2, contentLeft, cursorY + 4, contentWidth, Math.round(line2Px*1.25), 'left');
 
-    // Dynamic pairs (row, spaced)
+    // Dynamic pairs (constrained to content area)
     ctx.font = `${Math.max(10, dynPx)}px Arial`;
     selectedCols.forEach(col=>{
       const text = `${col}: ${String(row[col] ?? '')}`;
-      cursorY = drawWrapped(text, contentX, cursorY + 6, contentW, Math.round(dynPx*1.2), 'left');
+      cursorY = drawWrapped(text, contentLeft, cursorY + 6, contentWidth, Math.round(dynPx*1.2), 'left');
     });
 
-    // Barcode
+    // Barcode (constrained to content area and label height)
     if(chosenBarcodeCol){
       const raw = String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'');
-      if(raw){
+      if(raw && cursorY + bcHeightPx + bcFontPx + 20 < contentBottom){
         const bcCanvas = document.createElement('canvas');
-        // approximate width: contentW
-        bcCanvas.width = contentW; bcCanvas.height = bcHeightPx + bcFontPx + 10;
+        // Ensure barcode fits within content width
+        const bcWidth = Math.min(contentWidth, bcCanvas.width);
+        bcCanvas.width = bcWidth; 
+        bcCanvas.height = bcHeightPx + bcFontPx + 10;
         try{
           JsBarcode(bcCanvas, raw, {format:'ean13', displayValue:true, fontSize:bcFontPx, height:bcHeightPx, margin:4});
-          ctx.drawImage(bcCanvas, contentX, cursorY + 8);
+          // Center barcode horizontally within content area
+          const bcX = contentLeft + (contentWidth - bcWidth) / 2;
+          ctx.drawImage(bcCanvas, bcX, cursorY + 8);
           cursorY += 8 + bcCanvas.height;
         }catch(e){ /* ignore */ }
       }
     }
 
-    // Bottom info lines
+    // Bottom info lines (constrained to bottom of label)
     ctx.font = `${infoPx}px Arial`;
     const bottomBlockH = Math.round(infoPx*1.2)*2 + 4;
-    const baseY = pxH - padPx - bottomBlockH + Math.round(infoPx*1.2);
+    const baseY = contentBottom - bottomBlockH + Math.round(infoPx*1.2);
     ctx.textAlign = 'center';
-    ctx.fillText(line3, Math.round(pxW/2), baseY);
-    ctx.fillText(line4, Math.round(pxW/2), baseY + Math.round(infoPx*1.2));
+    const centerX = contentLeft + contentWidth / 2;
+    ctx.fillText(line3, centerX, baseY);
+    ctx.fillText(line4, centerX, baseY + Math.round(infoPx*1.2));
 
-    // Logo (draw last so it sits above text visually)
+    // Logo (constrained to top-right corner, within label bounds)
     if(currentLogoDataUrl){
       await new Promise(resolve=>{
         const img = new Image();
-        img.onload = ()=>{ ctx.drawImage(img, pxW - logoRightPx - logoBoxPx, logoTopPx, logoBoxPx, logoBoxPx); resolve(); };
-        img.onerror = resolve; img.src = currentLogoDataUrl;
+        img.onload = ()=>{
+          // Ensure logo stays within label boundaries
+          const logoX = Math.max(safeLeft, Math.min(logoLeft, safeRight - logoBoxPx));
+          const logoY = Math.max(safeTop, Math.min(logoTop, safeBottom - logoBoxPx));
+          ctx.drawImage(img, logoX, logoY, logoBoxPx, logoBoxPx); 
+          resolve();
+        };
+        img.onerror = resolve; 
+        img.src = currentLogoDataUrl;
       });
     } else {
-      ctx.strokeStyle = '#ddd'; ctx.strokeRect(pxW - logoRightPx - logoBoxPx, logoTopPx, logoBoxPx, logoBoxPx);
+      // Draw logo placeholder within bounds
+      const logoX = Math.max(safeLeft, Math.min(logoLeft, safeRight - logoBoxPx));
+      const logoY = Math.max(safeTop, Math.min(logoTop, safeBottom - logoBoxPx));
+      ctx.strokeStyle = '#ddd'; 
+      ctx.strokeRect(logoX, logoY, logoBoxPx, logoBoxPx);
     }
 
     const dataUrl = canvas.toDataURL('image/png', 0.92);
@@ -653,12 +691,22 @@ generatePdfBtn.addEventListener('click', async ()=>{
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({unit:'mm', format:'a4', compress:true});
 
-  // compute positions
+  // compute positions with safety checks
   const colsPerPage = cols;
   const rowsPerPage = rows;
   const spacing = labelSpacingMM;
   const startX = pageMarginMM;
   const startY = pageMarginMM;
+  
+  // Verify that labels fit within page boundaries
+  const totalWidth = colsPerPage * labelSizeMM.w + (colsPerPage - 1) * spacing;
+  const totalHeight = rowsPerPage * labelSizeMM.h + (rowsPerPage - 1) * spacing;
+  const maxWidth = A4.w - 2 * pageMarginMM;
+  const maxHeight = A4.h - 2 * pageMarginMM;
+  
+  if(totalWidth > maxWidth || totalHeight > maxHeight) {
+    alert(`Warning: Labels may not fit properly on page. Calculated: ${totalWidth.toFixed(1)}×${totalHeight.toFixed(1)}mm, Available: ${maxWidth.toFixed(1)}×${maxHeight.toFixed(1)}mm`);
+  }
 
   let pageIndex = 0;
   let labelIndex = 0;
@@ -671,9 +719,18 @@ generatePdfBtn.addEventListener('click', async ()=>{
         const globalIndex = pageIndex*perPage + r*colsPerPage + c;
         if(globalIndex >= items.length) break;
         const it = items[globalIndex];
-        // compute x,y in mm
-        const x = startX + c*(labelSizeMM.w + spacing);
-        const y = startY + r*(labelSizeMM.h + spacing);
+        // compute x,y in mm with safety bounds
+        const x = Math.max(0, startX + c*(labelSizeMM.w + spacing));
+        const y = Math.max(0, startY + r*(labelSizeMM.h + spacing));
+        
+        // Ensure label doesn't exceed page boundaries
+        const labelRight = x + labelSizeMM.w;
+        const labelBottom = y + labelSizeMM.h;
+        if(labelRight > A4.w || labelBottom > A4.h) {
+          console.warn(`Label at (${x}, ${y}) exceeds page boundaries. Skipping.`);
+          continue;
+        }
+        
         // render this label on the fly and add image
         try{
           const renderedItem = await renderLabelToDataUrl(it.row, selectedCols);
@@ -791,21 +848,41 @@ function applyStyleControlsToPreview(){
   const infoPx = getIntValue(infoPxInput, 11);
   const dynPx = getIntValue(dynPxInput, 12);
 
-  if(labelInner) labelInner.style.padding = padPx + 'px';
+  if(labelInner) {
+    labelInner.style.padding = padPx + 'px';
+    // Ensure preview container respects label boundaries
+    labelInner.style.overflow = 'hidden';
+    labelInner.style.position = 'relative';
+  }
   if(logoContainer){
+    logoContainer.style.position = 'absolute';
     logoContainer.style.top = logoTopPx + 'px';
     logoContainer.style.right = logoRightPx + 'px';
     logoContainer.style.width = logoBoxPx + 'px';
     logoContainer.style.height = logoBoxPx + 'px';
+    logoContainer.style.zIndex = '10';
   }
   const labelContentEl = document.getElementById('labelContent');
-  if(labelContentEl) labelContentEl.style.paddingRight = (getIntValue(logoRightPxInput, 10) + getIntValue(logoBoxPxInput, 60) + 12) + 'px';
+  if(labelContentEl) {
+    // Calculate content area similar to PDF rendering
+    const contentRightPadding = logoRightPx + logoBoxPx + 8;
+    labelContentEl.style.paddingRight = contentRightPadding + 'px';
+    labelContentEl.style.overflow = 'hidden';
+  }
   const staticLine1El = document.getElementById('staticLine1');
   const staticLine2El = document.getElementById('staticLine2');
   if(staticLine1El) staticLine1El.style.fontSize = line1Px + 'px';
   if(staticLine2El) staticLine2El.style.fontSize = line2Px + 'px';
   const dynEl = document.getElementById('dynamicPairs');
   if(dynEl) dynEl.style.fontSize = dynPx + 'px';
+  
+  // Ensure barcode area respects boundaries
+  const barcodeAreaEl = document.getElementById('barcodeArea');
+  if(barcodeAreaEl) {
+    barcodeAreaEl.style.overflow = 'hidden';
+    barcodeAreaEl.style.maxWidth = '100%';
+  }
+  
   // bottom info container font size set via inline style container; re-apply with mapping preview
   renderBarcodePreview();
 }
