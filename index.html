@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Label Maker — EAN13 + A4 PDF</title>
+  <title>Label Maker — EAN13 + PDF</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%232c7be5'/%3E%3Ctext x='32' y='38' font-size='28' text-anchor='middle' fill='white' font-family='Arial'%3EL%3C/text%3E%3C/svg%3E" />
 
   <!-- SheetJS (xlsx) -->
@@ -14,6 +14,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- jsPDF for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- pdf-lib for vector SVG support -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <!-- JSZip for ZIP downloads -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -39,8 +41,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>Label Maker — EAN13 + A4 PDF (Excel/CSV/Google Sheets)</h1>
-    <p class="help">Upload sheet, choose barcode column (EAN13), choose dynamic columns, pick a quantity column to multiply labels, select label size, upload logo (will be rendered top-right with 10px padding), then "Generate A4 PDF".</p>
+    <h1>Label Maker — EAN13 + PDF (Excel/CSV/Google Sheets)</h1>
+    <p class="help">Upload sheet, choose barcode column (EAN13), choose dynamic columns, pick a quantity column to multiply labels, select label size, choose paper size (A4/Letter/4"×6"/Custom), upload logo (will be rendered top-right with 10px padding), then "Generate PDF".</p>
 
     <div class="grid" style="margin-top:12px">
       <div class="card">
@@ -97,6 +99,24 @@
           <div>
             <label>Label spacing (mm)</label>
             <input id="labelSpacingInput" type="number" min="0" max="10" step="1" />
+          </div>
+        </div>
+
+        <label style="margin-top:8px">Paper size for PDF</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px" id="paperSizeButtons">
+          <button data-size="a4" class="active">A4 (210×297 mm)</button>
+          <button data-size="letter">Letter (216×279 mm)</button>
+          <button data-size="4x6">4"×6" (102×152 mm)</button>
+          <button data-size="custom">Custom</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px" id="customPaperSize" style="display:none">
+          <div>
+            <label>Width (mm)</label>
+            <input id="paperWmm" type="number" min="100" max="500" step="1" />
+          </div>
+          <div>
+            <label>Height (mm)</label>
+            <input id="paperHmm" type="number" min="100" max="500" step="1" />
           </div>
         </div>
 
@@ -157,9 +177,9 @@
 
         <div style="margin-top:10px;display:flex;gap:8px">
           <button id="renderBtn">Render Preview</button>
-          <button id="generatePdf" style="background:#059669">Generate A4 PDF</button>
+          <button id="generatePdf" style="background:#059669">Generate PDF</button>
           <a id="downloadPdfLink" href="#" download="labels_a4.pdf" style="display:none;background:#10b981;color:#fff;padding:8px 10px;border-radius:8px;text-decoration:none">Download last PDF</a>
-          <button id="downloadZip" style="background:#6b7280">Download ZIP (PNG)</button>
+          <button id="downloadZip" style="background:#6b7280">Download ZIP (PDF)</button>
         </div>
       </div>
 
@@ -203,7 +223,7 @@
       </div>
     </div>
 
-    <p style="margin-top:12px;font-size:13px;color:#666">Notes: Barcode values are validated for EAN-13 (only digits, 12 or 13 chars). PDF generation creates an A4 PDF (210×297 mm), placing labels in a grid using chosen label size, page margins and spacing. All done locally.</p>
+    <p style="margin-top:12px;font-size:13px;color:#666">Notes: Barcode values are validated for EAN-13 (only digits, 12 or 13 chars). PDF generation creates a PDF with selected paper size, placing labels in a grid using chosen label size, page margins and spacing. All done locally.</p>
   </div>
 
 <script>
@@ -219,6 +239,9 @@ let currentLogoDataUrl = null;
 let labelSizeMM = {w:80, h:60}; // default medium
 let labelDPI = 300; // canvas DPI for export (high quality)
 const A4 = {w:210, h:297}; // mm
+const LETTER = {w:216, h:279}; // mm
+const FOUR_BY_SIX = {w:101.6, h:152.4}; // 4" × 6" in mm
+let paperSizeMM = A4; // current paper size
 let pageMarginMM = 6; // page margin in mm (reduced to waste less space)
 let labelSpacingMM = 2; // spacing between labels (reduced)
 
@@ -245,6 +268,10 @@ const labelWmmInput = document.getElementById('labelWmm');
 const labelHmmInput = document.getElementById('labelHmm');
 const pageMarginInput = document.getElementById('pageMarginInput');
 const labelSpacingInput = document.getElementById('labelSpacingInput');
+const paperSizeButtons = document.getElementById('paperSizeButtons');
+const customPaperSize = document.getElementById('customPaperSize');
+const paperWmmInput = document.getElementById('paperWmm');
+const paperHmmInput = document.getElementById('paperHmm');
 const padPxInput = document.getElementById('padPx');
 const logoBoxPxInput = document.getElementById('logoBoxPx');
 const logoTopPxInput = document.getElementById('logoTopPx');
@@ -483,6 +510,30 @@ sizeButtons.addEventListener('click', (e)=>{
   labelCanvasDOM.style.width = pxW + 'px';
 });
 
+/* paper size buttons */
+paperSizeButtons.addEventListener('click', (e)=>{
+  if(!e.target.dataset || !e.target.dataset.size) return;
+  const size = e.target.dataset.size;
+  Array.from(paperSizeButtons.querySelectorAll('button')).forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  if(size==='a4') {
+    paperSizeMM = A4;
+    customPaperSize.style.display = 'none';
+  } else if(size==='letter') {
+    paperSizeMM = LETTER;
+    customPaperSize.style.display = 'none';
+  } else if(size==='4x6') {
+    paperSizeMM = FOUR_BY_SIX;
+    customPaperSize.style.display = 'none';
+  } else if(size==='custom') {
+    customPaperSize.style.display = 'grid';
+    // Use current values or defaults
+    if(!paperWmmInput.value) paperWmmInput.value = '210';
+    if(!paperHmmInput.value) paperHmmInput.value = '297';
+    paperSizeMM = {w: parseInt(paperWmmInput.value), h: parseInt(paperHmmInput.value)};
+  }
+});
+
 /* render preview button */
 renderBtn.addEventListener('click', ()=>{
   renderMappingPreview();
@@ -523,18 +574,19 @@ generatePdfBtn.addEventListener('click', async ()=>{
   if(items.length === 0){ alert('No labels to generate (0 items).'); return; }
   // For performance/preview ask user? but requirement forbids wait — proceed.
 
-  // Calculate grid layout for A4
-  const usableW = A4.w - 2*pageMarginMM;
-  const usableH = A4.h - 2*pageMarginMM;
+  // Calculate grid layout for selected paper size
+  const usableW = paperSizeMM.w - 2*pageMarginMM;
+  const usableH = paperSizeMM.h - 2*pageMarginMM;
   const cols = Math.floor( (usableW + labelSpacingMM) / (labelSizeMM.w + labelSpacingMM) );
   const rows = Math.floor( (usableH + labelSpacingMM) / (labelSizeMM.h + labelSpacingMM) );
-  if(cols < 1 || rows < 1){ alert('Label size too large to fit on A4 with current margins. Choose a smaller label size or reduce margins.'); return; }
+  if(cols < 1 || rows < 1){ alert('Label size too large to fit on selected paper size with current margins. Choose a smaller label size or reduce margins.'); return; }
   const perPage = cols * rows;
 
   // Show quick information
   const pagesNeeded = Math.ceil(items.length / perPage);
   const totalRequestedQty = items.length;
-  if(!confirm(`Generating ${totalRequestedQty} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
+  const paperSizeName = paperSizeMM === A4 ? 'A4' : paperSizeMM === LETTER ? 'Letter' : paperSizeMM === FOUR_BY_SIX ? '4"×6"' : 'Custom';
+  if(!confirm(`Generating ${totalRequestedQty} labels → ${pagesNeeded} ${paperSizeName} page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
   
   // Add progress indicator
   const progressDiv = document.createElement('div');
@@ -657,7 +709,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
 
     const pxW = canvas.width; // already scaled
     const pxH = canvas.height;
-    const dataUrl = canvas.toDataURL('image/png', 0.92);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     const result = { dataUrl, pxW, pxH };
     __renderCache.set(key, result);
     return result;
@@ -666,7 +718,17 @@ generatePdfBtn.addEventListener('click', async ()=>{
 
   // Compose pages using jsPDF
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({unit:'mm', format:'a4', compress:true});
+  let pdfFormat = 'a4';
+  if(paperSizeMM === LETTER) {
+    pdfFormat = 'letter';
+  } else if(paperSizeMM === FOUR_BY_SIX) {
+    // 4" × 6" size - use array format [width, height] in mm
+    pdfFormat = [paperSizeMM.w, paperSizeMM.h];
+  } else if(paperSizeMM !== A4) {
+    // Custom size - use array format [width, height] in mm
+    pdfFormat = [paperSizeMM.w, paperSizeMM.h];
+  }
+  const pdf = new jsPDF({unit:'mm', format:pdfFormat, compress:true});
 
   // compute positions with safety checks
   const colsPerPage = cols;
@@ -678,8 +740,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
   // Verify that labels fit within page boundaries
   const totalWidth = colsPerPage * labelSizeMM.w + (colsPerPage - 1) * spacing;
   const totalHeight = rowsPerPage * labelSizeMM.h + (rowsPerPage - 1) * spacing;
-  const maxWidth = A4.w - 2 * pageMarginMM;
-  const maxHeight = A4.h - 2 * pageMarginMM;
+  const maxWidth = paperSizeMM.w - 2 * pageMarginMM;
+  const maxHeight = paperSizeMM.h - 2 * pageMarginMM;
   
   if(totalWidth > maxWidth || totalHeight > maxHeight) {
     alert(`Warning: Labels may not fit properly on page. Calculated: ${totalWidth.toFixed(1)}×${totalHeight.toFixed(1)}mm, Available: ${maxWidth.toFixed(1)}×${maxHeight.toFixed(1)}mm`);
@@ -709,7 +771,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
         // Ensure label doesn't exceed page boundaries
         const labelRight = x + labelSizeMM.w;
         const labelBottom = y + labelSizeMM.h;
-        if(labelRight > A4.w || labelBottom > A4.h) {
+        if(labelRight > paperSizeMM.w || labelBottom > paperSizeMM.h) {
           console.warn(`Label at (${x}, ${y}) exceeds page boundaries. Skipping.`);
           continue;
         }
@@ -743,7 +805,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
   }catch(e){
     console.warn('Could not create blob URL for download link', e);
   }
-  pdf.save('labels_a4.pdf');
+  const fileName = paperSizeMM === A4 ? 'labels_a4.pdf' : paperSizeMM === LETTER ? 'labels_letter.pdf' : paperSizeMM === FOUR_BY_SIX ? 'labels_4x6.pdf' : 'labels_custom.pdf';
+  pdf.save(fileName);
   alert('PDF generated and downloaded. Pages: ' + pageIndex);
 });
 /* ---------- Shared renderer used by ZIP and PDF (global scope) ---------- */
@@ -829,11 +892,11 @@ async function renderLabelToDataUrl(row, selectedCols){
   const canvas = await html2canvas(clone, {backgroundColor:'#ffffff', scale});
   document.body.removeChild(wrapper);
 
-  const result = { dataUrl: canvas.toDataURL('image/png', 0.92), pxW: canvas.width, pxH: canvas.height };
+  const result = { dataUrl: canvas.toDataURL('image/jpeg', 0.92), pxW: canvas.width, pxH: canvas.height };
   __globalRenderCache.set(key, result);
   return result;
 }
-/* ---------- ZIP (PNG) download ---------- */
+/* ---------- ZIP (PDF) download ---------- */
 downloadZipBtn.addEventListener('click', async ()=>{
   if(!parsedData || parsedData.length===0){ alert('Load a sheet first'); return; }
   const qtyCol = quantitySelect.value;
@@ -873,21 +936,35 @@ downloadZipBtn.addEventListener('click', async ()=>{
   });
   if(rowsForZip.length === 0){ alert('No labels to generate (0 items).'); return; }
 
+  // Add progress indicator
+  const progressDiv = document.createElement('div');
+  progressDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:10000;text-align:center;';
+  progressDiv.innerHTML = '<div>Generating ZIP...</div><div id="zipProgress">0%</div>';
+  document.body.appendChild(progressDiv);
+
   const zip = new JSZip();
   for(let i=0;i<rowsForZip.length;i++){
-    const r = await renderLabelToDataUrl(rowsForZip[i].row, selectedCols);
-    if(r && r.dataUrl) {
-      // convert dataURL to blob
-      const resp = await fetch(r.dataUrl);
-      const blob = await resp.blob();
+    const pdfBlob = await generateIndividualPDF(rowsForZip[i].row, selectedCols, labelSizeMM);
+    if(pdfBlob) {
       const safeName = rowsForZip[i].fileBase || `label_${(i+1).toString().padStart(4,'0')}`;
-      zip.file(`${safeName}.png`, blob);
+      zip.file(`${safeName}.pdf`, pdfBlob);
     }
+    
+    // Update progress
+    const progress = Math.round(((i + 1) / rowsForZip.length) * 100);
+    const progressEl = document.getElementById('zipProgress');
+    if(progressEl) progressEl.textContent = `${progress}%`;
   }
   const zipBlob = await zip.generateAsync({type:'blob'});
+  
+  // Clean up progress indicator
+  if(progressDiv && progressDiv.parentNode) {
+    progressDiv.parentNode.removeChild(progressDiv);
+  }
+  
   const url = URL.createObjectURL(zipBlob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'labels_png.zip';
+  a.href = url; a.download = 'labels_pdf.zip';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=> URL.revokeObjectURL(url), 1000);
 });
@@ -896,6 +973,381 @@ downloadZipBtn.addEventListener('click', async ()=>{
 function escapeHtml(s){
   if(!s) return '';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Generate individual PDF for a single label using pdf-lib with vector SVG barcodes
+async function generateIndividualPDF(row, selectedCols, dimensions) {
+  // Build cache key from row + important knobs
+  let key;
+  try{
+    key = JSON.stringify({row, selectedCols, size:labelSizeMM, staticText:staticTextArea.value, hasLogo:!!currentLogoDataUrl, pdfLib:true});
+  }catch(_){ key = String(Math.random()); }
+  if(__globalRenderCache.has(key)) return __globalRenderCache.get(key);
+
+  // Create PDF with pdf-lib
+  const pdfDoc = await PDFLib.PDFDocument.create();
+  const page = pdfDoc.addPage([dimensions.w, dimensions.h]);
+  
+  // Get current style values
+  const padPx = getIntValue(padPxInput, 12);
+  const logoBoxPx = getIntValue(logoBoxPxInput, 60);
+  const logoTopPx = getIntValue(logoTopPxInput, 10);
+  const logoRightPx = getIntValue(logoRightPxInput, 10);
+  const line1Px = getIntValue(line1PxInput, 14);
+  const line2Px = getIntValue(line2PxInput, 12);
+  const infoPx = getIntValue(infoPxInput, 11);
+  const dynPx = getIntValue(dynPxInput, 12);
+  const bcHeightPx = getIntValue(bcHeightPxInput, 40);
+  const bcFontPx = getIntValue(bcFontPxInput, 12);
+
+  // Convert px to mm (assuming 96 DPI for CSS pixels)
+  const pxToMm = 25.4 / 96;
+  const padding = padPx * pxToMm;
+  const logoBoxSize = logoBoxPx * pxToMm;
+  const logoTop = logoTopPx * pxToMm;
+  const logoRight = logoRightPx * pxToMm;
+
+  // Embed fonts
+  const helveticaFont = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+  const helveticaBoldFont = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+
+  // Add logo if present
+  if(currentLogoDataUrl) {
+    try {
+      // Convert data URL to Uint8Array for pdf-lib
+      const logoResponse = await fetch(currentLogoDataUrl);
+      const logoBytes = await logoResponse.arrayBuffer();
+      const logoImage = await pdfDoc.embedPng(logoBytes);
+      
+      const logoX = dimensions.w - logoRight - logoBoxSize;
+      const logoY = dimensions.h - logoTop - logoBoxSize; // pdf-lib uses bottom-left origin
+      const logoW = logoBoxSize;
+      const logoH = logoBoxSize;
+      
+      page.drawImage(logoImage, {
+        x: logoX,
+        y: logoY,
+        width: logoW,
+        height: logoH,
+      });
+    } catch(e) {
+      console.warn('Logo could not be added to PDF:', e);
+    }
+  }
+
+  // Calculate text area (accounting for logo space)
+  const textAreaX = padding;
+  const textAreaY = dimensions.h - padding; // Start from top (pdf-lib uses bottom-left origin)
+  const textAreaW = dimensions.w - padding - (logoBoxSize + logoRight + padding);
+
+  // Add static text - use the same content as the preview HTML
+  let currentY = textAreaY;
+  
+  // Static line 1 (main header) - bilingual
+  const staticLine1Text = "مستوردة ومسوقة من قبل\nImported and Marketed By";
+  const fontSize1 = line1Px * pxToMm;
+  const lines1 = wrapText(staticLine1Text, textAreaW, fontSize1, helveticaBoldFont);
+  lines1.forEach(line => {
+    page.drawText(line, {
+      x: textAreaX,
+      y: currentY - fontSize1,
+      size: fontSize1,
+      font: helveticaBoldFont,
+      color: PDFLib.rgb(0, 0, 0),
+    });
+    currentY -= (fontSize1 * 1.2);
+  });
+
+  // Static line 2 (company info) - bilingual
+  const staticLine2Text = "Advista Marketing (P) Ltd\nشركة أدفيتا للتسويق المحدودة";
+  const fontSize2 = line2Px * pxToMm;
+  const lines2 = wrapText(staticLine2Text, textAreaW, fontSize2, helveticaBoldFont);
+  lines2.forEach(line => {
+    page.drawText(line, {
+      x: textAreaX,
+      y: currentY - fontSize2,
+      size: fontSize2,
+      font: helveticaBoldFont,
+      color: PDFLib.rgb(0, 0, 0),
+    });
+    currentY -= (fontSize2 * 1.2);
+  });
+
+  // VAT/Contact info
+  const vatText = "رقم ضريبة القيمة المضافة (VAT): 313061260900003\nwww.layyun.net | info@advistaltd.com";
+  const fontSize3 = infoPx * pxToMm;
+  const lines3 = wrapText(vatText, textAreaW, fontSize3, helveticaFont);
+  lines3.forEach(line => {
+    page.drawText(line, {
+      x: textAreaX,
+      y: currentY - fontSize3,
+      size: fontSize3,
+      font: helveticaFont,
+      color: PDFLib.rgb(0, 0, 0),
+    });
+    currentY -= (fontSize3 * 1.2);
+  });
+
+  // Add some spacing
+  currentY -= 2;
+
+  // Add dynamic pairs
+  if(selectedCols.length > 0) {
+    const fontSize = dynPx * pxToMm;
+    
+    selectedCols.forEach(col => {
+      const value = String(row[col] ?? '');
+      if(value) {
+        const text = `${col}: ${value}`;
+        const lines = wrapText(text, textAreaW, fontSize, helveticaFont);
+        lines.forEach(line => {
+          page.drawText(line, {
+            x: textAreaX,
+            y: currentY - fontSize,
+            size: fontSize,
+            font: helveticaFont,
+            color: PDFLib.rgb(0, 0, 0),
+          });
+          currentY -= (fontSize * 1.2);
+        });
+      }
+    });
+  }
+
+  // Add SVG barcode if present
+  const chosenBarcodeCol = barcodeSelect.value;
+  if(chosenBarcodeCol) {
+    const barcodeValue = String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'');
+    if(barcodeValue && barcodeValue.length >= 12) {
+      try {
+        // Create SVG barcode
+        const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svgElement.setAttribute('width', '200');
+        svgElement.setAttribute('height', bcHeightPx + 20);
+        
+        JsBarcode(svgElement, barcodeValue, {
+          format: 'ean13',
+          displayValue: true,
+          fontSize: bcFontPx,
+          height: bcHeightPx,
+          margin: 4,
+          renderer: 'svg'
+        });
+        
+        // Convert SVG to string
+        const svgString = new XMLSerializer().serializeToString(svgElement);
+        
+        // Embed SVG in PDF
+        const svgPage = await pdfDoc.embedSvg(svgString);
+        const barcodeW = 40; // Fixed width in mm
+        const barcodeH = (bcHeightPx + 20) * pxToMm;
+        const barcodeX = textAreaX;
+        const barcodeY = Math.max(5, currentY - barcodeH - 5); // Ensure it's not too low
+        
+        page.drawPage(svgPage, {
+          x: barcodeX,
+          y: barcodeY,
+          xScale: barcodeW / 200, // Scale to fit
+          yScale: barcodeH / (bcHeightPx + 20),
+        });
+        
+        currentY = barcodeY - 2; // Position bottom text below barcode
+      } catch(e) {
+        console.warn('SVG barcode could not be added to PDF:', e);
+      }
+    }
+  }
+
+  // Add bottom static text (material composition) - bilingual
+  const materialText = "تركيبة الخامة (Material Composition)\nنايلون + سباندكس (Nylon + Spandex)\nصنع في الهند | Made in India";
+  const fontSize4 = infoPx * pxToMm;
+  const lines4 = wrapText(materialText, textAreaW, fontSize4, helveticaFont);
+  
+  // Position from bottom up to ensure visibility
+  let bottomY = padding + (lines4.length * fontSize4 * 1.2);
+  lines4.forEach(line => {
+    page.drawText(line, {
+      x: textAreaX,
+      y: bottomY,
+      size: fontSize4,
+      font: helveticaFont,
+      color: PDFLib.rgb(0, 0, 0),
+    });
+    bottomY += (fontSize4 * 1.2);
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  const result = new Blob([pdfBytes], { type: 'application/pdf' });
+  __globalRenderCache.set(key, result);
+  return result;
+}
+
+// Helper function to wrap text for pdf-lib
+function wrapText(text, maxWidth, fontSize, font) {
+  // First split by newlines to handle explicit line breaks
+  const paragraphs = text.split('\n');
+  const allLines = [];
+  
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(' ');
+    const lines = [];
+    let currentLine = '';
+    
+    for (const word of words) {
+      const testLine = currentLine + (currentLine ? ' ' : '') + word;
+      const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+      
+      if (textWidth <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          lines.push(word);
+        }
+      }
+    }
+    
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    
+    allLines.push(...lines);
+  }
+  
+  return allLines;
+}
+
+// Render label directly to JPEG with dimensional metadata (matches PDF generation logic)
+async function renderLabelToJpegWithMetadata(row, selectedCols, dimensions) {
+  // Build cache key from row + important knobs
+  let key;
+  try{
+    key = JSON.stringify({row, selectedCols, size:labelSizeMM, dpi:labelDPI, staticText:staticTextArea.value, hasLogo:!!currentLogoDataUrl, jpeg:true});
+  }catch(_){ key = String(Math.random()); }
+  if(__globalRenderCache.has(key)) return __globalRenderCache.get(key);
+
+  // Use the same rendering logic as PDF generation to ensure consistency
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;background:white;';
+
+  // Clone the current preview label DOM so styles/layout are identical
+  const clone = labelCanvasDOM.cloneNode(true);
+
+  // Force physical size in CSS pixels (96dpi) to match preview proportions
+  const cssW = Math.round(labelSizeMM.w * 3.78);
+  const cssH = Math.round(labelSizeMM.h * 3.78);
+  clone.style.width = cssW + 'px';
+  clone.style.minHeight = cssH + 'px';
+
+  // Preserve any user inline style changes made in the live preview by copying
+  // inline style attributes for key nodes into the clone before rendering.
+  function copyInline(fromRoot, toRoot, selector){
+    const a = fromRoot.querySelector(selector); const b = toRoot.querySelector(selector);
+    if(a && b){ const s = a.getAttribute('style'); if(s != null) b.setAttribute('style', s); }
+  }
+  copyInline(labelCanvasDOM, clone, '#labelInner');
+  copyInline(labelCanvasDOM, clone, '#labelContent');
+  copyInline(labelCanvasDOM, clone, '#dynamicPairs');
+  copyInline(labelCanvasDOM, clone, '#barcodeArea');
+  copyInline(labelCanvasDOM, clone, '#logoContainer');
+  copyInline(labelCanvasDOM, clone, '#staticLine1');
+  copyInline(labelCanvasDOM, clone, '#staticLine2');
+  copyInline(labelCanvasDOM, clone, '#staticLine3');
+  copyInline(labelCanvasDOM, clone, '#staticLine4');
+  copyInline(labelCanvasDOM, clone, '#staticLine5');
+  copyInline(labelCanvasDOM, clone, '#staticLine6');
+
+  // Apply current static lines from textarea
+  const staticLines = staticTextArea.value.split('\n').map(s=>s.trim());
+  const ids = ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'];
+  ids.forEach((id, i)=>{
+    const el = clone.querySelector(`#${id}`);
+    if(el) el.textContent = staticLines[i] || '';
+  });
+
+  // Dynamic pairs — preserve user-customized children; only update or add auto-generated items
+  const dynContainer = clone.querySelector('#dynamicPairs');
+  if(dynContainer){
+    // Remove only previously auto-generated entries
+    Array.from(dynContainer.querySelectorAll('[data-auto="pair"]')).forEach(el=>el.remove());
+    // If user provided bound elements with data-col, update those
+    const boundNodes = Array.from(dynContainer.querySelectorAll('[data-col]'));
+    if(boundNodes.length > 0){
+      boundNodes.forEach(el=>{
+        const col = el.getAttribute('data-col');
+        if(col) el.textContent = String(row[col] ?? '');
+      });
+    } else {
+      // Otherwise, append simple auto-generated pairs
+      selectedCols.forEach(col=>{
+        const d = document.createElement('div');
+        d.setAttribute('data-auto','pair');
+        d.style.marginBottom = '6px';
+        d.innerHTML = `<strong>${col}:</strong> <span>${row[col] ?? ''}</span>`;
+        dynContainer.appendChild(d);
+      });
+    }
+  }
+
+  // Render barcode inside the clone
+  const bcEl = clone.querySelector('#barcodeArea');
+  if(bcEl){
+    // Remove only our previous auto barcode(s)
+    Array.from(bcEl.querySelectorAll('[data-auto="barcode"]')).forEach(el=>el.remove());
+    const chosenBarcodeColVal = barcodeSelect.value ? String(row[barcodeSelect.value] ?? '').replace(/\D/g,'') : '';
+    if(chosenBarcodeColVal){
+      const canvas = document.createElement('canvas');
+      const h = getIntValue(bcHeightPxInput, 40);
+      const f = getIntValue(bcFontPxInput, 12);
+      try{
+        JsBarcode(canvas, chosenBarcodeColVal, {format:'ean13', displayValue:true, fontSize:f, height:h, margin:4});
+        canvas.setAttribute('data-auto','barcode');
+        bcEl.appendChild(canvas);
+      }catch{ /* ignore barcode errors for this row */ }
+    }
+  }
+
+  // Ensure logo is present in the clone when uploaded
+  const cloneLogoContainer = clone.querySelector('#logoContainer');
+  if(cloneLogoContainer && currentLogoDataUrl){
+    // Replace placeholder with image if missing
+    if(!cloneLogoContainer.querySelector('img')){
+      cloneLogoContainer.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = currentLogoDataUrl;
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = '100%';
+      img.style.display = 'block';
+      cloneLogoContainer.appendChild(img);
+    }
+  }
+
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  // High-DPI render so size in JPEG is crisp and matches mm
+  const scale = labelDPI / 96; // 96 CSS px per inch baseline
+  const canvas = await html2canvas(clone, {backgroundColor:'#ffffff', scale});
+
+  // Cleanup
+  document.body.removeChild(wrapper);
+
+  // Add dimensional metadata overlay
+  const ctx = canvas.getContext('2d');
+  const fontSize = Math.max(8, Math.min(16, canvas.width / 50));
+  ctx.font = `${fontSize}px Arial`;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillRect(canvas.width - 120, canvas.height - 25, 115, 20);
+  
+  ctx.fillStyle = 'white';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${dimensions.w}×${dimensions.h}mm`, canvas.width - 5, canvas.height - 10);
+
+  const result = canvas.toDataURL('image/jpeg', 0.92);
+  __globalRenderCache.set(key, result);
+  return result;
 }
 function mmToPxRounded(mm, dpi=300){ return Math.round(mm * dpi / 25.4); }
 
@@ -1013,6 +1465,22 @@ pageMarginInput.addEventListener('change', ()=>{
 });
 labelSpacingInput.addEventListener('change', ()=>{
   labelSpacingMM = Math.max(0, Math.min(10, getIntValue(labelSpacingInput, labelSpacingMM)));
+});
+
+/* custom paper size inputs */
+paperWmmInput.addEventListener('change', ()=>{
+  if(customPaperSize.style.display === 'grid') {
+    const w = Math.max(100, Math.min(500, getIntValue(paperWmmInput, 210)));
+    paperSizeMM.w = w;
+    paperWmmInput.value = w; // Update input to show clamped value
+  }
+});
+paperHmmInput.addEventListener('change', ()=>{
+  if(customPaperSize.style.display === 'grid') {
+    const h = Math.max(100, Math.min(500, getIntValue(paperHmmInput, 297)));
+    paperSizeMM.h = h;
+    paperHmmInput.value = h; // Update input to show clamped value
+  }
 });
 [padPxInput, logoBoxPxInput, logoTopPxInput, logoRightPxInput, line1PxInput, line2PxInput, infoPxInput, dynPxInput, bcHeightPxInput, bcFontPxInput].forEach(el=>{
   el.addEventListener('change', applyStyleControlsToPreview);
