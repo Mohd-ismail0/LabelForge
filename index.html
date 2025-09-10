@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Label Maker — EAN13 + A4 PDF</title>
+  <title>Label Maker — EAN13 + PDF</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%232c7be5'/%3E%3Ctext x='32' y='38' font-size='28' text-anchor='middle' fill='white' font-family='Arial'%3EL%3C/text%3E%3C/svg%3E" />
 
   <!-- SheetJS (xlsx) -->
@@ -39,8 +39,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>Label Maker — EAN13 + A4 PDF (Excel/CSV/Google Sheets)</h1>
-    <p class="help">Upload sheet, choose barcode column (EAN13), choose dynamic columns, pick a quantity column to multiply labels, select label size, upload logo (will be rendered top-right with 10px padding), then "Generate A4 PDF".</p>
+    <h1>Label Maker — EAN13 + PDF (Excel/CSV/Google Sheets)</h1>
+    <p class="help">Upload sheet, choose barcode column (EAN13), choose dynamic columns, pick a quantity column to multiply labels, select label size, choose paper size (A4/Letter/Custom), upload logo (will be rendered top-right with 10px padding), then "Generate PDF".</p>
 
     <div class="grid" style="margin-top:12px">
       <div class="card">
@@ -97,6 +97,23 @@
           <div>
             <label>Label spacing (mm)</label>
             <input id="labelSpacingInput" type="number" min="0" max="10" step="1" />
+          </div>
+        </div>
+
+        <label style="margin-top:8px">Paper size for PDF</label>
+        <div style="display:flex;gap:8px;margin-bottom:8px" id="paperSizeButtons">
+          <button data-size="a4" class="active">A4 (210×297 mm)</button>
+          <button data-size="letter">Letter (216×279 mm)</button>
+          <button data-size="custom">Custom</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px" id="customPaperSize" style="display:none">
+          <div>
+            <label>Width (mm)</label>
+            <input id="paperWmm" type="number" min="100" max="500" step="1" />
+          </div>
+          <div>
+            <label>Height (mm)</label>
+            <input id="paperHmm" type="number" min="100" max="500" step="1" />
           </div>
         </div>
 
@@ -157,7 +174,7 @@
 
         <div style="margin-top:10px;display:flex;gap:8px">
           <button id="renderBtn">Render Preview</button>
-          <button id="generatePdf" style="background:#059669">Generate A4 PDF</button>
+          <button id="generatePdf" style="background:#059669">Generate PDF</button>
           <a id="downloadPdfLink" href="#" download="labels_a4.pdf" style="display:none;background:#10b981;color:#fff;padding:8px 10px;border-radius:8px;text-decoration:none">Download last PDF</a>
           <button id="downloadZip" style="background:#6b7280">Download ZIP (PNG)</button>
         </div>
@@ -203,7 +220,7 @@
       </div>
     </div>
 
-    <p style="margin-top:12px;font-size:13px;color:#666">Notes: Barcode values are validated for EAN-13 (only digits, 12 or 13 chars). PDF generation creates an A4 PDF (210×297 mm), placing labels in a grid using chosen label size, page margins and spacing. All done locally.</p>
+    <p style="margin-top:12px;font-size:13px;color:#666">Notes: Barcode values are validated for EAN-13 (only digits, 12 or 13 chars). PDF generation creates a PDF with selected paper size, placing labels in a grid using chosen label size, page margins and spacing. All done locally.</p>
   </div>
 
 <script>
@@ -219,6 +236,8 @@ let currentLogoDataUrl = null;
 let labelSizeMM = {w:80, h:60}; // default medium
 let labelDPI = 300; // canvas DPI for export (high quality)
 const A4 = {w:210, h:297}; // mm
+const LETTER = {w:216, h:279}; // mm
+let paperSizeMM = A4; // current paper size
 let pageMarginMM = 6; // page margin in mm (reduced to waste less space)
 let labelSpacingMM = 2; // spacing between labels (reduced)
 
@@ -245,6 +264,10 @@ const labelWmmInput = document.getElementById('labelWmm');
 const labelHmmInput = document.getElementById('labelHmm');
 const pageMarginInput = document.getElementById('pageMarginInput');
 const labelSpacingInput = document.getElementById('labelSpacingInput');
+const paperSizeButtons = document.getElementById('paperSizeButtons');
+const customPaperSize = document.getElementById('customPaperSize');
+const paperWmmInput = document.getElementById('paperWmm');
+const paperHmmInput = document.getElementById('paperHmm');
 const padPxInput = document.getElementById('padPx');
 const logoBoxPxInput = document.getElementById('logoBoxPx');
 const logoTopPxInput = document.getElementById('logoTopPx');
@@ -483,6 +506,27 @@ sizeButtons.addEventListener('click', (e)=>{
   labelCanvasDOM.style.width = pxW + 'px';
 });
 
+/* paper size buttons */
+paperSizeButtons.addEventListener('click', (e)=>{
+  if(!e.target.dataset || !e.target.dataset.size) return;
+  const size = e.target.dataset.size;
+  Array.from(paperSizeButtons.querySelectorAll('button')).forEach(b=>b.classList.remove('active'));
+  e.target.classList.add('active');
+  if(size==='a4') {
+    paperSizeMM = A4;
+    customPaperSize.style.display = 'none';
+  } else if(size==='letter') {
+    paperSizeMM = LETTER;
+    customPaperSize.style.display = 'none';
+  } else if(size==='custom') {
+    customPaperSize.style.display = 'grid';
+    // Use current values or defaults
+    if(!paperWmmInput.value) paperWmmInput.value = '210';
+    if(!paperHmmInput.value) paperHmmInput.value = '297';
+    paperSizeMM = {w: parseInt(paperWmmInput.value), h: parseInt(paperHmmInput.value)};
+  }
+});
+
 /* render preview button */
 renderBtn.addEventListener('click', ()=>{
   renderMappingPreview();
@@ -523,18 +567,19 @@ generatePdfBtn.addEventListener('click', async ()=>{
   if(items.length === 0){ alert('No labels to generate (0 items).'); return; }
   // For performance/preview ask user? but requirement forbids wait — proceed.
 
-  // Calculate grid layout for A4
-  const usableW = A4.w - 2*pageMarginMM;
-  const usableH = A4.h - 2*pageMarginMM;
+  // Calculate grid layout for selected paper size
+  const usableW = paperSizeMM.w - 2*pageMarginMM;
+  const usableH = paperSizeMM.h - 2*pageMarginMM;
   const cols = Math.floor( (usableW + labelSpacingMM) / (labelSizeMM.w + labelSpacingMM) );
   const rows = Math.floor( (usableH + labelSpacingMM) / (labelSizeMM.h + labelSpacingMM) );
-  if(cols < 1 || rows < 1){ alert('Label size too large to fit on A4 with current margins. Choose a smaller label size or reduce margins.'); return; }
+  if(cols < 1 || rows < 1){ alert('Label size too large to fit on selected paper size with current margins. Choose a smaller label size or reduce margins.'); return; }
   const perPage = cols * rows;
 
   // Show quick information
   const pagesNeeded = Math.ceil(items.length / perPage);
   const totalRequestedQty = items.length;
-  if(!confirm(`Generating ${totalRequestedQty} labels → ${pagesNeeded} A4 page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
+  const paperSizeName = paperSizeMM === A4 ? 'A4' : paperSizeMM === LETTER ? 'Letter' : 'Custom';
+  if(!confirm(`Generating ${totalRequestedQty} labels → ${pagesNeeded} ${paperSizeName} page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
   
   // Add progress indicator
   const progressDiv = document.createElement('div');
@@ -666,7 +711,14 @@ generatePdfBtn.addEventListener('click', async ()=>{
 
   // Compose pages using jsPDF
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({unit:'mm', format:'a4', compress:true});
+  let pdfFormat = 'a4';
+  if(paperSizeMM === LETTER) {
+    pdfFormat = 'letter';
+  } else if(paperSizeMM !== A4) {
+    // Custom size - use array format [width, height] in mm
+    pdfFormat = [paperSizeMM.w, paperSizeMM.h];
+  }
+  const pdf = new jsPDF({unit:'mm', format:pdfFormat, compress:true});
 
   // compute positions with safety checks
   const colsPerPage = cols;
@@ -678,8 +730,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
   // Verify that labels fit within page boundaries
   const totalWidth = colsPerPage * labelSizeMM.w + (colsPerPage - 1) * spacing;
   const totalHeight = rowsPerPage * labelSizeMM.h + (rowsPerPage - 1) * spacing;
-  const maxWidth = A4.w - 2 * pageMarginMM;
-  const maxHeight = A4.h - 2 * pageMarginMM;
+  const maxWidth = paperSizeMM.w - 2 * pageMarginMM;
+  const maxHeight = paperSizeMM.h - 2 * pageMarginMM;
   
   if(totalWidth > maxWidth || totalHeight > maxHeight) {
     alert(`Warning: Labels may not fit properly on page. Calculated: ${totalWidth.toFixed(1)}×${totalHeight.toFixed(1)}mm, Available: ${maxWidth.toFixed(1)}×${maxHeight.toFixed(1)}mm`);
@@ -709,7 +761,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
         // Ensure label doesn't exceed page boundaries
         const labelRight = x + labelSizeMM.w;
         const labelBottom = y + labelSizeMM.h;
-        if(labelRight > A4.w || labelBottom > A4.h) {
+        if(labelRight > paperSizeMM.w || labelBottom > paperSizeMM.h) {
           console.warn(`Label at (${x}, ${y}) exceeds page boundaries. Skipping.`);
           continue;
         }
@@ -743,7 +795,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
   }catch(e){
     console.warn('Could not create blob URL for download link', e);
   }
-  pdf.save('labels_a4.pdf');
+  const fileName = paperSizeMM === A4 ? 'labels_a4.pdf' : paperSizeMM === LETTER ? 'labels_letter.pdf' : 'labels_custom.pdf';
+  pdf.save(fileName);
   alert('PDF generated and downloaded. Pages: ' + pageIndex);
 });
 /* ---------- Shared renderer used by ZIP and PDF (global scope) ---------- */
@@ -1013,6 +1066,22 @@ pageMarginInput.addEventListener('change', ()=>{
 });
 labelSpacingInput.addEventListener('change', ()=>{
   labelSpacingMM = Math.max(0, Math.min(10, getIntValue(labelSpacingInput, labelSpacingMM)));
+});
+
+/* custom paper size inputs */
+paperWmmInput.addEventListener('change', ()=>{
+  if(customPaperSize.style.display === 'grid') {
+    const w = Math.max(100, Math.min(500, getIntValue(paperWmmInput, 210)));
+    paperSizeMM.w = w;
+    paperWmmInput.value = w; // Update input to show clamped value
+  }
+});
+paperHmmInput.addEventListener('change', ()=>{
+  if(customPaperSize.style.display === 'grid') {
+    const h = Math.max(100, Math.min(500, getIntValue(paperHmmInput, 297)));
+    paperSizeMM.h = h;
+    paperHmmInput.value = h; // Update input to show clamped value
+  }
 });
 [padPxInput, logoBoxPxInput, logoTopPxInput, logoRightPxInput, line1PxInput, line2PxInput, infoPxInput, dynPxInput, bcHeightPxInput, bcFontPxInput].forEach(el=>{
   el.addEventListener('change', applyStyleControlsToPreview);
