@@ -14,6 +14,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- jsPDF for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- pdf-lib for vector SVG support -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <!-- JSZip for ZIP downloads -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
@@ -973,17 +975,18 @@ function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// Generate individual PDF for a single label using native PDF elements
+// Generate individual PDF for a single label using pdf-lib with vector SVG barcodes
 async function generateIndividualPDF(row, selectedCols, dimensions) {
   // Build cache key from row + important knobs
   let key;
   try{
-    key = JSON.stringify({row, selectedCols, size:labelSizeMM, staticText:staticTextArea.value, hasLogo:!!currentLogoDataUrl, nativePDF:true});
+    key = JSON.stringify({row, selectedCols, size:labelSizeMM, staticText:staticTextArea.value, hasLogo:!!currentLogoDataUrl, pdfLib:true});
   }catch(_){ key = String(Math.random()); }
   if(__globalRenderCache.has(key)) return __globalRenderCache.get(key);
 
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({unit:'mm', format:[dimensions.w, dimensions.h], compress:true});
+  // Create PDF with pdf-lib
+  const pdfDoc = await PDFLib.PDFDocument.create();
+  const page = pdfDoc.addPage([dimensions.w, dimensions.h]);
   
   // Get current style values
   const padPx = getIntValue(padPxInput, 12);
@@ -1004,29 +1007,29 @@ async function generateIndividualPDF(row, selectedCols, dimensions) {
   const logoTop = logoTopPx * pxToMm;
   const logoRight = logoRightPx * pxToMm;
 
-  // Set up fonts and colors
-  pdf.setFont('helvetica');
-  pdf.setTextColor(0, 0, 0);
+  // Embed fonts
+  const helveticaFont = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+  const helveticaBoldFont = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
 
   // Add logo if present
   if(currentLogoDataUrl) {
     try {
-      // Create image element to get dimensions
-      const img = new Image();
-      img.src = currentLogoDataUrl;
-      await new Promise(resolve => {
-        img.onload = resolve;
-        img.onerror = resolve;
-      });
+      // Convert data URL to Uint8Array for pdf-lib
+      const logoResponse = await fetch(currentLogoDataUrl);
+      const logoBytes = await logoResponse.arrayBuffer();
+      const logoImage = await pdfDoc.embedPng(logoBytes);
       
-      if(img.width && img.height) {
-        const logoX = dimensions.w - logoRight - logoBoxSize;
-        const logoY = logoTop;
-        const logoW = logoBoxSize;
-        const logoH = logoBoxSize;
-        
-        pdf.addImage(currentLogoDataUrl, 'PNG', logoX, logoY, logoW, logoH);
-      }
+      const logoX = dimensions.w - logoRight - logoBoxSize;
+      const logoY = dimensions.h - logoTop - logoBoxSize; // pdf-lib uses bottom-left origin
+      const logoW = logoBoxSize;
+      const logoH = logoBoxSize;
+      
+      page.drawImage(logoImage, {
+        x: logoX,
+        y: logoY,
+        width: logoW,
+        height: logoH,
+      });
     } catch(e) {
       console.warn('Logo could not be added to PDF:', e);
     }
@@ -1034,9 +1037,8 @@ async function generateIndividualPDF(row, selectedCols, dimensions) {
 
   // Calculate text area (accounting for logo space)
   const textAreaX = padding;
-  const textAreaY = padding;
+  const textAreaY = dimensions.h - padding; // Start from top (pdf-lib uses bottom-left origin)
   const textAreaW = dimensions.w - padding - (logoBoxSize + logoRight + padding);
-  const textAreaH = dimensions.h - (padding * 2);
 
   // Add static text from textarea
   const staticLines = staticTextArea.value.split('\n').map(s=>s.trim()).filter(Boolean);
@@ -1044,103 +1046,171 @@ async function generateIndividualPDF(row, selectedCols, dimensions) {
   
   // Static line 1 (main header)
   if(staticLines[0]) {
-    pdf.setFontSize(line1Px * pxToMm);
-    pdf.setFont('helvetica', 'bold');
-    const lines = pdf.splitTextToSize(staticLines[0], textAreaW);
+    const fontSize = line1Px * pxToMm;
+    const lines = wrapText(staticLines[0], textAreaW, fontSize, helveticaBoldFont);
     lines.forEach(line => {
-      pdf.text(line, textAreaX, currentY);
-      currentY += (line1Px * pxToMm * 1.2);
+      page.drawText(line, {
+        x: textAreaX,
+        y: currentY - fontSize,
+        size: fontSize,
+        font: helveticaBoldFont,
+        color: PDFLib.rgb(0, 0, 0),
+      });
+      currentY -= (fontSize * 1.2);
     });
   }
 
   // Static line 2 (company info)
   if(staticLines[1]) {
-    pdf.setFontSize(line2Px * pxToMm);
-    pdf.setFont('helvetica', 'bold');
-    const lines = pdf.splitTextToSize(staticLines[1], textAreaW);
+    const fontSize = line2Px * pxToMm;
+    const lines = wrapText(staticLines[1], textAreaW, fontSize, helveticaBoldFont);
     lines.forEach(line => {
-      pdf.text(line, textAreaX, currentY);
-      currentY += (line2Px * pxToMm * 1.2);
+      page.drawText(line, {
+        x: textAreaX,
+        y: currentY - fontSize,
+        size: fontSize,
+        font: helveticaBoldFont,
+        color: PDFLib.rgb(0, 0, 0),
+      });
+      currentY -= (fontSize * 1.2);
     });
   }
 
   // VAT/Contact info
   if(staticLines[2]) {
-    pdf.setFontSize(infoPx * pxToMm);
-    pdf.setFont('helvetica', 'normal');
-    const lines = pdf.splitTextToSize(staticLines[2], textAreaW);
+    const fontSize = infoPx * pxToMm;
+    const lines = wrapText(staticLines[2], textAreaW, fontSize, helveticaFont);
     lines.forEach(line => {
-      pdf.text(line, textAreaX, currentY);
-      currentY += (infoPx * pxToMm * 1.2);
+      page.drawText(line, {
+        x: textAreaX,
+        y: currentY - fontSize,
+        size: fontSize,
+        font: helveticaFont,
+        color: PDFLib.rgb(0, 0, 0),
+      });
+      currentY -= (fontSize * 1.2);
     });
   }
 
   // Add some spacing
-  currentY += 2;
+  currentY -= 2;
 
   // Add dynamic pairs
   if(selectedCols.length > 0) {
-    pdf.setFontSize(dynPx * pxToMm);
-    pdf.setFont('helvetica', 'normal');
+    const fontSize = dynPx * pxToMm;
     
     selectedCols.forEach(col => {
       const value = String(row[col] ?? '');
       if(value) {
         const text = `${col}: ${value}`;
-        const lines = pdf.splitTextToSize(text, textAreaW);
+        const lines = wrapText(text, textAreaW, fontSize, helveticaFont);
         lines.forEach(line => {
-          pdf.text(line, textAreaX, currentY);
-          currentY += (dynPx * pxToMm * 1.2);
+          page.drawText(line, {
+            x: textAreaX,
+            y: currentY - fontSize,
+            size: fontSize,
+            font: helveticaFont,
+            color: PDFLib.rgb(0, 0, 0),
+          });
+          currentY -= (fontSize * 1.2);
         });
       }
     });
   }
 
-  // Add barcode if present
+  // Add SVG barcode if present
   const chosenBarcodeCol = barcodeSelect.value;
   if(chosenBarcodeCol) {
     const barcodeValue = String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'');
     if(barcodeValue && barcodeValue.length >= 12) {
       try {
-        // Create barcode canvas
-        const canvas = document.createElement('canvas');
-        JsBarcode(canvas, barcodeValue, {
+        // Create SVG barcode
+        const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svgElement.setAttribute('width', '200');
+        svgElement.setAttribute('height', bcHeightPx + 20);
+        
+        JsBarcode(svgElement, barcodeValue, {
           format: 'ean13',
           displayValue: true,
           fontSize: bcFontPx,
           height: bcHeightPx,
-          margin: 4
+          margin: 4,
+          renderer: 'svg'
         });
         
-        // Add barcode to PDF
-        const barcodeDataUrl = canvas.toDataURL('image/png');
-        const barcodeW = (canvas.width * pxToMm);
-        const barcodeH = (canvas.height * pxToMm);
-        const barcodeX = textAreaX;
-        const barcodeY = currentY;
+        // Convert SVG to string
+        const svgString = new XMLSerializer().serializeToString(svgElement);
         
-        pdf.addImage(barcodeDataUrl, 'PNG', barcodeX, barcodeY, barcodeW, barcodeH);
-        currentY += barcodeH + 2;
+        // Embed SVG in PDF
+        const svgPage = await pdfDoc.embedSvg(svgString);
+        const barcodeW = 40; // Fixed width in mm
+        const barcodeH = (bcHeightPx + 20) * pxToMm;
+        const barcodeX = textAreaX;
+        const barcodeY = currentY - barcodeH;
+        
+        page.drawPage(svgPage, {
+          x: barcodeX,
+          y: barcodeY,
+          xScale: barcodeW / 200, // Scale to fit
+          yScale: barcodeH / (bcHeightPx + 20),
+        });
+        
+        currentY -= barcodeH + 2;
       } catch(e) {
-        console.warn('Barcode could not be added to PDF:', e);
+        console.warn('SVG barcode could not be added to PDF:', e);
       }
     }
   }
 
   // Add bottom static text (material composition)
   if(staticLines[3]) {
-    pdf.setFontSize(infoPx * pxToMm);
-    pdf.setFont('helvetica', 'normal');
-    const lines = pdf.splitTextToSize(staticLines[3], textAreaW);
+    const fontSize = infoPx * pxToMm;
+    const lines = wrapText(staticLines[3], textAreaW, fontSize, helveticaFont);
     lines.forEach(line => {
-      pdf.text(line, textAreaX, currentY);
-      currentY += (infoPx * pxToMm * 1.2);
+      page.drawText(line, {
+        x: textAreaX,
+        y: currentY - fontSize,
+        size: fontSize,
+        font: helveticaFont,
+        color: PDFLib.rgb(0, 0, 0),
+      });
+      currentY -= (fontSize * 1.2);
     });
   }
 
-  const result = pdf.output('blob');
+  const pdfBytes = await pdfDoc.save();
+  const result = new Blob([pdfBytes], { type: 'application/pdf' });
   __globalRenderCache.set(key, result);
   return result;
+}
+
+// Helper function to wrap text for pdf-lib
+function wrapText(text, maxWidth, fontSize, font) {
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+  
+  for (const word of words) {
+    const testLine = currentLine + (currentLine ? ' ' : '') + word;
+    const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+    
+    if (textWidth <= maxWidth) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        lines.push(word);
+      }
+    }
+  }
+  
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  
+  return lines;
 }
 
 // Render label directly to JPEG with dimensional metadata (matches PDF generation logic)
