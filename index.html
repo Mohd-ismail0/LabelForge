@@ -894,7 +894,7 @@ async function renderLabelToDataUrl(row, selectedCols){
   __globalRenderCache.set(key, result);
   return result;
 }
-/* ---------- ZIP (JPEG) download ---------- */
+/* ---------- ZIP (PDF) download ---------- */
 downloadZipBtn.addEventListener('click', async ()=>{
   if(!parsedData || parsedData.length===0){ alert('Load a sheet first'); return; }
   const qtyCol = quantitySelect.value;
@@ -942,14 +942,10 @@ downloadZipBtn.addEventListener('click', async ()=>{
 
   const zip = new JSZip();
   for(let i=0;i<rowsForZip.length;i++){
-    const jpegDataUrl = await renderLabelToJpegWithMetadata(rowsForZip[i].row, selectedCols, labelSizeMM);
-    if(jpegDataUrl) {
-      // convert dataURL to blob
-      const resp = await fetch(jpegDataUrl);
-      const blob = await resp.blob();
-      
+    const pdfBlob = await generateIndividualPDF(rowsForZip[i].row, selectedCols, labelSizeMM);
+    if(pdfBlob) {
       const safeName = rowsForZip[i].fileBase || `label_${(i+1).toString().padStart(4,'0')}`;
-      zip.file(`${safeName}.jpg`, blob);
+      zip.file(`${safeName}.pdf`, pdfBlob);
     }
     
     // Update progress
@@ -966,7 +962,7 @@ downloadZipBtn.addEventListener('click', async ()=>{
   
   const url = URL.createObjectURL(zipBlob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'labels_jpeg.zip';
+  a.href = url; a.download = 'labels_pdf.zip';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=> URL.revokeObjectURL(url), 1000);
 });
@@ -975,6 +971,134 @@ downloadZipBtn.addEventListener('click', async ()=>{
 function escapeHtml(s){
   if(!s) return '';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Generate individual PDF for a single label
+async function generateIndividualPDF(row, selectedCols, dimensions) {
+  // Build cache key from row + important knobs
+  let key;
+  try{
+    key = JSON.stringify({row, selectedCols, size:labelSizeMM, dpi:labelDPI, staticText:staticTextArea.value, hasLogo:!!currentLogoDataUrl, individualPDF:true});
+  }catch(_){ key = String(Math.random()); }
+  if(__globalRenderCache.has(key)) return __globalRenderCache.get(key);
+
+  // Use the same rendering logic as PDF generation to ensure consistency
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;background:white;';
+
+  // Clone the current preview label DOM so styles/layout are identical
+  const clone = labelCanvasDOM.cloneNode(true);
+
+  // Force physical size in CSS pixels (96dpi) to match preview proportions
+  const cssW = Math.round(labelSizeMM.w * 3.78);
+  const cssH = Math.round(labelSizeMM.h * 3.78);
+  clone.style.width = cssW + 'px';
+  clone.style.minHeight = cssH + 'px';
+
+  // Preserve any user inline style changes made in the live preview by copying
+  // inline style attributes for key nodes into the clone before rendering.
+  function copyInline(fromRoot, toRoot, selector){
+    const a = fromRoot.querySelector(selector); const b = toRoot.querySelector(selector);
+    if(a && b){ const s = a.getAttribute('style'); if(s != null) b.setAttribute('style', s); }
+  }
+  copyInline(labelCanvasDOM, clone, '#labelInner');
+  copyInline(labelCanvasDOM, clone, '#labelContent');
+  copyInline(labelCanvasDOM, clone, '#dynamicPairs');
+  copyInline(labelCanvasDOM, clone, '#barcodeArea');
+  copyInline(labelCanvasDOM, clone, '#logoContainer');
+  copyInline(labelCanvasDOM, clone, '#staticLine1');
+  copyInline(labelCanvasDOM, clone, '#staticLine2');
+  copyInline(labelCanvasDOM, clone, '#staticLine3');
+  copyInline(labelCanvasDOM, clone, '#staticLine4');
+  copyInline(labelCanvasDOM, clone, '#staticLine5');
+  copyInline(labelCanvasDOM, clone, '#staticLine6');
+
+  // Apply current static lines from textarea
+  const staticLines = staticTextArea.value.split('\n').map(s=>s.trim());
+  const ids = ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'];
+  ids.forEach((id, i)=>{
+    const el = clone.querySelector(`#${id}`);
+    if(el) el.textContent = staticLines[i] || '';
+  });
+
+  // Dynamic pairs — preserve user-customized children; only update or add auto-generated items
+  const dynContainer = clone.querySelector('#dynamicPairs');
+  if(dynContainer){
+    // Remove only previously auto-generated entries
+    Array.from(dynContainer.querySelectorAll('[data-auto="pair"]')).forEach(el=>el.remove());
+    // If user provided bound elements with data-col, update those
+    const boundNodes = Array.from(dynContainer.querySelectorAll('[data-col]'));
+    if(boundNodes.length > 0){
+      boundNodes.forEach(el=>{
+        const col = el.getAttribute('data-col');
+        if(col) el.textContent = String(row[col] ?? '');
+      });
+    } else {
+      // Otherwise, append simple auto-generated pairs
+      selectedCols.forEach(col=>{
+        const d = document.createElement('div');
+        d.setAttribute('data-auto','pair');
+        d.style.marginBottom = '6px';
+        d.innerHTML = `<strong>${col}:</strong> <span>${row[col] ?? ''}</span>`;
+        dynContainer.appendChild(d);
+      });
+    }
+  }
+
+  // Render barcode inside the clone
+  const bcEl = clone.querySelector('#barcodeArea');
+  if(bcEl){
+    // Remove only our previous auto barcode(s)
+    Array.from(bcEl.querySelectorAll('[data-auto="barcode"]')).forEach(el=>el.remove());
+    const chosenBarcodeColVal = barcodeSelect.value ? String(row[barcodeSelect.value] ?? '').replace(/\D/g,'') : '';
+    if(chosenBarcodeColVal){
+      const canvas = document.createElement('canvas');
+      const h = getIntValue(bcHeightPxInput, 40);
+      const f = getIntValue(bcFontPxInput, 12);
+      try{
+        JsBarcode(canvas, chosenBarcodeColVal, {format:'ean13', displayValue:true, fontSize:f, height:h, margin:4});
+        canvas.setAttribute('data-auto','barcode');
+        bcEl.appendChild(canvas);
+      }catch{ /* ignore barcode errors for this row */ }
+    }
+  }
+
+  // Ensure logo is present in the clone when uploaded
+  const cloneLogoContainer = clone.querySelector('#logoContainer');
+  if(cloneLogoContainer && currentLogoDataUrl){
+    // Replace placeholder with image if missing
+    if(!cloneLogoContainer.querySelector('img')){
+      cloneLogoContainer.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = currentLogoDataUrl;
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = '100%';
+      img.style.display = 'block';
+      cloneLogoContainer.appendChild(img);
+    }
+  }
+
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  // High-DPI render so size in PDF is crisp and matches mm
+  const scale = labelDPI / 96; // 96 CSS px per inch baseline
+  const canvas = await html2canvas(clone, {backgroundColor:'#ffffff', scale});
+
+  // Cleanup
+  document.body.removeChild(wrapper);
+
+  // Create individual PDF with exact label dimensions
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({unit:'mm', format:[dimensions.w, dimensions.h], compress:true});
+  
+  // Add the rendered label to PDF
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  pdf.addImage(dataUrl, 'JPEG', 0, 0, dimensions.w, dimensions.h);
+  
+  const result = pdf.output('blob');
+  __globalRenderCache.set(key, result);
+  return result;
 }
 
 // Render label directly to JPEG with dimensional metadata (matches PDF generation logic)
