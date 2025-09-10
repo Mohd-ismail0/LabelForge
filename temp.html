@@ -168,28 +168,31 @@
 
         <!-- Single-label DOM used for html2canvas rendering; will be rendered at high DPI -->
         <div id="labelRenderWrapper" style="display:flex;flex-direction:column;gap:8px">
-          <div id="labelCanvasDOM" class="label-preview" style="width: 302px; min-height: 180px;">
-            <div id="labelInner" style="position: relative; padding: 12px; box-sizing: border-box; min-height: 130px;">
-              <div id="labelContent" style="width: 100%; display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 8px;">
-                <div id="logoContainer" class="logo-box" style="width: 60px;height: 60px;display: block;align-items: center;border-radius: 4px;overflow: hidden;z-index: 2;right: 0;position: absolute;top: 0;left: 0;"><img src="" style="max-width: 100%; max-height: 100%; display: block;"></div>
+          <div id="labelCanvasDOM" class="label-preview" style="width:300px; min-height:180px">
+            <div id="labelInner" style="position:relative;padding:12px;box-sizing:border-box;min-height:130px">
+              <div id="labelContent" style="width: 100%; display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 8px; padding-right: 82px;">
+                <div id="logoContainer" class="logo-box" style="width: 60px; height: 60px; display: flex; align-items: center; border-radius: 4px; overflow: hidden; z-index: 2; top: 10px; right: 10px;">
+                  <span style="color:#999;font-size:12px">logo</span>
+                </div>
                 <div style="display:flex;flex-direction:column;width:100%;gap: 4px;">
-                  <div id="staticLine1" contenteditable="true" style="font-weight: 700; width: 100%; font-size: 13px; align-items: center; display: flex; flex-direction: column;">
+                  <div id="staticLine1" contenteditable="true" style="font-weight: 700;width: 100%;font-size: 14px;align-items: center;display: flex;flex-direction: column;">
                     <span style="direction: rtl">مستوردة ومسوقة من قبل</span>
                     <span>Imported and Marketed By</span>
                   </div>
-                  <div id="staticLine2" contenteditable="true" style="font-size: 11px; display: flex; flex-direction: column; align-items: center; font-weight: 600;"><span>Advista Marketing (P) Ltd</span><span style="direction: rtl">شركة أدفيتا للتسويق المحدودة</span> </div><div id="vatcontact" contenteditable="true" style="font-size:10px;width:100%;align-items: center;display: flex;flex-direction: column;">
+                  <div id="staticLine2" contenteditable="true" style="font-size: 12px;display: flex;flex-direction: column;align-items: center;font-weight: 600;"><span>Advista Marketing (P) Ltd</span><span style="direction: rtl">شركة أدفيتا للتسويق المحدودة</span> </div><div id="vatcontact" contenteditable="true" style="font-size:10px;width:100%;align-items: center;display: flex;flex-direction: column;">
                     <span style="direction: rtl">رقم ضريبة القيمة المضافة (VAT): 313061260900003</span>
                     <span>www.layyun.net | info@advistaltd.com</span>
                   </div>
+                  
                 </div>
               </div>
             
-              <div id="dynamicPairs" style="margin-top: 8px; font-size: 11px; display: flex; flex-direction: row; justify-content: space-around;"></div>
-              <div id="barcodeArea" style="margin-top:8px;margin-bottom:4px;width:fit-content;padding-left:9%;display:flex;flex-direction:column"></div>
+              <div id="dynamicPairs" style="margin-top: 8px; font-size: 12px; display: flex; flex-direction: row; justify-content: space-around;"></div>
+              <div id="barcodeArea" style="margin-top:8px;margin-bottom:4px;width:fit-content;padding-left:10%;display:flex;flex-direction:column"></div>
               <div id="staticLine3" contenteditable="true" style="margin-top:8px;font-size:12px;width:100%;display:flex;flex-direction:column;align-items:center;direction: rtl;gap: 1px;">
-                <span style="font-weight: bold;"> تركيبة الخامة (Material Composition)</span>
-                <span>نايلون + سباندكس (Nylon + Spandex)</span><span style="font-weight: 700;">صنع في الهند | Made in India</span>
-              </div>
+                  <span style="font-weight: bold;"> تركيبة الخامة (Material Composition)</span>
+                  <span>نايلون + سباندكس (Nylon + Spandex)</span><span style="font-weight: 700;">صنع في الهند | Made in India</span>
+                </div>
 
             </div>
           </div>
@@ -424,7 +427,8 @@ logoInput.addEventListener('change', (e)=>{
 /* mapping preview & dynamic pairs */
 function renderMappingPreview(){
   mappingPreviewBox.innerHTML = '';
-  dynamicPairsEl.innerHTML = '';
+  // Preserve user layout in preview; remove only our auto-added pairs
+  Array.from(dynamicPairsEl.querySelectorAll('[data-auto="pair"]')).forEach(el=>el.remove());
   const selected = Array.from(colsList.querySelectorAll('input[type=checkbox]:checked')).map(cb=>cb.dataset.col);
   const idx = rowSelect.value;
   if(idx==='' || !parsedData[idx]) return;
@@ -432,19 +436,20 @@ function renderMappingPreview(){
   selected.forEach(col=>{
     const p = document.createElement('div'); p.className='pair'; p.textContent = `${col}: ${row[col] ?? ''}`;
     mappingPreviewBox.appendChild(p);
-    // also add into label dynamicPairsEl
-    const d = document.createElement('div'); d.style.marginBottom='6px'; d.innerHTML = `<strong>${col}:</strong> <span>${row[col] ?? ''}</span>`;
-    dynamicPairsEl.appendChild(d);
+    // Update bound element if present; otherwise create an auto element
+    const bound = dynamicPairsEl.querySelector(`[data-col="${CSS.escape(col)}"]`);
+    if(bound){
+      bound.textContent = String(row[col] ?? '');
+    } else {
+      const d = document.createElement('div'); d.style.marginBottom='6px'; d.setAttribute('data-auto','pair'); d.innerHTML = `<strong>${col}:</strong> <span>${row[col] ?? ''}</span>`; dynamicPairsEl.appendChild(d);
+    }
   });
-  // Static lines: do not override user's custom markup by default.
-  // If you want a block to be driven by the textarea, add data-auto="static" to it.
+  // static lines mapping
   const staticLines = staticTextArea.value.split('\n').map(s=>s.trim()).filter(Boolean);
   const ids = ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'];
   ids.forEach((id, i)=>{
     const el = document.getElementById(id);
-    if(el && el.getAttribute('data-auto') === 'static'){
-      el.textContent = staticLines[i] || '';
-    }
+    if(el) el.textContent = staticLines[i] || '';
   });
 
   // barcode rendering for preview
@@ -453,7 +458,8 @@ function renderMappingPreview(){
 
 /* render barcode preview using JsBarcode into svg/canvas */
 function renderBarcodePreview(){
-  barcodeArea.innerHTML = '';
+  // Remove only auto barcode/message; keep custom nodes
+  Array.from(barcodeArea.querySelectorAll('[data-auto="barcode"],[data-auto="bcmsg"]')).forEach(el=>el.remove());
   const idx = rowSelect.value;
   if(idx==='' || !parsedData[idx]) return;
   const row = parsedData[idx];
@@ -463,7 +469,7 @@ function renderBarcodePreview(){
   // strip non-digits
   val = val.replace(/\D/g,'');
   if(val.length < 12){
-    const msg = document.createElement('div'); msg.style.color='#b02a37'; msg.textContent = 'EAN-13 needs 12 (auto-checksum) or 13 digits. Value has ' + val.length + ' digits after stripping non-digits.';
+    const msg = document.createElement('div'); msg.setAttribute('data-auto','bcmsg'); msg.style.color='#b02a37'; msg.textContent = 'EAN-13 needs 12 (auto-checksum) or 13 digits. Value has ' + val.length + ' digits after stripping non-digits.';
     barcodeArea.appendChild(msg);
     return;
   }
@@ -473,9 +479,10 @@ function renderBarcodePreview(){
     const h = getIntValue(bcHeightPxInput, 40);
     const f = getIntValue(bcFontPxInput, 12);
     JsBarcode(canvas, val, {format:'ean13', displayValue:true, fontSize:f, height:h, margin:4});
+    canvas.setAttribute('data-auto','barcode');
     barcodeArea.appendChild(canvas);
   } catch(err){
-    const msg = document.createElement('div'); msg.style.color='#b02a37'; msg.textContent = 'Barcode render error: ' + err.message;
+    const msg = document.createElement('div'); msg.setAttribute('data-auto','bcmsg'); msg.style.color='#b02a37'; msg.textContent = 'Barcode render error: ' + err.message;
     barcodeArea.appendChild(msg);
   }
 }
@@ -610,6 +617,24 @@ generatePdfBtn.addEventListener('click', async ()=>{
     clone.style.width = cssW + 'px';
     clone.style.minHeight = cssH + 'px';
 
+    // Preserve any user inline style changes made in the live preview by copying
+    // inline style attributes for key nodes into the clone before rendering.
+    function copyInline(fromRoot, toRoot, selector){
+      const a = fromRoot.querySelector(selector); const b = toRoot.querySelector(selector);
+      if(a && b){ const s = a.getAttribute('style'); if(s != null) b.setAttribute('style', s); }
+    }
+    copyInline(labelCanvasDOM, clone, '#labelInner');
+    copyInline(labelCanvasDOM, clone, '#labelContent');
+    copyInline(labelCanvasDOM, clone, '#dynamicPairs');
+    copyInline(labelCanvasDOM, clone, '#barcodeArea');
+    copyInline(labelCanvasDOM, clone, '#logoContainer');
+    copyInline(labelCanvasDOM, clone, '#staticLine1');
+    copyInline(labelCanvasDOM, clone, '#staticLine2');
+    copyInline(labelCanvasDOM, clone, '#staticLine3');
+    copyInline(labelCanvasDOM, clone, '#staticLine4');
+    copyInline(labelCanvasDOM, clone, '#staticLine5');
+    copyInline(labelCanvasDOM, clone, '#staticLine6');
+
     // Apply current static lines from textarea
     const staticLines = staticTextArea.value.split('\n').map(s=>s.trim());
     const ids = ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'];
@@ -618,22 +643,35 @@ generatePdfBtn.addEventListener('click', async ()=>{
       if(el) el.textContent = staticLines[i] || '';
     });
 
-    // Rebuild dynamic pairs exactly like preview (space-around row)
+    // Dynamic pairs — preserve user-customized children; only update or add auto-generated items
     const dynContainer = clone.querySelector('#dynamicPairs');
     if(dynContainer){
-      dynContainer.innerHTML = '';
-      selectedCols.forEach(col=>{
-        const d = document.createElement('div');
-        d.style.marginBottom = '6px';
-        d.innerHTML = `<strong>${col}:</strong> <span>${row[col] ?? ''}</span>`;
-        dynContainer.appendChild(d);
-      });
+      // Remove only previously auto-generated entries
+      Array.from(dynContainer.querySelectorAll('[data-auto="pair"]')).forEach(el=>el.remove());
+      // If user provided bound elements with data-col, update those
+      const boundNodes = Array.from(dynContainer.querySelectorAll('[data-col]'));
+      if(boundNodes.length > 0){
+        boundNodes.forEach(el=>{
+          const col = el.getAttribute('data-col');
+          if(col) el.textContent = String(row[col] ?? '');
+        });
+      } else {
+        // Otherwise, append simple auto-generated pairs
+        selectedCols.forEach(col=>{
+          const d = document.createElement('div');
+          d.setAttribute('data-auto','pair');
+          d.style.marginBottom = '6px';
+          d.innerHTML = `<strong>${col}:</strong> <span>${row[col] ?? ''}</span>`;
+          dynContainer.appendChild(d);
+        });
+      }
     }
 
     // Render barcode inside the clone
     const bcEl = clone.querySelector('#barcodeArea');
     if(bcEl){
-      bcEl.innerHTML = '';
+      // Remove only our previous auto barcode(s)
+      Array.from(bcEl.querySelectorAll('[data-auto="barcode"]')).forEach(el=>el.remove());
       const chosenBarcodeColVal = chosenBarcodeCol ? String(row[chosenBarcodeCol] ?? '').replace(/\D/g,'') : '';
       if(chosenBarcodeColVal){
         const canvas = document.createElement('canvas');
@@ -641,6 +679,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
         const f = getIntValue(bcFontPxInput, 12);
         try{
           JsBarcode(canvas, chosenBarcodeColVal, {format:'ean13', displayValue:true, fontSize:f, height:h, margin:4});
+          canvas.setAttribute('data-auto','barcode');
           bcEl.appendChild(canvas);
         }catch{ /* ignore barcode errors for this row */ }
       }
