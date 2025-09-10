@@ -177,7 +177,7 @@
           <button id="renderBtn">Render Preview</button>
           <button id="generatePdf" style="background:#059669">Generate PDF</button>
           <a id="downloadPdfLink" href="#" download="labels_a4.pdf" style="display:none;background:#10b981;color:#fff;padding:8px 10px;border-radius:8px;text-decoration:none">Download last PDF</a>
-          <button id="downloadZip" style="background:#6b7280">Download ZIP (PNG)</button>
+          <button id="downloadZip" style="background:#6b7280">Download ZIP (JPEG)</button>
         </div>
       </div>
 
@@ -938,17 +938,21 @@ downloadZipBtn.addEventListener('click', async ()=>{
   for(let i=0;i<rowsForZip.length;i++){
     const r = await renderLabelToDataUrl(rowsForZip[i].row, selectedCols);
     if(r && r.dataUrl) {
-      // convert dataURL to blob
+      // convert dataURL to blob and then to JPEG with metadata
       const resp = await fetch(r.dataUrl);
       const blob = await resp.blob();
+      
+      // Create JPEG with dimensional metadata
+      const jpegBlob = await addDimensionalMetadata(blob, labelSizeMM);
+      
       const safeName = rowsForZip[i].fileBase || `label_${(i+1).toString().padStart(4,'0')}`;
-      zip.file(`${safeName}.png`, blob);
+      zip.file(`${safeName}.jpg`, jpegBlob);
     }
   }
   const zipBlob = await zip.generateAsync({type:'blob'});
   const url = URL.createObjectURL(zipBlob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'labels_png.zip';
+  a.href = url; a.download = 'labels_jpeg.zip';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=> URL.revokeObjectURL(url), 1000);
 });
@@ -957,6 +961,44 @@ downloadZipBtn.addEventListener('click', async ()=>{
 function escapeHtml(s){
   if(!s) return '';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Add dimensional metadata to JPEG images
+async function addDimensionalMetadata(pngBlob, dimensions) {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.onload = () => {
+      // Set canvas size to match image
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      // Draw the image
+      ctx.drawImage(img, 0, 0);
+      
+      // Add dimensional information as text overlay (bottom right corner)
+      const fontSize = Math.max(8, Math.min(16, canvas.width / 50));
+      ctx.font = `${fontSize}px Arial`;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(canvas.width - 120, canvas.height - 25, 115, 20);
+      
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${dimensions.w}×${dimensions.h}mm`, canvas.width - 5, canvas.height - 10);
+      
+      // Convert to JPEG with quality 0.92 (same as PDF generation)
+      const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      
+      // Convert data URL to blob
+      fetch(jpegDataUrl).then(resp => resp.blob()).then(jpegBlob => {
+        resolve(jpegBlob);
+      });
+    };
+    
+    img.src = URL.createObjectURL(pngBlob);
+  });
 }
 function mmToPxRounded(mm, dpi=300){ return Math.round(mm * dpi / 25.4); }
 
