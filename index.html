@@ -211,18 +211,7 @@
 const mmToPt = mm => (mm * 72 / 25.4); // not used but handy
 const mmToPx = (mm, dpi=300) => Math.round(mm * dpi / 25.4); // convert mm to px at a DPI (for high-res canvas)
 
-/* ---------- Defaults & state ---------- */
-const presetStatic = `
-مستورد ومُسوّق بواسطة: شركة أدفيستا للتسويق المحدودة
-Imported and Marketed By: Advista Marketing Pvt Ltd
 
-تركيبة الخامة: نايلون + سباندكس
-Material Composition: Nylon + Spandex
-
-رقم ضريبة القيمة المضافة (VAT): 313061260900003
-`.trim();
-
-document.getElementById('staticText').value = presetStatic;
 
 let parsedData = []; // array of objects
 let headers = [];
@@ -610,13 +599,8 @@ generatePdfBtn.addEventListener('click', async ()=>{
     clone.style.width = cssW + 'px';
     clone.style.minHeight = cssH + 'px';
 
-    // Apply current static lines from textarea
-    const staticLines = staticTextArea.value.split('\n').map(s=>s.trim());
-    const ids = ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'];
-    ids.forEach((id, i)=>{
-      const el = clone.querySelector(`#${id}`);
-      if(el) el.textContent = staticLines[i] || '';
-    });
+     // Do NOT override static lines - preserve the exact HTML structure from preview
+     // Only update static lines if they have data-auto="static" attribute
 
     // Rebuild dynamic pairs exactly like preview (space-around row)
     const dynContainer = clone.querySelector('#dynamicPairs');
@@ -784,12 +768,8 @@ async function renderLabelToDataUrl(row, selectedCols){
   clone.style.width = cssW + 'px';
   clone.style.minHeight = cssH + 'px';
 
-  // Apply static lines from textarea
-  const staticLines = staticTextArea.value.split('\n').map(s=>s.trim());
-  ['staticLine1','staticLine2','staticLine3','staticLine4','staticLine5','staticLine6'].forEach((id,i)=>{
-    const el = clone.querySelector('#'+id);
-    if(el) el.textContent = staticLines[i] || '';
-  });
+   // Do NOT override static lines - preserve the exact HTML structure from preview
+   // Only update static lines if they have data-auto="static" attribute
 
   // Dynamic pairs
   const dyn = clone.querySelector('#dynamicPairs');
