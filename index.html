@@ -1040,57 +1040,53 @@ async function generateIndividualPDF(row, selectedCols, dimensions) {
   const textAreaY = dimensions.h - padding; // Start from top (pdf-lib uses bottom-left origin)
   const textAreaW = dimensions.w - padding - (logoBoxSize + logoRight + padding);
 
-  // Add static text from textarea
-  const staticLines = staticTextArea.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  // Add static text - use the same content as the preview HTML
   let currentY = textAreaY;
   
-  // Static line 1 (main header)
-  if(staticLines[0]) {
-    const fontSize = line1Px * pxToMm;
-    const lines = wrapText(staticLines[0], textAreaW, fontSize, helveticaBoldFont);
-    lines.forEach(line => {
-      page.drawText(line, {
-        x: textAreaX,
-        y: currentY - fontSize,
-        size: fontSize,
-        font: helveticaBoldFont,
-        color: PDFLib.rgb(0, 0, 0),
-      });
-      currentY -= (fontSize * 1.2);
+  // Static line 1 (main header) - bilingual
+  const staticLine1Text = "مستوردة ومسوقة من قبل\nImported and Marketed By";
+  const fontSize1 = line1Px * pxToMm;
+  const lines1 = wrapText(staticLine1Text, textAreaW, fontSize1, helveticaBoldFont);
+  lines1.forEach(line => {
+    page.drawText(line, {
+      x: textAreaX,
+      y: currentY - fontSize1,
+      size: fontSize1,
+      font: helveticaBoldFont,
+      color: PDFLib.rgb(0, 0, 0),
     });
-  }
+    currentY -= (fontSize1 * 1.2);
+  });
 
-  // Static line 2 (company info)
-  if(staticLines[1]) {
-    const fontSize = line2Px * pxToMm;
-    const lines = wrapText(staticLines[1], textAreaW, fontSize, helveticaBoldFont);
-    lines.forEach(line => {
-      page.drawText(line, {
-        x: textAreaX,
-        y: currentY - fontSize,
-        size: fontSize,
-        font: helveticaBoldFont,
-        color: PDFLib.rgb(0, 0, 0),
-      });
-      currentY -= (fontSize * 1.2);
+  // Static line 2 (company info) - bilingual
+  const staticLine2Text = "Advista Marketing (P) Ltd\nشركة أدفيتا للتسويق المحدودة";
+  const fontSize2 = line2Px * pxToMm;
+  const lines2 = wrapText(staticLine2Text, textAreaW, fontSize2, helveticaBoldFont);
+  lines2.forEach(line => {
+    page.drawText(line, {
+      x: textAreaX,
+      y: currentY - fontSize2,
+      size: fontSize2,
+      font: helveticaBoldFont,
+      color: PDFLib.rgb(0, 0, 0),
     });
-  }
+    currentY -= (fontSize2 * 1.2);
+  });
 
   // VAT/Contact info
-  if(staticLines[2]) {
-    const fontSize = infoPx * pxToMm;
-    const lines = wrapText(staticLines[2], textAreaW, fontSize, helveticaFont);
-    lines.forEach(line => {
-      page.drawText(line, {
-        x: textAreaX,
-        y: currentY - fontSize,
-        size: fontSize,
-        font: helveticaFont,
-        color: PDFLib.rgb(0, 0, 0),
-      });
-      currentY -= (fontSize * 1.2);
+  const vatText = "رقم ضريبة القيمة المضافة (VAT): 313061260900003\nwww.layyun.net | info@advistaltd.com";
+  const fontSize3 = infoPx * pxToMm;
+  const lines3 = wrapText(vatText, textAreaW, fontSize3, helveticaFont);
+  lines3.forEach(line => {
+    page.drawText(line, {
+      x: textAreaX,
+      y: currentY - fontSize3,
+      size: fontSize3,
+      font: helveticaFont,
+      color: PDFLib.rgb(0, 0, 0),
     });
-  }
+    currentY -= (fontSize3 * 1.2);
+  });
 
   // Add some spacing
   currentY -= 2;
@@ -1146,7 +1142,7 @@ async function generateIndividualPDF(row, selectedCols, dimensions) {
         const barcodeW = 40; // Fixed width in mm
         const barcodeH = (bcHeightPx + 20) * pxToMm;
         const barcodeX = textAreaX;
-        const barcodeY = currentY - barcodeH;
+        const barcodeY = Math.max(5, currentY - barcodeH - 5); // Ensure it's not too low
         
         page.drawPage(svgPage, {
           x: barcodeX,
@@ -1155,28 +1151,30 @@ async function generateIndividualPDF(row, selectedCols, dimensions) {
           yScale: barcodeH / (bcHeightPx + 20),
         });
         
-        currentY -= barcodeH + 2;
+        currentY = barcodeY - 2; // Position bottom text below barcode
       } catch(e) {
         console.warn('SVG barcode could not be added to PDF:', e);
       }
     }
   }
 
-  // Add bottom static text (material composition)
-  if(staticLines[3]) {
-    const fontSize = infoPx * pxToMm;
-    const lines = wrapText(staticLines[3], textAreaW, fontSize, helveticaFont);
-    lines.forEach(line => {
-      page.drawText(line, {
-        x: textAreaX,
-        y: currentY - fontSize,
-        size: fontSize,
-        font: helveticaFont,
-        color: PDFLib.rgb(0, 0, 0),
-      });
-      currentY -= (fontSize * 1.2);
+  // Add bottom static text (material composition) - bilingual
+  const materialText = "تركيبة الخامة (Material Composition)\nنايلون + سباندكس (Nylon + Spandex)\nصنع في الهند | Made in India";
+  const fontSize4 = infoPx * pxToMm;
+  const lines4 = wrapText(materialText, textAreaW, fontSize4, helveticaFont);
+  
+  // Position from bottom up to ensure visibility
+  let bottomY = padding + (lines4.length * fontSize4 * 1.2);
+  lines4.forEach(line => {
+    page.drawText(line, {
+      x: textAreaX,
+      y: bottomY,
+      size: fontSize4,
+      font: helveticaFont,
+      color: PDFLib.rgb(0, 0, 0),
     });
-  }
+    bottomY += (fontSize4 * 1.2);
+  });
 
   const pdfBytes = await pdfDoc.save();
   const result = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -1186,31 +1184,39 @@ async function generateIndividualPDF(row, selectedCols, dimensions) {
 
 // Helper function to wrap text for pdf-lib
 function wrapText(text, maxWidth, fontSize, font) {
-  const words = text.split(' ');
-  const lines = [];
-  let currentLine = '';
+  // First split by newlines to handle explicit line breaks
+  const paragraphs = text.split('\n');
+  const allLines = [];
   
-  for (const word of words) {
-    const testLine = currentLine + (currentLine ? ' ' : '') + word;
-    const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(' ');
+    const lines = [];
+    let currentLine = '';
     
-    if (textWidth <= maxWidth) {
-      currentLine = testLine;
-    } else {
-      if (currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
+    for (const word of words) {
+      const testLine = currentLine + (currentLine ? ' ' : '') + word;
+      const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+      
+      if (textWidth <= maxWidth) {
+        currentLine = testLine;
       } else {
-        lines.push(word);
+        if (currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          lines.push(word);
+        }
       }
     }
+    
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    
+    allLines.push(...lines);
   }
   
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-  
-  return lines;
+  return allLines;
 }
 
 // Render label directly to JPEG with dimensional metadata (matches PDF generation logic)
