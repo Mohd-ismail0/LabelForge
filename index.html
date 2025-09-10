@@ -40,7 +40,7 @@
 <body>
   <div class="container">
     <h1>Label Maker — EAN13 + PDF (Excel/CSV/Google Sheets)</h1>
-    <p class="help">Upload sheet, choose barcode column (EAN13), choose dynamic columns, pick a quantity column to multiply labels, select label size, choose paper size (A4/Letter/Custom), upload logo (will be rendered top-right with 10px padding), then "Generate PDF".</p>
+    <p class="help">Upload sheet, choose barcode column (EAN13), choose dynamic columns, pick a quantity column to multiply labels, select label size, choose paper size (A4/Letter/4"×6"/Custom), upload logo (will be rendered top-right with 10px padding), then "Generate PDF".</p>
 
     <div class="grid" style="margin-top:12px">
       <div class="card">
@@ -101,9 +101,10 @@
         </div>
 
         <label style="margin-top:8px">Paper size for PDF</label>
-        <div style="display:flex;gap:8px;margin-bottom:8px" id="paperSizeButtons">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px" id="paperSizeButtons">
           <button data-size="a4" class="active">A4 (210×297 mm)</button>
           <button data-size="letter">Letter (216×279 mm)</button>
+          <button data-size="4x6">4"×6" (102×152 mm)</button>
           <button data-size="custom">Custom</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px" id="customPaperSize" style="display:none">
@@ -237,6 +238,7 @@ let labelSizeMM = {w:80, h:60}; // default medium
 let labelDPI = 300; // canvas DPI for export (high quality)
 const A4 = {w:210, h:297}; // mm
 const LETTER = {w:216, h:279}; // mm
+const FOUR_BY_SIX = {w:101.6, h:152.4}; // 4" × 6" in mm
 let paperSizeMM = A4; // current paper size
 let pageMarginMM = 6; // page margin in mm (reduced to waste less space)
 let labelSpacingMM = 2; // spacing between labels (reduced)
@@ -518,6 +520,9 @@ paperSizeButtons.addEventListener('click', (e)=>{
   } else if(size==='letter') {
     paperSizeMM = LETTER;
     customPaperSize.style.display = 'none';
+  } else if(size==='4x6') {
+    paperSizeMM = FOUR_BY_SIX;
+    customPaperSize.style.display = 'none';
   } else if(size==='custom') {
     customPaperSize.style.display = 'grid';
     // Use current values or defaults
@@ -578,7 +583,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
   // Show quick information
   const pagesNeeded = Math.ceil(items.length / perPage);
   const totalRequestedQty = items.length;
-  const paperSizeName = paperSizeMM === A4 ? 'A4' : paperSizeMM === LETTER ? 'Letter' : 'Custom';
+  const paperSizeName = paperSizeMM === A4 ? 'A4' : paperSizeMM === LETTER ? 'Letter' : paperSizeMM === FOUR_BY_SIX ? '4"×6"' : 'Custom';
   if(!confirm(`Generating ${totalRequestedQty} labels → ${pagesNeeded} ${paperSizeName} page(s).\nLabels per page: ${perPage} (${cols}×${rows}). Proceed?`)) return;
   
   // Add progress indicator
@@ -714,6 +719,9 @@ generatePdfBtn.addEventListener('click', async ()=>{
   let pdfFormat = 'a4';
   if(paperSizeMM === LETTER) {
     pdfFormat = 'letter';
+  } else if(paperSizeMM === FOUR_BY_SIX) {
+    // 4" × 6" size - use array format [width, height] in mm
+    pdfFormat = [paperSizeMM.w, paperSizeMM.h];
   } else if(paperSizeMM !== A4) {
     // Custom size - use array format [width, height] in mm
     pdfFormat = [paperSizeMM.w, paperSizeMM.h];
@@ -795,7 +803,7 @@ generatePdfBtn.addEventListener('click', async ()=>{
   }catch(e){
     console.warn('Could not create blob URL for download link', e);
   }
-  const fileName = paperSizeMM === A4 ? 'labels_a4.pdf' : paperSizeMM === LETTER ? 'labels_letter.pdf' : 'labels_custom.pdf';
+  const fileName = paperSizeMM === A4 ? 'labels_a4.pdf' : paperSizeMM === LETTER ? 'labels_letter.pdf' : paperSizeMM === FOUR_BY_SIX ? 'labels_4x6.pdf' : 'labels_custom.pdf';
   pdf.save(fileName);
   alert('PDF generated and downloaded. Pages: ' + pageIndex);
 });
